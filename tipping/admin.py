@@ -1,6 +1,5 @@
-# Register your models here.
 from django.contrib import admin
-from .models import Tournament, Group, Match, GroupMembership, Prediction
+from .models import Tournament, Group, Match, GroupMembership, Prediction, BonusPrediction
 
 
 @admin.register(Tournament)
@@ -32,3 +31,10 @@ class GroupMembershipAdmin(admin.ModelAdmin):
 class PredictionAdmin(admin.ModelAdmin):
     list_display = ("id", "user", "group", "match", "pred_home", "pred_away", "updated_at")
     list_filter = ("group",)
+
+
+@admin.register(BonusPrediction)
+class BonusPredictionAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "group", "tournament", "bonus_type", "value", "updated_at")
+    list_filter = ("group", "tournament", "bonus_type")
+    search_fields = ("user__username", "value")
