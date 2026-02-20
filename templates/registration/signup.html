@@ -1,0 +1,52 @@
+{% extends "registration/base_auth.html" %}
+{% block title %}Registracion{% endblock %}
+
+{% block content %}
+<h2>Registrarse</h2>
+<p class="subtitle">Crea tu cuenta. A continuación, únete a un grupo mediante un código.</p>
+
+{% if form.non_field_errors %}
+  <div class="error-box">
+    {% for e in form.non_field_errors %}{{ e }}{% endfor %}
+  </div>
+{% endif %}
+
+<form method="post" novalidate>
+  {% csrf_token %}
+
+  <label for="{{ form.username.id_for_label }}">Usuario</label>
+  {{ form.username }}
+  {% for e in form.username.errors %}
+    <div class="field-error">{{ e }}</div>
+  {% endfor %}
+
+  <label for="{{ form.email.id_for_label }}">E-Mail</label>
+  {{ form.email }}
+  {% for e in form.email.errors %}
+    <div class="field-error">{{ e }}</div>
+  {% endfor %}
+
+  <label for="{{ form.password1.id_for_label }}">Clave</label>
+  {{ form.password1 }}
+  {% for e in form.password1.errors %}
+    <div class="field-error">{{ e }}</div>
+  {% endfor %}
+
+  <label for="{{ form.password2.id_for_label }}">Repetir clave</label>
+  {{ form.password2 }}
+  {% for e in form.password2.errors %}
+    <div class="field-error">{{ e }}</div>
+  {% endfor %}
+
+  {% if form.errors and not form.non_field_errors %}
+    <div class="error-box">Por favor revisa tus datos.</div>
+  {% endif %}
+
+  <button class="btn" type="submit">Crear cuenta</button>
+</form>
+
+<div class="links">
+  ¿Ya estás registrado?
+  <a href="{% url 'login' %}">Para iniciar sesión</a>
+</div>
+{% endblock %}

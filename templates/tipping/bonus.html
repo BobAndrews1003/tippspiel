@@ -1,0 +1,72 @@
+{% extends "tipping/base.html" %}
+{% block title %}Pronosticos especiales{% endblock %}
+
+{% block content %}
+<div style="max-width:720px; margin: 0 auto;">
+  <h2>Pronosticos especiales</h2>
+
+  {% if messages %}
+    <div style="margin:12px 0;">
+      {% for message in messages %}
+        <div style="padding:10px 12px; border:1px solid #eee; border-radius:10px; margin-bottom:8px;">
+          {{ message }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <form method="post" style="display:grid; gap:14px;">
+    {% csrf_token %}
+
+    <div>
+      <label for="{{ form.herbstmeister.id_for_label }}" style="display:block; font-size:13px; color:#555; margin-bottom:6px;">
+        {{ form.herbstmeister.label }}
+      </label>
+      {{ form.herbstmeister }}
+    </div>
+
+    <div>
+      <label for="{{ form.meister.id_for_label }}" style="display:block; font-size:13px; color:#555; margin-bottom:6px;">
+        {{ form.meister.label }}
+      </label>
+      {{ form.meister }}
+    </div>
+
+    <div>
+      <label for="{{ form.trainer_first.id_for_label }}" style="display:block; font-size:13px; color:#555; margin-bottom:6px;">
+        {{ form.trainer_first.label }}
+      </label>
+      {{ form.trainer_first }}
+    </div>
+
+    <div>
+      <label for="{{ form.topscorer.id_for_label }}" style="display:block; font-size:13px; color:#555; margin-bottom:6px;">
+        {{ form.topscorer.label }}
+      </label>
+      {{ form.topscorer }}
+    </div>
+
+    <div>
+      <label for="{{ form.relegation1.id_for_label }}" style="display:block; font-size:13px; color:#555; margin-bottom:6px;">
+        {{ form.relegation1.label }}
+      </label>
+      {{ form.relegation1 }}
+    </div>
+
+    <div>
+      <label for="{{ form.relegation2.id_for_label }}" style="display:block; font-size:13px; color:#555; margin-bottom:6px;">
+        {{ form.relegation2.label }}
+      </label>
+      {{ form.relegation2 }}
+      {% if form.relegation2.errors %}
+        <div style="color:#b00020; font-size:13px; margin-top:6px;">{{ form.relegation2.errors }}</div>
+      {% endif %}
+    </div>
+
+    <button type="submit"
+            style="margin-top:8px; padding:10px 12px; border:0; border-radius:10px; background:#0077cc; color:#fff; font-size:14px; cursor:pointer;">
+      Guardar
+    </button>
+  </form>
+</div>
+{% endblock %}

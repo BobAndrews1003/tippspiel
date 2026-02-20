@@ -1,0 +1,192 @@
+<style>
+  .nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 18px;
+    margin-bottom: 22px;
+    border-bottom: 1px solid #e8e8e8;
+    background: #ffffff;
+    gap: 16px;
+  }
+
+  .nav-left {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+
+  .nav-title {
+    font-weight: 600;
+    font-size: 15px;
+    margin-right: 6px;
+    white-space: nowrap;
+  }
+
+  .nav a {
+    text-decoration: none;
+    color: #333;
+    font-size: 14px;
+    padding-bottom: 2px;
+  }
+
+  .nav a:hover { color: #0077cc; }
+  .nav a.active { font-weight: 600; border-bottom: 2px solid #0077cc; }
+
+  .nav-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .logout-btn {
+    background: none;
+    border: none;
+    color: #b00020;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0;
+  }
+  .logout-btn:hover { text-decoration: underline; }
+
+  .muted-user { font-size: 13px; color: #777; }
+
+  .group-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .group-switch select {
+    font-size: 13px;
+    padding: 6px 8px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: #fff;
+  }
+
+  .mini-btn {
+    font-size: 12px;
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: #fff;
+    cursor: pointer;
+  }
+
+  .pill {
+    font-size: 12px;
+    border: 1px solid #e2e2e2;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: #fafafa;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+  }
+
+  .pill code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: 12px;
+    background: #fff;
+    border: 1px solid #eee;
+    padding: 2px 6px;
+    border-radius: 6px;
+  }
+</style>
+
+<div class="nav">
+
+  <div class="nav-left">
+    <span class="nav-title">
+      {% if group %}{{ group.name }}{% else %}Tippspiel{% endif %}
+    </span>
+
+    {% if request.user.is_authenticated %}
+      {% if group %}
+        <a href="{% url 'tippen' %}" class="{% if request.resolver_match.url_name == 'tippen' %}active{% endif %}">
+          Pronosticar
+        </a>
+
+        <a href="{% url 'spieltag' %}" class="{% if request.resolver_match.url_name == 'spieltag' %}active{% endif %}">
+          Tabla por fecha
+        </a>
+
+        <a href="{% url 'tabelle' %}" class="{% if request.resolver_match.url_name == 'tabelle' %}active{% endif %}">
+          Tabla general
+        </a>
+
+        <!-- 🏆 Bonustipps -->
+        <a href="{% url 'bonus_tips' %}" class="{% if request.resolver_match.url_name == 'bonus_tips' %}active{% endif %}">
+          Pronosticos especiales
+        </a>
+      {% endif %}
+
+      <a href="{% url 'join_group' %}" class="{% if request.resolver_match.url_name == 'join_group' %}active{% endif %}">
+        Unirse a un grupo
+      </a>
+
+      <a href="{% url 'create_group' %}" class="{% if request.resolver_match.url_name == 'create_group' %}active{% endif %}">
+        Crear un grupo
+      </a>
+    {% endif %}
+  </div>
+
+  <div class="nav-right">
+
+    {% if request.user.is_authenticated %}
+
+      {% if my_groups and my_groups|length > 1 %}
+        <form method="post" action="{% url 'set_active_group' %}" class="group-switch">
+          {% csrf_token %}
+          <select name="group_id" onchange="this.form.submit()">
+            {% for g in my_groups %}
+              <option value="{{ g.id }}" {% if group and g.id == group.id %}selected{% endif %}>
+                {{ g.name }}
+              </option>
+            {% endfor %}
+          </select>
+        </form>
+      {% endif %}
+
+      {% if membership and membership.is_creator and group %}
+        <span class="pill">
+          Join-Code: <code>{{ group.join_code }}</code>
+
+          <button class="mini-btn" type="button"
+                  onclick="navigator.clipboard.writeText('{{ group.join_code }}')">
+            Copiar codigo
+          </button>
+
+          <button class="mini-btn" type="button"
+                  onclick="navigator.clipboard.writeText(window.location.origin + '{% url 'join_group' %}?code={{ group.join_code }}')">
+            Copiar enlace
+          </button>
+        </span>
+      {% endif %}
+
+      <span class="muted-user">{{ request.user.username }}</span>
+
+      <form method="post" action="{% url 'logout' %}">
+        {% csrf_token %}
+        <button type="submit" class="logout-btn">Logout</button>
+      </form>
+
+    {% else %}
+
+      <a href="{% url 'login' %}" class="{% if request.resolver_match.url_name == 'login' %}active{% endif %}">
+        Login
+      </a>
+
+      <a href="{% url 'signup' %}" class="{% if request.resolver_match.url_name == 'signup' %}active{% endif %}">
+        Registrieren
+      </a>
+
+    {% endif %}
+  </div>
+
+</div>

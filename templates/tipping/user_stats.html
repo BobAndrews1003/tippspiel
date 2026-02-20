@@ -1,0 +1,160 @@
+{% include "tipping/_nav.html" %}
+
+<style>
+  .grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap:14px; }
+  @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  .card { border:1px solid #ddd; border-radius:10px; padding:12px; background:#fff; }
+  .card h3 { margin:0 0 8px; font-size:16px; }
+
+  .chartbox { position:relative; height:220px; }
+  .chartbox.tall { height:260px; }
+
+  .hint { margin:8px 0 0; color:#666; font-size:12px; }
+
+  table { width:100%; border-collapse:collapse; }
+  th, td { padding:8px 6px; border-bottom:1px solid #eee; text-align:left; font-size:14px; }
+  th { background:#fafafa; position:sticky; top:0; }
+
+  .right { text-align:right; }
+  .center { text-align:center; }
+
+  .tablewrap { border:1px solid #e5e5e5; border-radius:10px; overflow:auto; max-height:520px; }
+</style>
+
+<h2 style="margin:6px 0 12px;">Estadistica de – {{ target_user.username }}</h2>
+
+{% if total_predictions == 0 %}
+  <p>Aún no hay pronósticos evaluables (solo evaluamos partidos con resultado)..</p>
+{% else %}
+
+  {{ tip_counts|json_script:"tipCountsData" }}
+  {{ hit_counts|json_script:"hitCountsData" }}
+  {{ top_teams|json_script:"topTeamsData" }}
+  {{ bottom_teams|json_script:"bottomTeamsData" }}
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <div class="grid-2">
+    <div class="card">
+      <h3>Pronosticos</h3>
+      <div class="chartbox"><canvas id="tipsPie"></canvas></div>
+      <div class="hint">Local / Empate / Visitante (Anzahl)</div>
+    </div>
+
+    <div class="card">
+      <h3>Treffer</h3>
+      <div class="chartbox"><canvas id="hitsPie"></canvas></div>
+      <div class="hint">Pronostico incorrecto / Equipo ganador / Diferencia de goles / Resultado exacto</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px;">
+    <h3>Los 3 resultados más pronosticados</h3>
+    <table>
+      <tr>
+        <th>Resultado</th>
+        <th class="right">Frecuencia</th>
+      </tr>
+      {% for score, cnt in top_scores %}
+        <tr>
+          <td>{{ score }}</td>
+          <td class="right">{{ cnt }}</td>
+        </tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <div class="grid-2" style="margin-top:14px;">
+    <div class="card">
+      <h3>Teams – Top 10 (mas puntos)</h3>
+      <div class="chartbox tall"><canvas id="topTeamsBar"></canvas></div>
+    </div>
+
+    <div class="card">
+      <h3>Teams – Flop 10 (menos puntos)</h3>
+      <div class="chartbox tall"><canvas id="bottomTeamsBar"></canvas></div>
+    </div>
+  </div>
+
+  <!-- NEU: Getippte Ligatabelle -->
+  <div class="card" style="margin-top:14px;">
+    <h3>Tabla de la liga pronosticada (solo partidos con resultado y pronóstico realizado)</h3>
+
+    {% if predicted_table_rows|length == 0 %}
+      <p class="hint">Aún no hay una tabla previsible (no hay pronósticos para partidos con resultado)..</p>
+    {% else %}
+      <div class="tablewrap">
+        <table>
+          <tr>
+            <th class="right">Pos</th>
+            <th>Team</th>
+            <th class="right">Sp</th>
+            <th class="right">S</th>
+            <th class="right">U</th>
+            <th class="right">N</th>
+            <th class="right">Tore</th>
+            <th class="right">Diff</th>
+            <th class="right">Pkt</th>
+          </tr>
+
+          {% for r in predicted_table_rows %}
+            <tr>
+              <td class="right">{{ r.pos }}</td>
+              <td>{{ r.team }}</td>
+              <td class="right">{{ r.played }}</td>
+              <td class="right">{{ r.wins }}</td>
+              <td class="right">{{ r.draws }}</td>
+              <td class="right">{{ r.losses }}</td>
+              <td class="right">{{ r.gf }}:{{ r.ga }}</td>
+              <td class="right">{{ r.gd }}</td>
+              <td class="right"><strong>{{ r.points }}</strong></td>
+            </tr>
+          {% endfor %}
+        </table>
+      </div>
+    {% endif %}
+  </div>
+
+  <script>
+    (function () {
+      const tipCounts = JSON.parse(document.getElementById("tipCountsData").textContent);
+      const hitCounts = JSON.parse(document.getElementById("hitCountsData").textContent);
+      const topTeams = JSON.parse(document.getElementById("topTeamsData").textContent);
+      const bottomTeams = JSON.parse(document.getElementById("bottomTeamsData").textContent);
+
+      function makePie(canvasId, dataObj) {
+        return new Chart(document.getElementById(canvasId), {
+          type: "pie",
+          data: { labels: Object.keys(dataObj), datasets: [{ data: Object.values(dataObj) }] },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } }
+        });
+      }
+
+      makePie("tipsPie", tipCounts);
+      makePie("hitsPie", hitCounts);
+
+      function makeBar(canvasId, items) {
+        const labels = items.map(x => x[0]);
+        const values = items.map(x => x[1]);
+        return new Chart(document.getElementById(canvasId), {
+          type: "bar",
+          data: { labels, datasets: [{ label: "Punkte", data: values }] },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { ticks: { autoSkip: false, maxRotation: 60, minRotation: 0 } },
+              y: { beginAtZero: true }
+            }
+          }
+        });
+      }
+
+      makeBar("topTeamsBar", topTeams);
+      makeBar("bottomTeamsBar", bottomTeams);
+    })();
+  </script>
+
+{% endif %}

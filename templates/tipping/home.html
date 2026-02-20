@@ -1,0 +1,141 @@
+<h1>{{ group.name }} – Tippabgabe</h1>
+
+<p>
+  <a href="{% url 'join_group' %}">Cambiar grupo activo</a> |
+  <a href="/accounts/logout/">Logout</a>
+</p>
+
+{% if matchday %}
+  <h2>Siguiente fecha: {{ matchday }}</h2>
+
+  <p>
+    {% if prev_md %}<a href="/?md={{ prev_md }}">◀ Fecha anterior</a>{% endif %}
+    {% if prev_md and next_md %} | {% endif %}
+    {% if next_md %}<a href="/?md={{ next_md }}">Siguiente fecha ▶</a>{% endif %}
+  </p>
+
+  <form method="post">
+    {% csrf_token %}
+
+    <table border="1" cellpadding="6">
+      <tr>
+        <th>Partido</th>
+        <th>Resultado</th>
+        <th>Tu pronostico</th>
+        <th>Estatus</th>
+        <th>Puntos</th>
+      </tr>
+
+      {% for r in rows %}
+        <tr>
+          <td>{{ r.match.home_team }} – {{ r.match.away_team }}</td>
+
+          <td>
+            {% if r.match.home_score != None and r.match.away_score != None %}
+              {{ r.match.home_score }} : {{ r.match.away_score }}
+            {% else %}
+              —
+            {% endif %}
+          </td>
+
+          <td>
+            {% if r.match.is_locked %}
+              {% if r.pred %}
+                {{ r.pred.pred_home }} : {{ r.pred.pred_away }}
+              {% else %}
+                —
+              {% endif %}
+            {% else %}
+              <input
+                type="number"
+                min="0"
+                name="pred_home_{{ r.match.id }}"
+                style="width:60px"
+                value="{% if r.pred %}{{ r.pred.pred_home }}{% endif %}"
+              />
+              :
+              <input
+                type="number"
+                min="0"
+                name="pred_away_{{ r.match.id }}"
+                style="width:60px"
+                value="{% if r.pred %}{{ r.pred.pred_away }}{% endif %}"
+              />
+            {% endif %}
+          </td>
+
+          <td>{% if r.match.is_locked %}cerrado{% else %}abierto{% endif %}</td>
+
+          <td>
+            {% if r.match.home_score != None and r.match.away_score != None %}
+              {{ r.points }}
+            {% else %}
+              —
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </table>
+
+    <p style="margin-top: 12px;">
+      <button type="submit">Guardar pronosticos</button>
+    </p>
+  </form>
+
+  <hr>
+
+  <h2>Tabla (Total de puntos)</h2>
+
+  {% if leaderboard %}
+    <table border="1" cellpadding="6">
+      <tr>
+        <th>#</th>
+        <th>Nombre</th>
+        <th>Puntos</th>
+      </tr>
+
+      {% for row in leaderboard %}
+        <tr>
+          <td>{{ forloop.counter }}</td>
+          <td>{{ row.user.username }}</td>
+          <td>{{ row.points }}</td>
+        </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <p>Grupo sin miembros</p>
+  {% endif %}
+
+{% else %}
+  <p>No encontramos mas partidos.</p>
+{% endif %}
+
+<!-- Modal: zeigt Django messages nach dem Redirect -->
+{% if messages %}
+  <div id="modalBackdrop" style="
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    display: flex; align-items: center; justify-content: center;
+  ">
+    <div style="background: white; padding: 16px; border-radius: 10px; min-width: 320px;">
+      <h3 style="margin-top:0;">Info</h3>
+      {% for message in messages %}
+        <p style="margin: 8px 0;">{{ message }}</p>
+      {% endfor %}
+      <div style="text-align:right; margin-top: 12px;">
+        <button id="closeModalBtn">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const backdrop = document.getElementById("modalBackdrop");
+      const btn = document.getElementById("closeModalBtn");
+      function close() { backdrop.style.display = "none"; }
+      btn.addEventListener("click", close);
+      backdrop.addEventListener("click", function (e) {
+        if (e.target === backdrop) close();
+      });
+    })();
+  </script>
+{% endif %}

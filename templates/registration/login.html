@@ -1,0 +1,28 @@
+{% extends "registration/base_auth.html" %}
+{% block title %}Login{% endblock %}
+
+{% block content %}
+<h2>Login</h2>
+<p class="subtitle">Inicia sesión con tu nombre de usuario o correo electrónico.</p>
+
+{% if form.errors %}
+  <div class="error-box">El nombre de usuario/correo electrónico o la contraseña son incorrectos.</div>
+{% endif %}
+
+<form method="post" novalidate>
+  {% csrf_token %}
+
+  <label for="{{ form.username.id_for_label }}">Usuario o E-Mail</label>
+  {{ form.username }}
+
+  <label for="{{ form.password.id_for_label }}">Clave</label>
+  {{ form.password }}
+
+  <button class="btn" type="submit">Comenzar sesion</button>
+</form>
+
+<div class="links">
+  Noch keinen Account?
+  <a href="{% url 'signup' %}">Registrarse</a>
+</div>
+{% endblock %}
