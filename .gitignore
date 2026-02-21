@@ -1,9 +1,10 @@
+cat > .gitignore <<'EOF'
 # Python
 __pycache__/
 *.pyc
 *.pyo
 
-# Local database
+# Local DB
 db.sqlite3
 
 # Django collectstatic output
@@ -12,5 +13,6 @@ staticfiles/
 # macOS
 .DS_Store
 
-# Virtual environment
+# venv
 .venv/
+EOF
