@@ -1,14 +1,26 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="de">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{% block title %}Juego de pronosticos{% endblock %}</title>
+
+  <!-- ✅ globales Layout / Theme -->
+  <link rel="stylesheet" href="{% static 'app.css' %}">
+
+  {# optional: seiten-spezifische css (nur wenn nötig) #}
+  {% block extra_css %}{% endblock %}
 </head>
-<body style="margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;">
+
+<body>
   {% include "tipping/_nav.html" %}
-  <div style="padding: 16px;">
+
+  <main>
     {% block content %}{% endblock %}
-  </div>
+  </main>
+
+  {# optional: seiten-spezifisches JS #}
+  {% block extra_js %}{% endblock %}
 </body>
 </html>

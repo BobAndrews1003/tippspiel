@@ -1,192 +1,227 @@
-<style>
-  .nav {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 18px;
-    margin-bottom: 22px;
-    border-bottom: 1px solid #e8e8e8;
-    background: #ffffff;
-    gap: 16px;
-  }
+<nav class="nav">
+  <div class="nav-inner">
 
-  .nav-left {
-    display: flex;
-    align-items: center;
-    gap: 18px;
-    flex-wrap: wrap;
-  }
-
-  .nav-title {
-    font-weight: 600;
-    font-size: 15px;
-    margin-right: 6px;
-    white-space: nowrap;
-  }
-
-  .nav a {
-    text-decoration: none;
-    color: #333;
-    font-size: 14px;
-    padding-bottom: 2px;
-  }
-
-  .nav a:hover { color: #0077cc; }
-  .nav a.active { font-weight: 600; border-bottom: 2px solid #0077cc; }
-
-  .nav-right {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-  }
-
-  .logout-btn {
-    background: none;
-    border: none;
-    color: #b00020;
-    cursor: pointer;
-    font-size: 14px;
-    padding: 0;
-  }
-  .logout-btn:hover { text-decoration: underline; }
-
-  .muted-user { font-size: 13px; color: #777; }
-
-  .group-switch {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .group-switch select {
-    font-size: 13px;
-    padding: 6px 8px;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    background: #fff;
-  }
-
-  .mini-btn {
-    font-size: 12px;
-    padding: 6px 10px;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    background: #fff;
-    cursor: pointer;
-  }
-
-  .pill {
-    font-size: 12px;
-    border: 1px solid #e2e2e2;
-    padding: 6px 10px;
-    border-radius: 999px;
-    background: #fafafa;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    white-space: nowrap;
-  }
-
-  .pill code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-    font-size: 12px;
-    background: #fff;
-    border: 1px solid #eee;
-    padding: 2px 6px;
-    border-radius: 6px;
-  }
-</style>
-
-<div class="nav">
-
-  <div class="nav-left">
-    <span class="nav-title">
+    <!-- Brand -->
+    <a class="nav-title"
+       href="{% if request.user.is_authenticated and group %}{% url 'tippen' %}{% else %}{% url 'login' %}{% endif %}">
       {% if group %}{{ group.name }}{% else %}Tippspiel{% endif %}
-    </span>
+    </a>
 
-    {% if request.user.is_authenticated %}
-      {% if group %}
-        <a href="{% url 'tippen' %}" class="{% if request.resolver_match.url_name == 'tippen' %}active{% endif %}">
-          Pronosticar
-        </a>
+    <!-- Right controls -->
+    <div class="nav-controls">
 
-        <a href="{% url 'spieltag' %}" class="{% if request.resolver_match.url_name == 'spieltag' %}active{% endif %}">
-          Tabla por fecha
-        </a>
+      <!-- Burger -->
+      <button class="nav-iconbtn"
+              type="button"
+              aria-label="Menü"
+              aria-controls="navDrawer"
+              aria-expanded="false"
+              data-nav-toggle="drawer">
+        <span class="nav-burger" aria-hidden="true"></span>
+      </button>
 
-        <a href="{% url 'tabelle' %}" class="{% if request.resolver_match.url_name == 'tabelle' %}active{% endif %}">
-          Tabla general
-        </a>
-
-        <!-- 🏆 Bonustipps -->
-        <a href="{% url 'bonus_tips' %}" class="{% if request.resolver_match.url_name == 'bonus_tips' %}active{% endif %}">
-          Pronosticos especiales
-        </a>
+      {% if request.user.is_authenticated %}
+        <!-- Account / Group dropdown -->
+        <button class="nav-iconbtn"
+                type="button"
+                aria-label="Konto & Gruppe"
+                aria-controls="navAccount"
+                aria-expanded="false"
+                data-nav-toggle="account">
+          <span class="nav-avatar" aria-hidden="true">{{ request.user.username|slice:":1" }}</span>
+        </button>
       {% endif %}
-
-      <a href="{% url 'join_group' %}" class="{% if request.resolver_match.url_name == 'join_group' %}active{% endif %}">
-        Unirse a un grupo
-      </a>
-
-      <a href="{% url 'create_group' %}" class="{% if request.resolver_match.url_name == 'create_group' %}active{% endif %}">
-        Crear un grupo
-      </a>
-    {% endif %}
+    </div>
   </div>
 
-  <div class="nav-right">
+  <!-- Drawer backdrop -->
+  <div class="nav-backdrop" id="navBackdrop" hidden></div>
 
-    {% if request.user.is_authenticated %}
+  <!-- Drawer (links) -->
+  <div class="nav-drawer" id="navDrawer" aria-hidden="true">
+    <div class="nav-drawer-head">
+      <div>
+        <div class="nav-drawer-title">{% if group %}{{ group.name }}{% else %}Tippspiel{% endif %}</div>
+        {% if request.user.is_authenticated %}
+          <div class="muted small">{{ request.user.username }}</div>
+        {% endif %}
+      </div>
+      <button class="nav-iconbtn" type="button" aria-label="Schließen" data-nav-close>
+        ✕
+      </button>
+    </div>
 
-      {% if my_groups and my_groups|length > 1 %}
-        <form method="post" action="{% url 'set_active_group' %}" class="group-switch">
-          {% csrf_token %}
-          <select name="group_id" onchange="this.form.submit()">
-            {% for g in my_groups %}
-              <option value="{{ g.id }}" {% if group and g.id == group.id %}selected{% endif %}>
-                {{ g.name }}
-              </option>
-            {% endfor %}
-          </select>
-        </form>
-      {% endif %}
+    <div class="nav-drawer-body">
+      <div class="nav-section-title">Menü</div>
 
-      {% if membership and membership.is_creator and group %}
-        <span class="pill">
-          Join-Code: <code>{{ group.join_code }}</code>
+      <div class="nav-links-vertical">
+        {% if request.user.is_authenticated %}
+          {% if group %}
+            <a href="{% url 'tippen' %}"
+               class="nav-link {% if request.resolver_match.url_name == 'tippen' %}active{% endif %}">
+              Pronosticar
+            </a>
 
-          <button class="mini-btn" type="button"
-                  onclick="navigator.clipboard.writeText('{{ group.join_code }}')">
-            Copiar codigo
-          </button>
+            <a href="{% url 'spieltag' %}"
+               class="nav-link {% if request.resolver_match.url_name == 'spieltag' %}active{% endif %}">
+              Tabla por fecha
+            </a>
 
-          <button class="mini-btn" type="button"
-                  onclick="navigator.clipboard.writeText(window.location.origin + '{% url 'join_group' %}?code={{ group.join_code }}')">
-            Copiar enlace
-          </button>
-        </span>
-      {% endif %}
+            <a href="{% url 'tabelle' %}"
+               class="nav-link {% if request.resolver_match.url_name == 'tabelle' %}active{% endif %}">
+              Tabla general
+            </a>
 
-      <span class="muted-user">{{ request.user.username }}</span>
+            <a href="{% url 'bonus_tips' %}"
+               class="nav-link {% if request.resolver_match.url_name == 'bonus_tips' %}active{% endif %}">
+              Pronosticos especiales
+            </a>
+          {% endif %}
 
-      <form method="post" action="{% url 'logout' %}">
-        {% csrf_token %}
-        <button type="submit" class="logout-btn">Logout</button>
-      </form>
+          <a href="{% url 'join_group' %}"
+             class="nav-link {% if request.resolver_match.url_name == 'join_group' %}active{% endif %}">
+            Unirse a un grupo
+          </a>
 
-    {% else %}
+          <a href="{% url 'create_group' %}"
+             class="nav-link {% if request.resolver_match.url_name == 'create_group' %}active{% endif %}">
+            Crear un grupo
+          </a>
+        {% else %}
+          <a href="{% url 'login' %}"
+             class="nav-link {% if request.resolver_match.url_name == 'login' %}active{% endif %}">
+            Login
+          </a>
 
-      <a href="{% url 'login' %}" class="{% if request.resolver_match.url_name == 'login' %}active{% endif %}">
-        Login
-      </a>
-
-      <a href="{% url 'signup' %}" class="{% if request.resolver_match.url_name == 'signup' %}active{% endif %}">
-        Registrieren
-      </a>
-
-    {% endif %}
+          <a href="{% url 'signup' %}"
+             class="nav-link {% if request.resolver_match.url_name == 'signup' %}active{% endif %}">
+            Registrieren
+          </a>
+        {% endif %}
+      </div>
+    </div>
   </div>
 
-</div>
+  {% if request.user.is_authenticated %}
+    <!-- Account panel (right) -->
+    <div class="nav-account" id="navAccount" aria-hidden="true">
+      <div class="nav-account-head">
+        <div class="nav-section-title">Cuenta</div>
+        <button class="nav-iconbtn" type="button" aria-label="Schließen" data-nav-close>
+          ✕
+        </button>
+      </div>
+
+      <div class="nav-account-body">
+        {% if my_groups and my_groups|length > 1 %}
+          <div class="nav-section">
+            <div class="nav-section-title">Grupo activo</div>
+            <form method="post" action="{% url 'set_active_group' %}">
+              {% csrf_token %}
+              <select name="group_id" onchange="this.form.submit()">
+                {% for g in my_groups %}
+                  <option value="{{ g.id }}" {% if group and g.id == group.id %}selected{% endif %}>
+                    {{ g.name }}
+                  </option>
+                {% endfor %}
+              </select>
+            </form>
+          </div>
+        {% endif %}
+
+        {% if membership and membership.is_creator and group %}
+          <div class="nav-section">
+            <div class="nav-section-title">Join-Code</div>
+
+            <div class="nav-joinbox">
+              <code class="nav-code">{{ group.join_code }}</code>
+
+              <div class="nav-join-actions">
+                <button class="btn small" type="button"
+                        onclick="navigator.clipboard.writeText('{{ group.join_code }}')">
+                  Copiar código
+                </button>
+
+                <button class="btn small" type="button"
+                        onclick="navigator.clipboard.writeText(window.location.origin + '{% url 'join_group' %}?code={{ group.join_code }}')">
+                  Copiar enlace
+                </button>
+              </div>
+            </div>
+          </div>
+        {% endif %}
+
+        <div class="nav-section">
+          <div class="nav-userrow">
+            <span class="muted small">{{ request.user.username }}</span>
+
+            <form method="post" action="{% url 'logout' %}">
+              {% csrf_token %}
+              <button type="submit" class="nav-logout">Logout</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+</nav>
+
+<script>
+(function () {
+  const drawer = document.getElementById('navDrawer');
+  const account = document.getElementById('navAccount');
+  const backdrop = document.getElementById('navBackdrop');
+  const toggles = document.querySelectorAll('[data-nav-toggle]');
+  const closers = document.querySelectorAll('[data-nav-close]');
+
+  function openPanel(which){
+    backdrop.hidden = false;
+    backdrop.classList.add('open');
+
+    if (which === 'drawer'){
+      drawer.classList.add('open');
+      drawer.setAttribute('aria-hidden', 'false');
+      if (account) { account.classList.remove('open'); account.setAttribute('aria-hidden','true'); }
+    } else if (which === 'account' && account){
+      account.classList.add('open');
+      account.setAttribute('aria-hidden', 'false');
+      drawer.classList.remove('open');
+      drawer.setAttribute('aria-hidden', 'true');
+    }
+
+    toggles.forEach(btn => {
+      const target = btn.getAttribute('data-nav-toggle');
+      btn.setAttribute('aria-expanded', target === which ? 'true' : 'false');
+    });
+  }
+
+  function closeAll(){
+    drawer.classList.remove('open');
+    drawer.setAttribute('aria-hidden', 'true');
+    if (account){ account.classList.remove('open'); account.setAttribute('aria-hidden','true'); }
+    backdrop.classList.remove('open');
+    backdrop.hidden = true;
+    toggles.forEach(btn => btn.setAttribute('aria-expanded', 'false'));
+  }
+
+  toggles.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.getAttribute('data-nav-toggle');
+      const isOpen = (target === 'drawer') ? drawer.classList.contains('open') : (account && account.classList.contains('open'));
+      if (isOpen) closeAll(); else openPanel(target);
+    });
+  });
+
+  closers.forEach(btn => btn.addEventListener('click', closeAll));
+  backdrop && backdrop.addEventListener('click', closeAll);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeAll();
+  });
+
+  // Close when resizing to desktop to avoid weird states
+  window.addEventListener('resize', () => {
+    if (window.innerWidth >= 900) closeAll();
+  });
+})();
+</script>
