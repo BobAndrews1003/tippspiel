@@ -3,25 +3,31 @@
 
 {% block content %}
 <h2>Login</h2>
-<p class="subtitle">Inicia sesión con tu nombre de usuario o correo electrónico.</p>
+<p class="muted small">Inicia sesión con tu nombre de usuario o correo electrónico.</p>
 
 {% if form.errors %}
-  <div class="error-box">El nombre de usuario/correo electrónico o la contraseña son incorrectos.</div>
+  <div class="alert">El nombre de usuario/correo electrónico o la contraseña son incorrectos.</div>
 {% endif %}
 
-<form method="post" novalidate>
+<form method="post" class="form-grid" novalidate>
   {% csrf_token %}
 
-  <label for="{{ form.username.id_for_label }}">Usuario o E-Mail</label>
-  {{ form.username }}
+  <div class="field">
+    <label for="{{ form.username.id_for_label }}">Usuario o E-Mail</label>
+    {{ form.username }}
+  </div>
 
-  <label for="{{ form.password.id_for_label }}">Clave</label>
-  {{ form.password }}
+  <div class="field">
+    <label for="{{ form.password.id_for_label }}">Clave</label>
+    {{ form.password }}
+  </div>
 
-  <button class="btn" type="submit">Comenzar sesion</button>
+  <div class="actions">
+    <button class="btn primary" type="submit">Comenzar sesión</button>
+  </div>
 </form>
 
-<div class="links">
+<div class="links muted small">
   Noch keinen Account?
   <a href="{% url 'signup' %}">Registrarse</a>
 </div>

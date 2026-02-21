@@ -1,11 +1,9 @@
 {% extends "registration/base_auth.html" %}
-{% block auth_title %}Registración{% endblock %}
+{% block title %}Registración{% endblock %}
 
-{% block content_auth %}
+{% block content %}
 <h2>Registrarse</h2>
-<p class="muted small">
-  Crea tu cuenta. A continuación, únete a un grupo mediante un código.
-</p>
+<p class="muted small">Crea tu cuenta. A continuación, únete a un grupo mediante un código.</p>
 
 {% if form.non_field_errors %}
   <div class="alert">
@@ -20,7 +18,7 @@
     <label for="{{ form.username.id_for_label }}">Usuario</label>
     {{ form.username }}
     {% for e in form.username.errors %}
-      <div class="field-error">{{ e }}</div>
+      <div class="form-error">{{ e }}</div>
     {% endfor %}
   </div>
 
@@ -28,7 +26,7 @@
     <label for="{{ form.email.id_for_label }}">E-Mail</label>
     {{ form.email }}
     {% for e in form.email.errors %}
-      <div class="field-error">{{ e }}</div>
+      <div class="form-error">{{ e }}</div>
     {% endfor %}
   </div>
 
@@ -36,7 +34,7 @@
     <label for="{{ form.password1.id_for_label }}">Clave</label>
     {{ form.password1 }}
     {% for e in form.password1.errors %}
-      <div class="field-error">{{ e }}</div>
+      <div class="form-error">{{ e }}</div>
     {% endfor %}
   </div>
 
@@ -44,7 +42,7 @@
     <label for="{{ form.password2.id_for_label }}">Repetir clave</label>
     {{ form.password2 }}
     {% for e in form.password2.errors %}
-      <div class="field-error">{{ e }}</div>
+      <div class="form-error">{{ e }}</div>
     {% endfor %}
   </div>
 
@@ -57,8 +55,8 @@
   </div>
 </form>
 
-<div class="muted small" style="margin-top:12px; text-align:center;">
+<div class="links muted small">
   ¿Ya estás registrado?
-  <a href="{% url 'login' %}">Iniciar sesión</a>
+  <a href="{% url 'login' %}">Para iniciar sesión</a>
 </div>
 {% endblock %}
