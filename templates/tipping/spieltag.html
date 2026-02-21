@@ -1,192 +1,174 @@
+{% load static %}
+<link rel="stylesheet" href="{% static 'app.css' %}">
+
 {% include "tipping/_nav.html" %}
 
-<style>
-  .tabs { display:flex; gap:10px; margin: 10px 0 18px; flex-wrap:wrap; }
-  .tab {
-    display:inline-block; padding:8px 12px; border:1px solid #ddd; border-radius:999px;
-    text-decoration:none; color:#333; font-size:14px; background:#fff;
-  }
-  .tab.active { border-color:#0077cc; background:#eef6ff; font-weight:600; color:#0b4b7a; }
-  .tab small { color:#777; font-weight:500; }
+<div class="container">
 
-  .kicktipp-wrap { overflow-x:auto; border:1px solid #ddd; border-radius:10px; }
-  table.kicktipp { border-collapse:collapse; min-width:900px; width:100%; }
-  .kicktipp th, .kicktipp td { border-bottom:1px solid #eee; padding:10px 8px; text-align:center; white-space:nowrap; }
-  .kicktipp thead th { position:sticky; top:0; background:#fff; z-index:2; border-bottom:2px solid #ddd; }
+  <!-- Tabs (Matches / Bonus) -->
+  <div class="tabs-modern">
+    <a class="tab-modern {% if tab != 'bonus' %}active{% endif %}"
+       href="{% url 'spieltag' %}?tab=matches{% if matchday %}&md={{ matchday }}{% endif %}">
+      Tabla por fecha
+    </a>
 
-  .sticky-col-1 { position:sticky; left:0; background:#fff; z-index:3; text-align:left; min-width:60px; }
-  .sticky-col-2 { position:sticky; left:60px; background:#fff; z-index:3; text-align:left; min-width:160px; }
-
-  .match-head { font-weight:700; letter-spacing:.5px; }
-  .match-sub { color:#666; font-size:12px; margin-top:4px; }
-
-  .tip { font-weight:700; }
-  .pts { font-size:12px; margin-top:4px; color:#c00; }
-  .hidden-tip { color:#aaa; font-style:italic; }
-
-  .right-col { min-width:80px; font-weight:700; }
-
-  .note { margin-top:10px; color:#666; font-size:13px; }
-  .locked { padding:10px 12px; border:1px solid #eee; border-radius:10px; background:#fafafa; color:#555; }
-</style>
-
-{# ------------------ Tabs (Matches / Bonustipps) ------------------ #}
-<div class="tabs">
-  <a class="tab {% if tab != 'bonus' %}active{% endif %}"
-     href="{% if matchday %}/spieltag/?tab=matches&md={{ matchday }}{% else %}/spieltag/?tab=matches{% endif %}">
-    Tabla por fecha
-  </a>
-
-  <a class="tab {% if tab == 'bonus' %}active{% endif %}"
-     href="{% if matchday %}/spieltag/?tab=bonus&md={{ matchday }}{% else %}/spieltag/?tab=bonus{% endif %}">
-    Pronosticos especiales
-    {% if season_start %}
-      <small>(visible desde {{ season_start|date:"d.m H:i" }})</small>
-    {% endif %}
-  </a>
-</div>
-
-{# ------------------ BONUS TAB ------------------ #}
-{% if tab == "bonus" %}
-  <h2>Pronosticos especiales – {{ group.name }}</h2>
-
-  {% if not bonus_reveal %}
-    <div class="locked">
-      Pronosticos especiales estan todavia <strong>escondidos</strong>.
-      {% if season_start %}
-        Van a ser visibles <strong>{{ season_start|date:"d.m.Y H:i" }}</strong> .
-      {% else %}
-        Falta la fecha de inicio del campeonato.
-      {% endif %}
-    </div>
-  {% endif %}
-
-  <div class="kicktipp-wrap" style="margin-top:14px;">
-    <table class="kicktipp" style="min-width:760px;">
-      <thead>
-        <tr>
-          <th class="sticky-col-1">Pos</th>
-          <th class="sticky-col-2">Name</th>
-          <th>Campeon medio año</th>
-          <th>Campeon</th>
-          <th>Primer cambio de entrnador</th>
-          <th>Maximo goleador</th>
-          <th>Desciende 1</th>
-          <th>Desciende 2</th>
-          <th class="right-col">Bonus-P</th>
-        </tr>
-      </thead>
-
-      <tbody>
-        {% if bonus_reveal %}
-          {% for row in bonus_rows %}
-            <tr>
-              <td class="sticky-col-1">{{ forloop.counter }}.</td>
-              <td class="sticky-col-2">{{ row.user.username }}</td>
-
-              <td>{{ row.picks.herbstmeister|default:"—" }}</td>
-              <td>{{ row.picks.meister|default:"—" }}</td>
-              <td>{{ row.picks.trainer_first|default:"—" }}</td>
-              <td>{{ row.picks.topscorer|default:"—" }}</td>
-              <td>{{ row.picks.relegation1|default:"—" }}</td>
-              <td>{{ row.picks.relegation2|default:"—" }}</td>
-              <td class="right-col">{{ row.points }}</td>
-            </tr>
-          {% endfor %}
-        {% else %}
-          {# Vor Saisonstart: zeig trotzdem alle User (optional). Wenn du das nicht willst, lass nur eine Zeile stehen. #}
-          {% for m in group.groupmembership_set.all %}
-            <tr>
-              <td class="sticky-col-1">{{ forloop.counter }}.</td>
-              <td class="sticky-col-2">{{ m.user.username }}</td>
-              <td colspan="6"><span class="hidden-tip">versteckt</span></td>
-              <td class="right-col">—</td>
-            </tr>
-          {% endfor %}
+    {# ✅ Bonus-Tab-Link nur anzeigen, wenn sichtbar erlaubt #}
+    {% if bonus_reveal %}
+      <a class="tab-modern {% if tab == 'bonus' %}active{% endif %}"
+         href="{% url 'spieltag' %}?tab=bonus{% if matchday %}&md={{ matchday }}{% endif %}">
+        Pronósticos especiales
+        {% if season_start %}
+          <span class="pill">desde {{ season_start|date:"d.m H:i" }}</span>
         {% endif %}
-      </tbody>
-    </table>
+      </a>
+    {% endif %}
   </div>
 
-  <p class="note">
-    Los pronosticos especiales solo serán visibles una vez comenzada la temporada. Los puntos extra se sumarán a la puntuación total (5 puntos por cada pronostico correcto).
-  </p>
+  {# =================== BONUS TAB =================== #}
+  {% if tab == "bonus" %}
 
-{# ------------------ MATCHDAY TAB ------------------ #}
-{% else %}
-
-  {% if matchday %}
-    <h2>Vista por fecha – Fecha {{ matchday }}</h2>
-
-    <p>
-      {% if prev_md %}<a href="/spieltag/?tab=matches&md={{ prev_md }}">◀ Fecha anterior</a>{% endif %}
-      {% if prev_md and next_md %} | {% endif %}
-      {% if next_md %}<a href="/spieltag/?tab=matches&md={{ next_md }}">Siguiente Fecha ▶</a>{% endif %}
-    </p>
-
-    <div class="kicktipp-wrap">
-      <table class="kicktipp">
-        <thead>
-          <tr>
-            <th class="sticky-col-1">Pos</th>
-            <th class="sticky-col-2">Nombre</th>
-
-            {% for h in matches %}
-              <th>
-                <div class="match-head">
-                  {{ h.match.home_team|slice:":3"|upper }}&nbsp;&nbsp;{{ h.match.away_team|slice:":3"|upper }}
-                </div>
-                <div class="match-sub">
-                  {% if h.result %}
-                    {{ h.result.0 }}:{{ h.result.1 }}
-                  {% else %}
-                    {{ h.match.kickoff|date:"d.m H:i" }}
-                  {% endif %}
-                </div>
-              </th>
-            {% endfor %}
-
-            <th class="right-col">P</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {% for row in table_rows %}
-            <tr>
-              <td class="sticky-col-1">{{ forloop.counter }}.</td>
-              <td class="sticky-col-2">{{ row.user.username }}</td>
-
-              {% for c in row.cells %}
-                <td>
-                  {% if c.reveal %}
-                    {% if c.pred %}
-                      <div class="tip">{{ c.pred.pred_home }}:{{ c.pred.pred_away }}</div>
-                      <div class="pts">{{ c.points }}</div>
-                    {% else %}
-                      <div class="tip">—</div>
-                      <div class="pts">0</div>
-                    {% endif %}
-                  {% else %}
-                    <div class="hidden-tip">escondido</div>
-                  {% endif %}
-                </td>
-              {% endfor %}
-
-              <td class="right-col">
-                {{ row.total_points }}
-                {# optional: wenn du Bonus in der Matchansicht zeigen willst, dann hier total_with_bonus aus der View nutzen #}
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <div class="card header-card">
+      <div class="header-flex">
+        <div>
+          <h2>Pronósticos especiales – {{ group.name }}</h2>
+          {% if season_start %}
+            <div class="muted small">Bloqueo: {{ season_start|date:"d.m.Y H:i" }}</div>
+          {% endif %}
+        </div>
+      </div>
     </div>
 
-    <p class="note">
-      Los pronosticos seran visible <strong>despues del comienzo del partido</strong> .
-    </p>
+    <div class="card table-card">
+      <div class="tablewrap-modern">
+        <table>
+          <thead>
+            <tr>
+              <th class="sticky-left pos">Pos</th>
+              <th class="sticky-left name">Nombre</th>
+              <th>Campeón (mitad de temporada)</th>
+              <th>Campeón</th>
+              <th>1er entrenador despedido</th>
+              <th>Máximo goleador</th>
+              <th>Desciende 1</th>
+              <th>Desciende 2</th>
+              <th class="sticky-right total">Bonus</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {% for row in bonus_rows %}
+              <tr>
+                <td class="sticky-left pos">{{ forloop.counter }}.</td>
+                <td class="sticky-left name">{{ row.user.username }}</td>
+
+                <td>{{ row.picks.herbstmeister|default:"—" }}</td>
+                <td>{{ row.picks.meister|default:"—" }}</td>
+                <td>{{ row.picks.trainer_first|default:"—" }}</td>
+                <td>{{ row.picks.topscorer|default:"—" }}</td>
+                <td>{{ row.picks.relegation1|default:"—" }}</td>
+                <td>{{ row.picks.relegation2|default:"—" }}</td>
+
+                <td class="sticky-right total">{{ row.points }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <p class="note">
+        Los pronósticos especiales se vuelven visibles al inicio de la temporada.
+        Se suman a la puntuación total (5 puntos por cada acierto).
+      </p>
+    </div>
+
+
+  {# =================== MATCHDAY TAB =================== #}
   {% else %}
-    <p>Keine zukünftigen Matches gefunden.</p>
+
+    {% if matchday %}
+      <div class="card header-card">
+        <div class="header-flex">
+          <div>
+            <h2>Vista por fecha – Fecha {{ matchday }}</h2>
+            <div class="muted small">Los pronósticos se revelan después del inicio del partido.</div>
+          </div>
+
+          <div class="toolbar-nav">
+            <a class="btn small {% if not prev_md %}disabled{% endif %}"
+               href="{% url 'spieltag' %}?tab=matches&md={{ prev_md }}">
+              ◀
+            </a>
+            <a class="btn small {% if not next_md %}disabled{% endif %}"
+               href="{% url 'spieltag' %}?tab=matches&md={{ next_md }}">
+              ▶
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div class="card table-card">
+        <div class="tablewrap-modern">
+          <table>
+            <thead>
+              <tr>
+                <th class="sticky-left pos">Pos</th>
+                <th class="sticky-left name">Nombre</th>
+
+                {% for h in matches %}
+                  <th>
+                    <div class="match-head">
+                      {{ h.match.home_team|slice:":3"|upper }}&nbsp;&nbsp;{{ h.match.away_team|slice:":3"|upper }}
+                    </div>
+                    <div class="match-sub">
+                      {% if h.result %}
+                        {{ h.result.0 }}:{{ h.result.1 }}
+                      {% else %}
+                        {{ h.match.kickoff|date:"d.m H:i" }}
+                      {% endif %}
+                    </div>
+                  </th>
+                {% endfor %}
+
+                <th class="sticky-right total">P</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {% for row in table_rows %}
+                <tr class="{% if row.user.id == request.user.id %}me{% endif %}">
+                  <td class="sticky-left pos">{{ forloop.counter }}.</td>
+                  <td class="sticky-left name">{{ row.user.username }}</td>
+
+                  {% for c in row.cells %}
+                    <td>
+                      {% if c.reveal %}
+                        {% if c.pred %}
+                          <div class="tip">{{ c.pred.pred_home }}:{{ c.pred.pred_away }}</div>
+                          <div class="pts">{{ c.points }}</div>
+                        {% else %}
+                          <div class="tip">—</div>
+                          <div class="pts">0</div>
+                        {% endif %}
+                      {% else %}
+                        <div class="hidden-tip">oculto</div>
+                      {% endif %}
+                    </td>
+                  {% endfor %}
+
+                  <td class="sticky-right total">{{ row.total_points }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    {% else %}
+      <div class="card">
+        <p>No se han encontrado partidos futuros.</p>
+      </div>
+    {% endif %}
+
   {% endif %}
 
-{% endif %}
+</div>

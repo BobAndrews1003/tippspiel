@@ -1,204 +1,98 @@
+{% load static %}
+<link rel="stylesheet" href="{% static 'app.css' %}">
+
 {% include "tipping/_nav.html" %}
 
-<style>
-  .tabs {
-    display:flex;
-    gap:8px;
-    border-bottom:1px solid #ddd;
-    margin:12px 0;
-  }
+<div class="container">
 
-  .tab {
-    padding:8px 12px;
-    border:1px solid #ddd;
-    border-bottom:none;
-    background:#f6f6f6;
-    text-decoration:none;
-    color:#222;
-    border-top-left-radius:6px;
-    border-top-right-radius:6px;
-    font-size:14px;
-  }
+  <!-- Header -->
+  <div class="card header-card">
+    <div class="header-flex">
+      <div>
+        <h2>Tabla general</h2>
+      </div>
 
-  .tab.active {
-    background:white;
-    font-weight:600;
-  }
+      <div class="toolbar-nav">
+        <a class="btn small {% if prev_from is None %}disabled{% endif %}"
+           href="{% url 'tabelle' %}?view={{ view }}&from={{ prev_from }}&count={{ count }}">
+           ◀
+        </a>
 
-  .toolbar {
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    margin:10px 0 6px;
-  }
+        <a class="btn small {% if next_from is None %}disabled{% endif %}"
+           href="{% url 'tabelle' %}?view={{ view }}&from={{ next_from }}&count={{ count }}">
+           ▶
+        </a>
+      </div>
+    </div>
 
-  .navbtn {
-    text-decoration:none;
-    padding:6px 10px;
-    border:1px solid #ddd;
-    border-radius:6px;
-    color:#222;
-    background:#fafafa;
-  }
-
-  .navbtn.disabled {
-    opacity:.4;
-    pointer-events:none;
-  }
-
-  .tablewrap {
-    overflow-x:auto;
-    border:1px solid #e5e5e5;
-    border-radius:10px;
-  }
-
-  table {
-    border-collapse:collapse;
-    width:max-content;
-    min-width:100%;
-    background:white;
-  }
-
-  th, td {
-    border-bottom:1px solid #eee;
-    padding:10px 10px;
-    white-space:nowrap;
-    text-align:center;
-    font-size:14px;
-  }
-
-  th {
-    position:sticky;
-    top:0;
-    background:#fafafa;
-    z-index:1;
-  }
-
-  /* Sticky columns */
-  th.pos, td.pos {
-    position:sticky;
-    left:0;
-    z-index:3;
-    background:white;
-    width:50px;
-    text-align:right;
-    padding-right:12px;
-  }
-
-  th.name, td.name {
-    position:sticky;
-    left:50px;
-    z-index:3;
-    background:white;
-    min-width:180px;
-    text-align:left;
-  }
-
-  th.total, td.total {
-    position:sticky;
-    right:0;
-    z-index:3;
-    background:white;
-    font-weight:600;
-  }
-
-  tr.me td {
-    background:#fff6bf;
-  }
-
-  tr.me td.pos,
-  tr.me td.name,
-  tr.me td.total {
-    background:#ffe680;
-  }
-
-  .muted {
-    color:#888;
-  }
-</style>
-
-
-<h2 style="margin:6px 0 0;">Tabla general</h2>
-
-<!-- Tabs -->
-<div class="tabs">
-  <a class="tab {% if view == 'mdpoints' %}active{% endif %}"
-     href="{% url 'tabelle' %}?view=mdpoints">
-     Puntos por fecha
-  </a>
-
-  <a class="tab {% if view == 'ranks' %}active{% endif %}"
-     href="{% url 'tabelle' %}?view=ranks">
-     Posiciones
-  </a>
-
-  <a class="tab {% if view == 'rankdiff' %}active{% endif %}"
-     href="{% url 'tabelle' %}?view=rankdiff">
-     Diferencia de posiciones
-  </a>
-</div>
-
-
-<!-- Toolbar -->
-<div class="toolbar">
-  <div class="muted">
-    Vista actual: Fecha {{ shown_matchdays|first }}–{{ shown_matchdays|last }}
-    ({{ shown_matchdays|length }}) de {{ matchdays|length }}
+    <div class="muted small">
+      Vista actual: Fecha {{ shown_matchdays|first }}–{{ shown_matchdays|last }}
+      ({{ shown_matchdays|length }}) de {{ matchdays|length }}
+    </div>
   </div>
 
-  <div>
-    <a class="navbtn {% if prev_from is None %}disabled{% endif %}"
-       href="{% url 'tabelle' %}?view={{ view }}&from={{ prev_from }}&count={{ count }}">
-       ◀
+  <!-- Tabs -->
+  <div class="tabs-modern">
+    <a class="tab-modern {% if view == 'mdpoints' %}active{% endif %}"
+       href="{% url 'tabelle' %}?view=mdpoints">
+       Puntos por fecha
     </a>
 
-    <a class="navbtn {% if next_from is None %}disabled{% endif %}"
-       href="{% url 'tabelle' %}?view={{ view }}&from={{ next_from }}&count={{ count }}">
-       ▶
+    <a class="tab-modern {% if view == 'ranks' %}active{% endif %}"
+       href="{% url 'tabelle' %}?view=ranks">
+       Posiciones
+    </a>
+
+    <a class="tab-modern {% if view == 'rankdiff' %}active{% endif %}"
+       href="{% url 'tabelle' %}?view=rankdiff">
+       Diferencia
     </a>
   </div>
-</div>
 
+  <!-- Table -->
+  <div class="card table-card">
+    <div class="tablewrap-modern">
+      <table>
+        <thead>
+          <tr>
+            <th class="sticky-left pos">Pos</th>
+            <th class="sticky-left name">Nombre</th>
 
-<div class="tablewrap">
-  <table>
-    <thead>
-      <tr>
-        <th class="pos">Pos</th>
-        <th class="name">Nombre</th>
+            {% for md in shown_matchdays %}
+              <th>{{ md }}</th>
+            {% endfor %}
 
-        {% for md in shown_matchdays %}
-          <th>{{ md }}</th>
-        {% endfor %}
+            <th class="sticky-right total">Suma</th>
+          </tr>
+        </thead>
 
-        <th class="total">Suma</th>
-      </tr>
-    </thead>
+        <tbody>
+          {% for r in table_rows %}
+            <tr class="{% if r.user.id == me_id %}me{% endif %}">
+              <td class="sticky-left pos">{{ forloop.counter }}.</td>
 
-    <tbody>
-      {% for r in table_rows %}
-        <tr class="{% if r.user.id == me_id %}me{% endif %}">
-          <td class="pos">{{ forloop.counter }}.</td>
+              <td class="sticky-left name">
+                <a href="{% url 'user_stats' r.user.id %}">
+                  {{ r.user.username }}
+                </a>
+              </td>
 
-          <td class="name">
-            <a href="{% url 'user_stats' r.user.id %}">
-              {{ r.user.username }}
-            </a>
-          </td>
+              {% for c in r.cells %}
+                <td>
+                  {% if c is None %}
+                    <span class="muted">—</span>
+                  {% else %}
+                    {{ c }}
+                  {% endif %}
+                </td>
+              {% endfor %}
 
-          {% for c in r.cells %}
-            <td>
-              {% if c is None %}
-                <span class="muted">—</span>
-              {% else %}
-                {{ c }}
-              {% endif %}
-            </td>
+              <td class="sticky-right total">{{ r.total }}</td>
+            </tr>
           {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
 
-          <td class="total">{{ r.total }}</td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
 </div>

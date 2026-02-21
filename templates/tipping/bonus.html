@@ -1,72 +1,79 @@
 {% extends "tipping/base.html" %}
-{% block title %}Pronosticos especiales{% endblock %}
+
+{% block title %}Pronósticos especiales{% endblock %}
 
 {% block content %}
-<div style="max-width:720px; margin: 0 auto;">
-  <h2>Pronosticos especiales</h2>
+<div class="container">
 
+  <!-- Header -->
+  <div class="card">
+    <div class="header-flex">
+      <div>
+        <h2>Pronósticos especiales</h2>
+        {% if season_start %}
+          <div class="muted small">
+            Se bloquean a partir de: {{ season_start|date:"d.m.Y H:i" }}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Messages -->
   {% if messages %}
-    <div style="margin:12px 0;">
+    <div class="stack" style="margin-top:12px;">
       {% for message in messages %}
-        <div style="padding:10px 12px; border:1px solid #eee; border-radius:10px; margin-bottom:8px;">
-          {{ message }}
-        </div>
+        <div class="alert">{{ message }}</div>
       {% endfor %}
     </div>
   {% endif %}
 
-  <form method="post" style="display:grid; gap:14px;">
-    {% csrf_token %}
+  <!-- Form -->
+  <div class="card" style="margin-top:12px;">
+    <form method="post" class="form-grid">
+      {% csrf_token %}
 
-    <div>
-      <label for="{{ form.herbstmeister.id_for_label }}" style="display:block; font-size:13px; color:#555; margin-bottom:6px;">
-        {{ form.herbstmeister.label }}
-      </label>
-      {{ form.herbstmeister }}
-    </div>
+      <div class="field">
+        <label for="{{ form.herbstmeister.id_for_label }}">{{ form.herbstmeister.label }}</label>
+        {{ form.herbstmeister }}
+      </div>
 
-    <div>
-      <label for="{{ form.meister.id_for_label }}" style="display:block; font-size:13px; color:#555; margin-bottom:6px;">
-        {{ form.meister.label }}
-      </label>
-      {{ form.meister }}
-    </div>
+      <div class="field">
+        <label for="{{ form.meister.id_for_label }}">{{ form.meister.label }}</label>
+        {{ form.meister }}
+      </div>
 
-    <div>
-      <label for="{{ form.trainer_first.id_for_label }}" style="display:block; font-size:13px; color:#555; margin-bottom:6px;">
-        {{ form.trainer_first.label }}
-      </label>
-      {{ form.trainer_first }}
-    </div>
+      <div class="field">
+        <label for="{{ form.trainer_first.id_for_label }}">{{ form.trainer_first.label }}</label>
+        {{ form.trainer_first }}
+      </div>
 
-    <div>
-      <label for="{{ form.topscorer.id_for_label }}" style="display:block; font-size:13px; color:#555; margin-bottom:6px;">
-        {{ form.topscorer.label }}
-      </label>
-      {{ form.topscorer }}
-    </div>
+      <div class="field">
+        <label for="{{ form.topscorer.id_for_label }}">{{ form.topscorer.label }}</label>
+        {{ form.topscorer }}
+      </div>
 
-    <div>
-      <label for="{{ form.relegation1.id_for_label }}" style="display:block; font-size:13px; color:#555; margin-bottom:6px;">
-        {{ form.relegation1.label }}
-      </label>
-      {{ form.relegation1 }}
-    </div>
+      <div class="field">
+        <label for="{{ form.relegation1.id_for_label }}">{{ form.relegation1.label }}</label>
+        {{ form.relegation1 }}
+      </div>
 
-    <div>
-      <label for="{{ form.relegation2.id_for_label }}" style="display:block; font-size:13px; color:#555; margin-bottom:6px;">
-        {{ form.relegation2.label }}
-      </label>
-      {{ form.relegation2 }}
-      {% if form.relegation2.errors %}
-        <div style="color:#b00020; font-size:13px; margin-top:6px;">{{ form.relegation2.errors }}</div>
-      {% endif %}
-    </div>
+      <div class="field">
+        <label for="{{ form.relegation2.id_for_label }}">{{ form.relegation2.label }}</label>
+        {{ form.relegation2 }}
 
-    <button type="submit"
-            style="margin-top:8px; padding:10px 12px; border:0; border-radius:10px; background:#0077cc; color:#fff; font-size:14px; cursor:pointer;">
-      Guardar
-    </button>
-  </form>
+        {% if form.relegation2.errors %}
+          <div class="form-error">
+            {{ form.relegation2.errors }}
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="actions">
+        <button class="btn primary" type="submit">Guardar</button>
+      </div>
+    </form>
+  </div>
+
 </div>
 {% endblock %}

@@ -1,59 +1,49 @@
-{% include "tipping/_nav.html" %}
+{% extends "tipping/base.html" %}
 
-<style>
-  .card {
-    max-width: 520px;
-    margin: 0 auto;
-    border: 1px solid #e8e8e8;
-    border-radius: 12px;
-    padding: 18px;
-    background: #fff;
-  }
-  .title { margin: 0 0 12px; font-size: 18px; }
-  .field { margin-bottom: 12px; }
-  label { display:block; font-size: 13px; color:#444; margin-bottom: 6px; }
-  .input { width: 100%; padding: 10px 12px; border:1px solid #ddd; border-radius: 8px; }
-  .btn {
-    padding: 10px 14px;
-    border: 1px solid #0077cc;
-    background: #0077cc;
-    color: white;
-    border-radius: 8px;
-    cursor: pointer;
-  }
-  .btn:hover { filter: brightness(0.95); }
-  .hint { color:#666; font-size: 13px; margin-top: 10px; }
-  .errors { color:#b00020; font-size: 13px; margin: 10px 0; }
-</style>
+{% block title %}Crear grupo{% endblock %}
 
-<div class="card">
-  <h2 class="title">Crear grupo</h2>
+{% block content %}
+<div class="container">
+  <div class="card" style="max-width:520px; margin:0 auto;">
 
-  {% if form.errors %}
-    <div class="errors">
-      Por favor revisa tus datos.
-    </div>
-  {% endif %}
+    <h2 style="margin-bottom:12px;">Crear grupo</h2>
 
-  <form method="post">
-    {% csrf_token %}
+    {% if form.errors %}
+      <div class="alert" style="margin-bottom:12px;">
+        Por favor revisa tus datos.
+      </div>
+    {% endif %}
 
-    <div class="field">
-      <label for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
-      {{ form.name }}
-      {% for e in form.name.errors %}<div class="errors">{{ e }}</div>{% endfor %}
-    </div>
+    <form method="post" class="form-grid">
+      {% csrf_token %}
 
-    <div class="field">
-      <label for="{{ form.tournament.id_for_label }}">{{ form.tournament.label }}</label>
-      {{ form.tournament }}
-      {% for e in form.tournament.errors %}<div class="errors">{{ e }}</div>{% endfor %}
+      <div class="field">
+        <label for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
+        {{ form.name }}
+        {% for e in form.name.errors %}
+          <div class="form-error">{{ e }}</div>
+        {% endfor %}
+      </div>
+
+      <div class="field">
+        <label for="{{ form.tournament.id_for_label }}">{{ form.tournament.label }}</label>
+        {{ form.tournament }}
+        {% for e in form.tournament.errors %}
+          <div class="form-error">{{ e }}</div>
+        {% endfor %}
+      </div>
+
+      <div class="actions">
+        <button class="btn primary" type="submit">
+          Crear grupo
+        </button>
+      </div>
+    </form>
+
+    <div class="muted small" style="margin-top:14px;">
+      Una vez creado el grupo, recibirás un código de unión que podrás compartir con otras personas.
     </div>
 
-    <button class="btn" type="submit">Crear grupo</button>
-  </form>
-
-  <div class="hint">
-    Una vez creado el grupo, recibirás un código de unión que podrás compartir con otras personas.
   </div>
 </div>
+{% endblock %}

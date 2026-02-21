@@ -1,141 +1,192 @@
-<h1>{{ group.name }} – Tippabgabe</h1>
+{% extends "tipping/base.html" %}
 
-<p>
-  <a href="{% url 'join_group' %}">Cambiar grupo activo</a> |
-  <a href="/accounts/logout/">Logout</a>
-</p>
+{% block title %}{{ group.name }} – Tippabgabe{% endblock %}
 
-{% if matchday %}
-  <h2>Siguiente fecha: {{ matchday }}</h2>
+{% block content %}
+<div class="container">
 
-  <p>
-    {% if prev_md %}<a href="/?md={{ prev_md }}">◀ Fecha anterior</a>{% endif %}
-    {% if prev_md and next_md %} | {% endif %}
-    {% if next_md %}<a href="/?md={{ next_md }}">Siguiente fecha ▶</a>{% endif %}
-  </p>
-
-  <form method="post">
-    {% csrf_token %}
-
-    <table border="1" cellpadding="6">
-      <tr>
-        <th>Partido</th>
-        <th>Resultado</th>
-        <th>Tu pronostico</th>
-        <th>Estatus</th>
-        <th>Puntos</th>
-      </tr>
-
-      {% for r in rows %}
-        <tr>
-          <td>{{ r.match.home_team }} – {{ r.match.away_team }}</td>
-
-          <td>
-            {% if r.match.home_score != None and r.match.away_score != None %}
-              {{ r.match.home_score }} : {{ r.match.away_score }}
-            {% else %}
-              —
-            {% endif %}
-          </td>
-
-          <td>
-            {% if r.match.is_locked %}
-              {% if r.pred %}
-                {{ r.pred.pred_home }} : {{ r.pred.pred_away }}
-              {% else %}
-                —
-              {% endif %}
-            {% else %}
-              <input
-                type="number"
-                min="0"
-                name="pred_home_{{ r.match.id }}"
-                style="width:60px"
-                value="{% if r.pred %}{{ r.pred.pred_home }}{% endif %}"
-              />
-              :
-              <input
-                type="number"
-                min="0"
-                name="pred_away_{{ r.match.id }}"
-                style="width:60px"
-                value="{% if r.pred %}{{ r.pred.pred_away }}{% endif %}"
-              />
-            {% endif %}
-          </td>
-
-          <td>{% if r.match.is_locked %}cerrado{% else %}abierto{% endif %}</td>
-
-          <td>
-            {% if r.match.home_score != None and r.match.away_score != None %}
-              {{ r.points }}
-            {% else %}
-              —
-            {% endif %}
-          </td>
-        </tr>
-      {% endfor %}
-    </table>
-
-    <p style="margin-top: 12px;">
-      <button type="submit">Guardar pronosticos</button>
-    </p>
-  </form>
-
-  <hr>
-
-  <h2>Tabla (Total de puntos)</h2>
-
-  {% if leaderboard %}
-    <table border="1" cellpadding="6">
-      <tr>
-        <th>#</th>
-        <th>Nombre</th>
-        <th>Puntos</th>
-      </tr>
-
-      {% for row in leaderboard %}
-        <tr>
-          <td>{{ forloop.counter }}</td>
-          <td>{{ row.user.username }}</td>
-          <td>{{ row.points }}</td>
-        </tr>
-      {% endfor %}
-    </table>
-  {% else %}
-    <p>Grupo sin miembros</p>
-  {% endif %}
-
-{% else %}
-  <p>No encontramos mas partidos.</p>
-{% endif %}
-
-<!-- Modal: zeigt Django messages nach dem Redirect -->
-{% if messages %}
-  <div id="modalBackdrop" style="
-    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
-    display: flex; align-items: center; justify-content: center;
-  ">
-    <div style="background: white; padding: 16px; border-radius: 10px; min-width: 320px;">
-      <h3 style="margin-top:0;">Info</h3>
-      {% for message in messages %}
-        <p style="margin: 8px 0;">{{ message }}</p>
-      {% endfor %}
-      <div style="text-align:right; margin-top: 12px;">
-        <button id="closeModalBtn">OK</button>
+  <div class="card">
+    <div class="header-flex">
+      <div>
+        <h1 style="margin:0 0 6px;">{{ group.name }} – Tippabgabe</h1>
+        <div class="muted small">
+          {% if matchday %}Fecha: {{ matchday }}{% else %}Sin fecha activa{% endif %}
+        </div>
       </div>
+
+      {% if matchday %}
+        <div class="toolbar-nav">
+          {% if prev_md %}
+            <a class="btn small" href="/?md={{ prev_md }}">◀ Fecha anterior</a>
+          {% endif %}
+          {% if next_md %}
+            <a class="btn small" href="/?md={{ next_md }}">Siguiente fecha ▶</a>
+          {% endif %}
+        </div>
+      {% endif %}
     </div>
   </div>
 
-  <script>
-    (function () {
-      const backdrop = document.getElementById("modalBackdrop");
-      const btn = document.getElementById("closeModalBtn");
-      function close() { backdrop.style.display = "none"; }
-      btn.addEventListener("click", close);
-      backdrop.addEventListener("click", function (e) {
-        if (e.target === backdrop) close();
-      });
-    })();
-  </script>
-{% endif %}
+  {% if matchday %}
+
+    <!-- Tippen Tabelle -->
+    <div class="card table-card" style="margin-top:12px;">
+      <div class="tablewrap-modern">
+        <form method="post">
+          {% csrf_token %}
+
+          <table>
+            <thead>
+              <tr>
+                <th class="sticky-left">Partido</th>
+                <th>Resultado</th>
+                <th>Tu pronóstico</th>
+                <th>Estatus</th>
+                <th class="sticky-right">Puntos</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {% for r in rows %}
+                <tr>
+                  <td class="sticky-left" style="text-align:left;">
+                    {{ r.match.home_team }} – {{ r.match.away_team }}
+                  </td>
+
+                  <td>
+                    {% if r.match.home_score != None and r.match.away_score != None %}
+                      <span class="tip">{{ r.match.home_score }} : {{ r.match.away_score }}</span>
+                    {% else %}
+                      <span class="muted">—</span>
+                    {% endif %}
+                  </td>
+
+                  <td>
+                    {% if r.match.is_locked %}
+                      {% if r.pred %}
+                        <span class="tip">{{ r.pred.pred_home }} : {{ r.pred.pred_away }}</span>
+                      {% else %}
+                        <span class="muted">—</span>
+                      {% endif %}
+                    {% else %}
+                      <div class="grid" style="grid-template-columns: 1fr auto 1fr; gap: 8px; align-items:center; max-width: 180px; margin: 0 auto;">
+                        <input
+                          class="input"
+                          type="number"
+                          min="0"
+                          name="pred_home_{{ r.match.id }}"
+                          value="{% if r.pred %}{{ r.pred.pred_home }}{% endif %}"
+                        />
+                        <span class="muted">:</span>
+                        <input
+                          class="input"
+                          type="number"
+                          min="0"
+                          name="pred_away_{{ r.match.id }}"
+                          value="{% if r.pred %}{{ r.pred.pred_away }}{% endif %}"
+                        />
+                      </div>
+                    {% endif %}
+                  </td>
+
+                  <td>
+                    {% if r.match.is_locked %}
+                      <span class="pill">cerrado</span>
+                    {% else %}
+                      <span class="muted">abierto</span>
+                    {% endif %}
+                  </td>
+
+                  <td class="sticky-right">
+                    {% if r.match.home_score != None and r.match.away_score != None %}
+                      {{ r.points }}
+                    {% else %}
+                      <span class="muted">—</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+
+          <div style="padding: 12px 14px; display:flex; justify-content:flex-end;">
+            <button class="btn primary" type="submit">Guardar pronósticos</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Leaderboard -->
+    <div class="card" style="margin-top:12px;">
+      <div class="header-flex">
+        <h2 style="margin:0;">Tabla (Total de puntos)</h2>
+      </div>
+
+      {% if leaderboard %}
+        <div class="tablewrap-modern" style="margin-top:12px;">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:60px;">#</th>
+                <th style="text-align:left;">Nombre</th>
+                <th style="width:120px;">Puntos</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in leaderboard %}
+                <tr>
+                  <td>{{ forloop.counter }}</td>
+                  <td style="text-align:left;">{{ row.user.username }}</td>
+                  <td>{{ row.points }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="muted" style="margin:10px 0 0;">Grupo sin miembros</p>
+      {% endif %}
+    </div>
+
+  {% else %}
+    <div class="card" style="margin-top:12px;">
+      <div class="alert">No encontramos más partidos.</div>
+    </div>
+  {% endif %}
+
+  <!-- Messages (Modal) -->
+  {% if messages %}
+    <div id="modalBackdrop" style="
+      position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+      display: flex; align-items: center; justify-content: center;
+      padding: 16px; z-index: 1000;
+    ">
+      <div class="card" style="max-width:520px; width:100%;">
+        <div class="header-flex">
+          <h3 style="margin:0;">Info</h3>
+          <button class="btn small" id="closeModalBtn" type="button">OK</button>
+        </div>
+
+        <div class="stack" style="margin-top:12px;">
+          {% for message in messages %}
+            <div class="alert">{{ message }}</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const backdrop = document.getElementById("modalBackdrop");
+        const btn = document.getElementById("closeModalBtn");
+        function close() { backdrop.style.display = "none"; }
+        btn.addEventListener("click", close);
+        backdrop.addEventListener("click", function (e) {
+          if (e.target === backdrop) close();
+        });
+      })();
+    </script>
+  {% endif %}
+
+</div>
+{% endblock %}

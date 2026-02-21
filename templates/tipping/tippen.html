@@ -1,18 +1,40 @@
+{% load static %}
+<link rel="stylesheet" href="{% static 'app.css' %}">
+
 {% include "tipping/_nav.html" %}
 
-{% if matchday %}
-  <h2>Pronostica – Fecha: {{ matchday }}</h2>
+<div class="container">
 
-  <p>
-    {% if prev_md %}<a href="/tippen/?md={{ prev_md }}">◀ Fecha anterior</a>{% endif %}
-    {% if prev_md and next_md %} | {% endif %}
-    {% if next_md %}<a href="/tippen/?md={{ next_md }}">Siguiente Fecha ▶</a>{% endif %}
-  </p>
+  {% if matchday %}
+    
+    <!-- 🔵 Moderner Header -->
+    <div class="card" style="margin-bottom:16px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        
+        <div>
+          <h2 style="margin:0;">Pronostica</h2>
+          <div class="muted" style="font-size:14px;">
+            Fecha {{ matchday }}
+          </div>
+        </div>
+
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          {% if prev_md %}
+            <a class="btn" href="/tippen/?md={{ prev_md }}">◀ Anterior</a>
+          {% endif %}
+          {% if next_md %}
+            <a class="btn" href="/tippen/?md={{ next_md }}">Siguiente ▶</a>
+          {% endif %}
+        </div>
+
+      </div>
+    </div>
 
   <form method="post">
     {% csrf_token %}
 
-    <table border="1" cellpadding="6">
+    <div class="card" style="overflow-x:auto;">
+  <table style="width:100%; border-collapse:collapse;">
       <tr>
         <th>Partido</th>
         <th>Hora y fecha</th>
@@ -66,7 +88,7 @@
     </table>
 
     <p style="margin-top: 12px;">
-      <button type="submit">Guardar pronosticos</button>
+      <button class="btn" type="submit">Guardar pronósticos</button>
     </p>
   </form>
 
@@ -83,6 +105,7 @@
       {% endfor %}
       <div style="text-align:right; margin-top:12px;">
         <button id="closeModalBtn">OK</button>
+          </table>
       </div>
     </div>
   </div>
@@ -96,4 +119,6 @@
       backdrop.addEventListener("click", function (e) { if (e.target === backdrop) close(); });
     })();
   </script>
+
+    </div> <!-- container -->
 {% endif %}
