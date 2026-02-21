@@ -89,15 +89,26 @@ WSGI_APPLICATION = "tippspiel.wsgi.application"
 # ---------------------------------------------------------------------
 # Database
 # ---------------------------------------------------------------------
-# Railway provides DATABASE_URL for PostgreSQL.
-# Local default: sqlite.
-DATABASES = {
-    "default": dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-        conn_max_age=600,
-        ssl_require=not DEBUG,  # Railway: SSL on, local: off
-    )
-}
+# Railway provides DATABASE_URL (usually PostgreSQL). Local default: sqlite.
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+
+if DATABASE_URL:
+    is_postgres = DATABASE_URL.startswith(("postgres://", "postgresql://"))
+    DATABASES = {
+        "default": dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=600,
+            ssl_require=(is_postgres and (not DEBUG)),
+        )
+    }
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
+
 
 
 # ---------------------------------------------------------------------
