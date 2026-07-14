@@ -1,12 +1,22 @@
 from django.contrib import admin
-from django.urls import path, include
 from django.shortcuts import redirect
+from django.urls import include, path
+
 
 def root_redirect(request):
-    return redirect("/accounts/login/")  # 🔥 hier zur Login-Seite
+    if request.user.is_authenticated:
+        return redirect("tippen")
+
+    return redirect("account_login")
+
 
 urlpatterns = [
-    path("", root_redirect, name="root"),   # ✅ Root abfangen
-    path("", include("tipping.urls")),      # deine App-Routen
     path("admin/", admin.site.urls),
+
+    # Login, Registrierung, Logout, Passwortverwaltung und Social Login
+    path("accounts/", include("allauth.urls")),
+
+    # Startseite und Tippspiel
+    path("", root_redirect, name="root"),
+    path("", include("tipping.urls")),
 ]

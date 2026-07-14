@@ -26,7 +26,7 @@ DEBUG = os.environ.get("DEBUG", "1") == "1"
 allowed_hosts_env = os.environ.get("ALLOWED_HOSTS", "")
 ALLOWED_HOSTS = [h.strip() for h in allowed_hosts_env.split(",") if h.strip()]
 if DEBUG:
-    ALLOWED_HOSTS += ["127.0.0.1", "localhost", "*"]
+    ALLOWED_HOSTS += ["127.0.0.1", "localhost"]
 
 # CSRF: needed for POST requests on Railway domain
 # In Railway: set CSRF_TRUSTED_ORIGINS="https://yourapp.up.railway.app"
@@ -48,20 +48,31 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+
+    # django-allauth
+    "allauth",
+    "allauth.account",
+    "allauth.socialaccount",
+
+    # Social Login
+    "allauth.socialaccount.providers.google",
+    "allauth.socialaccount.providers.microsoft",
+
+    # Eigene App
     "tipping",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-
-    # WhiteNoise for static files in production (Railway)
     "whitenoise.middleware.WhiteNoiseMiddleware",
-
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+
+    "allauth.account.middleware.AccountMiddleware",
+
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
@@ -85,6 +96,13 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "tippspiel.wsgi.application"
 
+AUTHENTICATION_BACKENDS = [
+    # Normaler Django-Login und Django-Admin
+    "django.contrib.auth.backends.ModelBackend",
+
+    # Login über django-allauth
+    "allauth.account.auth_backends.AuthenticationBackend",
+]
 
 # ---------------------------------------------------------------------
 # Database
@@ -154,8 +172,36 @@ STORAGES = {
 # Auth redirects
 # ---------------------------------------------------------------------
 
-LOGIN_REDIRECT_URL = "/tippen/"
-LOGOUT_REDIRECT_URL = "/accounts/login/"
+# ---------------------------------------------------------------------
+# Authentication / django-allauth
+# ---------------------------------------------------------------------
+
+LOGIN_URL = "account_login"
+LOGIN_REDIRECT_URL = "tippen"
+LOGOUT_REDIRECT_URL = "account_login"
+
+# Login mit Benutzername oder E-Mail-Adresse
+ACCOUNT_LOGIN_METHODS = {"username", "email"}
+
+# Felder bei einer normalen Registrierung
+ACCOUNT_SIGNUP_FIELDS = [
+    "username*",
+    "email*",
+    "password1*",
+    "password2*",
+]
+
+# Nach Registrierung direkt zur Gruppenauswahl
+ACCOUNT_SIGNUP_REDIRECT_URL = "join_group"
+
+# Für den lokalen Aufbau zunächst keine Bestätigungsmail
+ACCOUNT_EMAIL_VERIFICATION = "none"
+
+# E-Mail-Adressen dürfen nicht mehrfach verwendet werden
+ACCOUNT_UNIQUE_EMAIL = True
+
+# Social Login nur über sichere POST-Anfragen starten
+SOCIALACCOUNT_LOGIN_ON_GET = False
 
 
 # ---------------------------------------------------------------------

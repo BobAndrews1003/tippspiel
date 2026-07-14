@@ -1,0 +1,52 @@
+{% extends "tipping/base.html" %}
+{% load i18n %}
+
+{% block title %}
+  {% block head_title %}Cuenta{% endblock %}
+  · Juego de pronósticos
+{% endblock %}
+
+{% block body_class %}auth-body{% endblock %}
+{% block main_class %}auth-main{% endblock %}
+
+{% block page_content %}
+  {% block body %}
+
+    <div class="auth-shell">
+      <section class="auth-card">
+
+        <header class="auth-header">
+          <a href="{% url 'root' %}" class="auth-logo">
+            Tippspiel
+          </a>
+
+          <p class="auth-subtitle">
+            Pronostica, compite y disfruta el fútbol.
+          </p>
+        </header>
+
+        {% if messages %}
+          <div class="auth-messages">
+            {% for message in messages %}
+              <div class="auth-message {{ message.tags }}">
+                {{ message }}
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+
+        <div class="auth-content">
+          {% block content %}{% endblock %}
+        </div>
+
+      </section>
+    </div>
+
+  {% endblock body %}
+{% endblock page_content %}
+
+{% block extra_js %}
+  {{ block.super }}
+
+  {% block extra_body %}{% endblock %}
+{% endblock extra_js %}

@@ -1,128 +1,246 @@
-<!-- NAV_VERSION: 2026-02-20-railway-test -->
+<!-- NAV_VERSION: 2026-07-14-menu-left -->
 
 <nav class="nav">
   <div class="nav-inner">
 
-    <!-- Brand -->
-    <a class="nav-title"
-       href="{% if request.user.is_authenticated and group %}{% url 'tippen' %}{% else %}{% url 'login' %}{% endif %}">
-      {% if group %}{{ group.name }}{% else %}Tippspiel{% endif %}
-    </a>
-
-    <!-- Right controls -->
-    <div class="nav-controls">
+    <!-- Linker Bereich: Burger und dynamischer Gruppenname -->
+    <div class="nav-left">
 
       <!-- Burger -->
-      <button class="nav-iconbtn"
-              type="button"
-              aria-label="Menü"
-              aria-controls="navDrawer"
-              aria-expanded="false"
-              data-nav-toggle="drawer">
+      <button
+        class="nav-iconbtn"
+        type="button"
+        aria-label="Menü"
+        aria-controls="navDrawer"
+        aria-expanded="false"
+        data-nav-toggle="drawer"
+      >
         <span class="nav-burger" aria-hidden="true"></span>
       </button>
 
+      <!-- Dynamischer Gruppenname -->
+      <a
+        class="nav-title"
+        href="
+          {% if request.user.is_authenticated and group %}
+            {% url 'tippen' %}
+          {% elif request.user.is_authenticated %}
+            {% url 'join_group' %}
+          {% else %}
+            {% url 'account_login' %}
+          {% endif %}
+        "
+      >
+        {% if group %}
+          {{ group.name }}
+        {% else %}
+          Tippspiel
+        {% endif %}
+      </a>
+
+    </div>
+
+    <!-- Rechter Bereich: Konto -->
+    <div class="nav-controls">
+
       {% if request.user.is_authenticated %}
-        <!-- Account / Group dropdown -->
-        <button class="nav-iconbtn"
-                type="button"
-                aria-label="Konto & Gruppe"
-                aria-controls="navAccount"
-                aria-expanded="false"
-                data-nav-toggle="account">
-          <span class="nav-avatar" aria-hidden="true">{{ request.user.username|slice:":1" }}</span>
+        <button
+          class="nav-iconbtn"
+          type="button"
+          aria-label="Konto und Gruppe"
+          aria-controls="navAccount"
+          aria-expanded="false"
+          data-nav-toggle="account"
+        >
+          <span class="nav-avatar" aria-hidden="true">
+            {{ request.user.username|default:request.user.email|slice:":1"|upper }}
+          </span>
         </button>
       {% endif %}
+
     </div>
   </div>
 
-  <!-- Drawer backdrop -->
-  <div class="nav-backdrop" id="navBackdrop" hidden></div>
+  <!-- Hintergrund beim geöffneten Menü -->
+  <div
+    class="nav-backdrop"
+    id="navBackdrop"
+    hidden
+  ></div>
 
-  <!-- Drawer (links) -->
-  <div class="nav-drawer" id="navDrawer" aria-hidden="true">
+  <!-- Linkes Navigationsmenü -->
+  <div
+    class="nav-drawer"
+    id="navDrawer"
+    aria-hidden="true"
+  >
     <div class="nav-drawer-head">
       <div>
-        <div class="nav-drawer-title">{% if group %}{{ group.name }}{% else %}Tippspiel{% endif %}</div>
+        <div class="nav-drawer-title">
+          {% if group %}
+            {{ group.name }}
+          {% else %}
+            Tippspiel
+          {% endif %}
+        </div>
+
         {% if request.user.is_authenticated %}
-          <div class="muted small">{{ request.user.username }}</div>
+          <div class="muted small">
+            {{ request.user.username|default:request.user.email }}
+          </div>
         {% endif %}
       </div>
-      <button class="nav-iconbtn" type="button" aria-label="Schließen" data-nav-close>
+
+      <button
+        class="nav-iconbtn"
+        type="button"
+        aria-label="Schließen"
+        data-nav-close
+      >
         ✕
       </button>
     </div>
 
     <div class="nav-drawer-body">
-      <div class="nav-section-title">Menü</div>
+      <div class="nav-section-title">Menú</div>
 
       <div class="nav-links-vertical">
+
         {% if request.user.is_authenticated %}
+
           {% if group %}
-            <a href="{% url 'tippen' %}"
-               class="nav-link {% if request.resolver_match.url_name == 'tippen' %}active{% endif %}">
+            <a
+              href="{% url 'tippen' %}"
+              class="nav-link {% if request.resolver_match.url_name == 'tippen' %}active{% endif %}"
+            >
               Pronosticar
             </a>
 
-            <a href="{% url 'spieltag' %}"
-               class="nav-link {% if request.resolver_match.url_name == 'spieltag' %}active{% endif %}">
+            <a
+              href="{% url 'spieltag' %}"
+              class="nav-link {% if request.resolver_match.url_name == 'spieltag' %}active{% endif %}"
+            >
               Tabla por fecha
             </a>
 
-            <a href="{% url 'tabelle' %}"
-               class="nav-link {% if request.resolver_match.url_name == 'tabelle' %}active{% endif %}">
+            <a
+              href="{% url 'tabelle' %}"
+              class="nav-link {% if request.resolver_match.url_name == 'tabelle' %}active{% endif %}"
+            >
               Tabla general
             </a>
 
-            <a href="{% url 'bonus_tips' %}"
-               class="nav-link {% if request.resolver_match.url_name == 'bonus_tips' %}active{% endif %}">
-              Pronosticos especiales
+            <a
+              href="{% url 'bonus_tips' %}"
+              class="nav-link {% if request.resolver_match.url_name == 'bonus_tips' %}active{% endif %}"
+            >
+              Pronósticos especiales
             </a>
           {% endif %}
 
-          <a href="{% url 'join_group' %}"
-             class="nav-link {% if request.resolver_match.url_name == 'join_group' %}active{% endif %}">
+          <a
+            href="{% url 'join_group' %}"
+            class="nav-link {% if request.resolver_match.url_name == 'join_group' %}active{% endif %}"
+          >
             Unirse a un grupo
           </a>
 
-          <a href="{% url 'create_group' %}"
-             class="nav-link {% if request.resolver_match.url_name == 'create_group' %}active{% endif %}">
+          <a
+            href="{% url 'create_group' %}"
+            class="nav-link {% if request.resolver_match.url_name == 'create_group' %}active{% endif %}"
+          >
             Crear un grupo
           </a>
+
         {% else %}
-          <a href="{% url 'login' %}"
-             class="nav-link {% if request.resolver_match.url_name == 'login' %}active{% endif %}">
-            Login
+
+          <a
+            href="{% url 'account_login' %}"
+            class="nav-link {% if request.resolver_match.url_name == 'account_login' %}active{% endif %}"
+          >
+            Iniciar sesión
           </a>
 
-          <a href="{% url 'signup' %}"
-             class="nav-link {% if request.resolver_match.url_name == 'signup' %}active{% endif %}">
-            Registrieren
+          <a
+            href="{% url 'account_signup' %}"
+            class="nav-link {% if request.resolver_match.url_name == 'account_signup' %}active{% endif %}"
+          >
+            Registrarse
           </a>
+
+          <a
+            href="{% url 'account_reset_password' %}"
+            class="nav-link {% if request.resolver_match.url_name == 'account_reset_password' %}active{% endif %}"
+          >
+            Restablecer contraseña
+          </a>
+
         {% endif %}
+
       </div>
     </div>
   </div>
 
   {% if request.user.is_authenticated %}
-    <!-- Account panel (right) -->
-    <div class="nav-account" id="navAccount" aria-hidden="true">
+    <!-- Rechtes Konto- und Gruppenmenü -->
+    <div
+      class="nav-account"
+      id="navAccount"
+      aria-hidden="true"
+    >
       <div class="nav-account-head">
         <div class="nav-section-title">Cuenta</div>
-        <button class="nav-iconbtn" type="button" aria-label="Schließen" data-nav-close>
+
+        <button
+          class="nav-iconbtn"
+          type="button"
+          aria-label="Schließen"
+          data-nav-close
+        >
           ✕
         </button>
       </div>
 
       <div class="nav-account-body">
+
+        <!-- Benutzerinformationen -->
+        <div class="nav-section">
+          <div class="nav-section-title">Usuario</div>
+
+          <div class="nav-user-info">
+            <strong>
+              {{ request.user.username|default:request.user.email }}
+            </strong>
+
+            {% if request.user.email %}
+              <div class="muted small">
+                {{ request.user.email }}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Aktive Gruppe auswählen -->
         {% if my_groups and my_groups|length > 1 %}
           <div class="nav-section">
             <div class="nav-section-title">Grupo activo</div>
-            <form method="post" action="{% url 'set_active_group' %}">
+
+            <form
+              method="post"
+              action="{% url 'set_active_group' %}"
+            >
               {% csrf_token %}
-              <select name="group_id" onchange="this.form.submit()">
+
+              <select
+                name="group_id"
+                aria-label="Aktive Gruppe auswählen"
+                onchange="this.form.submit()"
+              >
                 {% for g in my_groups %}
-                  <option value="{{ g.id }}" {% if group and g.id == group.id %}selected{% endif %}>
+                  <option
+                    value="{{ g.id }}"
+                    {% if group and g.id == group.id %}selected{% endif %}
+                  >
                     {{ g.name }}
                   </option>
                 {% endfor %}
@@ -131,38 +249,73 @@
           </div>
         {% endif %}
 
+        <!-- Zugangscode -->
         {% if membership and membership.is_creator and group %}
           <div class="nav-section">
-            <div class="nav-section-title">Join-Code</div>
+            <div class="nav-section-title">Código de acceso</div>
 
             <div class="nav-joinbox">
-              <code class="nav-code">{{ group.join_code }}</code>
+              <code class="nav-code">
+                {{ group.join_code }}
+              </code>
 
               <div class="nav-join-actions">
-                <button class="btn small" type="button"
-                        onclick="navigator.clipboard.writeText('{{ group.join_code }}')">
-                  Copiar código
-                </button>
-
-                <button class="btn small" type="button"
-                        onclick="navigator.clipboard.writeText(window.location.origin + '{% url 'join_group' %}?code={{ group.join_code }}')">
-                  Copiar enlace
-                </button>
-              </div>
+  <button
+    class="btn small"
+    type="button"
+    data-copy-value="{{ group.join_code }}"
+  >
+    Copiar código
+  </button>
+</div>
             </div>
           </div>
         {% endif %}
 
+        <!-- Kontoeinstellungen -->
+        <div class="nav-section">
+          <div class="nav-section-title">Configuración</div>
+
+          <div class="nav-links-vertical">
+            <a
+              href="{% url 'account_email' %}"
+              class="nav-link {% if request.resolver_match.url_name == 'account_email' %}active{% endif %}"
+            >
+              Administrar correo electrónico
+            </a>
+
+            <a
+              href="{% url 'account_change_password' %}"
+              class="nav-link {% if request.resolver_match.url_name == 'account_change_password' %}active{% endif %}"
+            >
+              Cambiar contraseña
+            </a>
+          </div>
+        </div>
+
+        <!-- Abmelden -->
         <div class="nav-section">
           <div class="nav-userrow">
-            <span class="muted small">{{ request.user.username }}</span>
+            <span class="muted small">
+              {{ request.user.username|default:request.user.email }}
+            </span>
 
-            <form method="post" action="{% url 'logout' %}">
+            <form
+              method="post"
+              action="{% url 'account_logout' %}"
+            >
               {% csrf_token %}
-              <button type="submit" class="nav-logout">Logout</button>
+
+              <button
+                type="submit"
+                class="nav-logout"
+              >
+                Cerrar sesión
+              </button>
             </form>
           </div>
         </div>
+
       </div>
     </div>
   {% endif %}
@@ -170,60 +323,159 @@
 
 <script>
 (function () {
-  const drawer = document.getElementById('navDrawer');
-  const account = document.getElementById('navAccount');
-  const backdrop = document.getElementById('navBackdrop');
-  const toggles = document.querySelectorAll('[data-nav-toggle]');
-  const closers = document.querySelectorAll('[data-nav-close]');
+  const drawer = document.getElementById("navDrawer");
+  const account = document.getElementById("navAccount");
+  const backdrop = document.getElementById("navBackdrop");
 
-  function openPanel(which){
-    backdrop.hidden = false;
-    backdrop.classList.add('open');
+  const toggles = document.querySelectorAll("[data-nav-toggle]");
+  const closers = document.querySelectorAll("[data-nav-close]");
 
-    if (which === 'drawer'){
-      drawer.classList.add('open');
-      drawer.setAttribute('aria-hidden', 'false');
-      if (account) { account.classList.remove('open'); account.setAttribute('aria-hidden','true'); }
-    } else if (which === 'account' && account){
-      account.classList.add('open');
-      account.setAttribute('aria-hidden', 'false');
-      drawer.classList.remove('open');
-      drawer.setAttribute('aria-hidden', 'true');
+  function openPanel(which) {
+    if (!drawer || !backdrop) {
+      return;
     }
 
-    toggles.forEach(btn => {
-      const target = btn.getAttribute('data-nav-toggle');
-      btn.setAttribute('aria-expanded', target === which ? 'true' : 'false');
+    backdrop.hidden = false;
+    backdrop.classList.add("open");
+
+    if (which === "drawer") {
+      drawer.classList.add("open");
+      drawer.setAttribute("aria-hidden", "false");
+
+      if (account) {
+        account.classList.remove("open");
+        account.setAttribute("aria-hidden", "true");
+      }
+    }
+
+    if (which === "account" && account) {
+      account.classList.add("open");
+      account.setAttribute("aria-hidden", "false");
+
+      drawer.classList.remove("open");
+      drawer.setAttribute("aria-hidden", "true");
+    }
+
+    toggles.forEach((button) => {
+      const target = button.getAttribute("data-nav-toggle");
+
+      button.setAttribute(
+        "aria-expanded",
+        target === which ? "true" : "false"
+      );
     });
   }
 
-  function closeAll(){
-    drawer.classList.remove('open');
-    drawer.setAttribute('aria-hidden', 'true');
-    if (account){ account.classList.remove('open'); account.setAttribute('aria-hidden','true'); }
-    backdrop.classList.remove('open');
-    backdrop.hidden = true;
-    toggles.forEach(btn => btn.setAttribute('aria-expanded', 'false'));
+  function closeAll() {
+    if (drawer) {
+      drawer.classList.remove("open");
+      drawer.setAttribute("aria-hidden", "true");
+    }
+
+    if (account) {
+      account.classList.remove("open");
+      account.setAttribute("aria-hidden", "true");
+    }
+
+    if (backdrop) {
+      backdrop.classList.remove("open");
+      backdrop.hidden = true;
+    }
+
+    toggles.forEach((button) => {
+      button.setAttribute("aria-expanded", "false");
+    });
   }
 
-  toggles.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const target = btn.getAttribute('data-nav-toggle');
-      const isOpen = (target === 'drawer') ? drawer.classList.contains('open') : (account && account.classList.contains('open'));
-      if (isOpen) closeAll(); else openPanel(target);
+  toggles.forEach((button) => {
+    button.addEventListener("click", () => {
+      const target = button.getAttribute("data-nav-toggle");
+
+      const isDrawerOpen =
+        target === "drawer" &&
+        drawer &&
+        drawer.classList.contains("open");
+
+      const isAccountOpen =
+        target === "account" &&
+        account &&
+        account.classList.contains("open");
+
+      if (isDrawerOpen || isAccountOpen) {
+        closeAll();
+      } else {
+        openPanel(target);
+      }
     });
   });
 
-  closers.forEach(btn => btn.addEventListener('click', closeAll));
-  backdrop && backdrop.addEventListener('click', closeAll);
-
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeAll();
+  closers.forEach((button) => {
+    button.addEventListener("click", closeAll);
   });
 
-  // Close when resizing to desktop to avoid weird states
-  window.addEventListener('resize', () => {
-    if (window.innerWidth >= 900) closeAll();
+  if (backdrop) {
+    backdrop.addEventListener("click", closeAll);
+  }
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeAll();
+    }
   });
+
+  window.addEventListener("resize", () => {
+    if (window.innerWidth >= 900) {
+      closeAll();
+    }
+  });
+
+  /*
+   * Zugangscode kopieren
+   */
+  document
+    .querySelectorAll("[data-copy-value]")
+    .forEach((button) => {
+      button.addEventListener("click", async () => {
+        const value = button.getAttribute("data-copy-value");
+
+        try {
+          await navigator.clipboard.writeText(value);
+          showCopiedState(button);
+        } catch (error) {
+          console.error("Code konnte nicht kopiert werden:", error);
+        }
+      });
+    });
+
+  /*
+   * Einladungslink kopieren
+   */
+  document
+    .querySelectorAll("[data-copy-url]")
+    .forEach((button) => {
+      button.addEventListener("click", async () => {
+        const relativeUrl = button.getAttribute("data-copy-url");
+        const fullUrl = window.location.origin + relativeUrl;
+
+        try {
+          await navigator.clipboard.writeText(fullUrl);
+          showCopiedState(button);
+        } catch (error) {
+          console.error("Link konnte nicht kopiert werden:", error);
+        }
+      });
+    });
+
+  function showCopiedState(button) {
+    const originalText = button.textContent;
+
+    button.textContent = "Copiado ✓";
+    button.disabled = true;
+
+    window.setTimeout(() => {
+      button.textContent = originalText;
+      button.disabled = false;
+    }, 1500);
+  }
 })();
 </script>

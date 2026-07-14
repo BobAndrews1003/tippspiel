@@ -348,13 +348,15 @@ def tippen(request):
         if saved > 0:
             if skipped_locked > 0:
                 messages.success(
-                    request,
-                    f"Tipps gespeichert ✅ ({saved}) — {skipped_locked} Spiel(e) waren gesperrt."
-                )
+                request,
+                f"Tipps gespeichert ✅ ({saved}) — "
+                f"{skipped_locked} Spiel(e) waren gesperrt."
+        )
             else:
-                messages.success(request, f"Tipps gespeichert ✅ ({saved})")
-        else:
-            messages.info(request, "Keine Tipps gespeichert (leere oder ungültige Eingaben).")
+                    messages.success(
+                request,
+                f"Tipps gespeichert ✅ ({saved})"
+        )
 
         # ✅ Wichtig: im gleichen Spieltag bleiben
         return redirect(f"{request.path}?md={matchday}")

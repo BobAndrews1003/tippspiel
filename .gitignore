@@ -1,18 +1,33 @@
-cat > .gitignore <<'EOF'
 # Python
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+*$py.class
 
-# Local DB
+# Virtuelle Umgebung
+.venv/
+venv/
+
+# Umgebungsvariablen und Zugangsdaten
+.env
+.env.*
+!.env.example
+
+# Lokale Datenbank
 db.sqlite3
 
-# Django collectstatic output
+# Django
 staticfiles/
+media/
+
+# Tests und Cache
+.pytest_cache/
+.coverage
+
+# Editor
+.vscode/
 
 # macOS
 .DS_Store
 
-# venv
-.venv/
-EOF
+# Lokale Sicherung im Projektordner
+tippspiel_backup_2026/

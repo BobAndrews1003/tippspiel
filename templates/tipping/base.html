@@ -1,27 +1,31 @@
 {% load static %}
 <!DOCTYPE html>
-<html lang="de">
+<html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}Juego de pronosticos{% endblock %}</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- ✅ globales Layout / Theme -->
+  <title>
+    {% block title %}Juego de pronósticos{% endblock %}
+  </title>
+
   <link rel="stylesheet" href="{% static 'app.css' %}">
 
-  {# optional: seiten-spezifische css (nur wenn nötig) #}
+  {% block extra_head %}{% endblock %}
   {% block extra_css %}{% endblock %}
 </head>
 
-<body>
-    <!-- DEPLOY_MARKER: ba58ea6 -->
+<body class="{% block body_class %}{% endblock %}">
+  <!-- DEPLOY_MARKER: allauth-layout-2026-07-13 -->
+
   {% include "tipping/_nav.html" %}
 
-  <main>
-    {% block content %}{% endblock %}
+  <main class="{% block main_class %}{% endblock %}">
+    {% block page_content %}
+      {% block content %}{% endblock %}
+    {% endblock %}
   </main>
 
-  {# optional: seiten-spezifisches JS #}
   {% block extra_js %}{% endblock %}
 </body>
 </html>

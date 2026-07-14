@@ -338,6 +338,15 @@ tr.me td.sticky-right{ background: rgba(78,161,255,.16); }
   gap: 12px;
 }
 
+/* Linker Bereich: Menübutton + dynamischer Gruppenname */
+.nav-left{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
 /* Brand */
 .nav-title{
   display: inline-flex;
@@ -349,6 +358,10 @@ tr.me td.sticky-right{ background: rgba(78,161,255,.16); }
   letter-spacing: .2px;
   font-size: 16px;
   white-space: nowrap;
+
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .nav-title:hover{ opacity: .95; }
@@ -358,6 +371,7 @@ tr.me td.sticky-right{ background: rgba(78,161,255,.16); }
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-shrink: 0;
 }
 
 /* Icon buttons */
@@ -620,4 +634,329 @@ tr.me td.sticky-right{ background: rgba(78,161,255,.16); }
   .nav-inner{ padding: 12px 16px; }
   .nav-drawer, .nav-account{ width: 420px; }
   .nav-title{ font-size: 17px; }
+}
+
+/* =========================================================
+   DJANGO-ALLAUTH
+   Login, Registrierung, Passwort-Reset und Kontoverwaltung
+   ========================================================= */
+
+body.auth-body {
+  min-height: 100vh;
+}
+
+/* Der gesamte Bereich unterhalb der Navigation */
+main.auth-main {
+  width: 100%;
+  min-height: calc(100vh - 65px);
+  padding: 48px 16px;
+
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+/* Begrenzt die Breite der Authentifizierungsseiten */
+.auth-shell {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+/* Eigentliche Login-/Registrierungskarte */
+.auth-card {
+  width: 100%;
+  padding: 32px;
+
+  background: rgba(17, 26, 46, 0.94);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+/* Kopfbereich der Karte */
+.auth-header {
+  margin-bottom: 28px;
+  text-align: center;
+}
+
+.auth-logo {
+  display: inline-block;
+
+  color: var(--text);
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1.1;
+  text-decoration: none;
+}
+
+.auth-logo:hover {
+  color: var(--brand);
+}
+
+.auth-subtitle {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Inhalt */
+.auth-content {
+  width: 100%;
+  min-width: 0;
+}
+
+.auth-content h1 {
+  margin: 0 0 12px;
+  font-size: 26px;
+  line-height: 1.25;
+}
+
+.auth-content h2 {
+  margin: 24px 0 10px;
+  font-size: 18px;
+}
+
+.auth-content p {
+  margin: 10px 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.auth-content a {
+  color: var(--brand);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.auth-content a:hover {
+  text-decoration: underline;
+}
+
+/* Allauth-Formulare */
+.auth-content form {
+  width: 100%;
+  margin-top: 22px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.auth-content form > p,
+.auth-content form > div {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+}
+
+/* Beschriftungen */
+.auth-content label {
+  display: block;
+  margin-bottom: 7px;
+
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* Eingabefelder innerhalb der Auth-Karte */
+.auth-content input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.auth-content select,
+.auth-content textarea {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+
+  padding: 12px 14px;
+
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--input-bg);
+  color: var(--text);
+
+  font: inherit;
+}
+
+.auth-content input::placeholder,
+.auth-content textarea::placeholder {
+  color: rgba(169, 182, 214, 0.65);
+}
+
+.auth-content input:focus,
+.auth-content select:focus,
+.auth-content textarea:focus {
+  border-color: rgba(78, 161, 255, 0.7);
+  box-shadow: 0 0 0 3px rgba(78, 161, 255, 0.12);
+  outline: none;
+}
+
+/* Checkboxen nicht über die ganze Breite ziehen */
+.auth-content input[type="checkbox"],
+.auth-content input[type="radio"] {
+  width: auto;
+  margin-right: 7px;
+}
+
+.auth-content label:has(input[type="checkbox"]),
+.auth-content label:has(input[type="radio"]) {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Hauptbutton */
+.auth-content button[type="submit"] {
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 16px;
+
+  border: 1px solid rgba(78, 161, 255, 0.5);
+  border-radius: 999px;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(78, 161, 255, 0.45),
+      rgba(124, 77, 255, 0.34)
+    );
+
+  color: var(--text);
+  cursor: pointer;
+
+  font: inherit;
+  font-weight: 800;
+}
+
+.auth-content button[type="submit"]:hover {
+  border-color: rgba(78, 161, 255, 0.8);
+  filter: brightness(1.08);
+}
+
+.auth-content button[type="submit"]:focus-visible {
+  outline: 3px solid rgba(78, 161, 255, 0.25);
+  outline-offset: 2px;
+}
+
+/* Fehlermeldungen */
+.auth-content .errorlist {
+  margin: 0 0 8px;
+  padding: 10px 12px;
+
+  list-style: none;
+
+  border: 1px solid rgba(255, 107, 107, 0.35);
+  border-radius: 10px;
+  background: rgba(255, 107, 107, 0.08);
+  color: #ff8a8a;
+
+  font-size: 13px;
+}
+
+.auth-content .helptext,
+.auth-content .helptext ul {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.auth-content .helptext ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+/* Django Messages */
+.auth-messages {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.auth-message {
+  padding: 11px 13px;
+
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+
+  font-size: 14px;
+}
+
+.auth-message.success {
+  border-color: rgba(46, 204, 113, 0.35);
+  background: rgba(46, 204, 113, 0.1);
+}
+
+.auth-message.error {
+  border-color: rgba(255, 107, 107, 0.35);
+  background: rgba(255, 107, 107, 0.1);
+  color: #ff8a8a;
+}
+
+/* Trennlinien und Listen */
+.auth-content hr {
+  margin: 26px 0;
+
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+.auth-content ul {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* Social-Login-Buttons */
+.auth-content .socialaccount_providers {
+  display: grid;
+  gap: 10px;
+
+  margin: 18px 0;
+  padding: 0;
+
+  list-style: none;
+}
+
+.auth-content .socialaccount_providers a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 44px;
+  padding: 10px 14px;
+
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+
+  color: var(--text);
+  text-decoration: none;
+}
+
+.auth-content .socialaccount_providers a:hover {
+  border-color: rgba(78, 161, 255, 0.55);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Mobil */
+@media (max-width: 520px) {
+  main.auth-main {
+    min-height: calc(100vh - 60px);
+    padding: 24px 10px;
+  }
+
+  .auth-card {
+    padding: 24px 18px;
+    border-radius: 14px;
+  }
+
+  .auth-logo {
+    font-size: 24px;
+  }
+
+  .auth-content h1 {
+    font-size: 22px;
+  }
 }
