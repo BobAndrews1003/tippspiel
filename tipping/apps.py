@@ -10,4 +10,5 @@ class TippingConfig(AppConfig):
 
     def ready(self):
         from . import bonus_signals  # noqa: F401
+        from . import membership_signals  # noqa: F401
         from . import signals  # noqa: F401

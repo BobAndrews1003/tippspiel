@@ -5,7 +5,6 @@ from collections import Counter, defaultdict
 from typing import Optional
 
 from .bonus_scoring import (
-    bonus_points_for_user,
     get_bonus_lock_time,
 )
 
@@ -16,7 +15,6 @@ from django.contrib.auth import logout
 from django.db.models import Q
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
-from django.db.models import Sum
 from django.db.models import Count
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404, redirect, render
