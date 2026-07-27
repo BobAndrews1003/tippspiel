@@ -5,7 +5,9 @@ from .models import (
     Match,
     MatchdayScore,
 )
-from .scoring import recalculate_points_for_match
+from .scoring import (
+    recalculate_points_for_match,
+)
 from .standings import (
     rebuild_group_bonus_points,
     rebuild_group_timeline,
@@ -31,66 +33,18 @@ def _matchday_has_results(
     ).exists()
 
 
-@transaction.atomic
-def process_match_change(
-    *,
-    match_id: int,
-    previous_matchday: int | None = None,
-) -> int:
+def _get_tournament_group_ids(
+    tournament_id: int,
+) -> list[int]:
     """
-    Verarbeitet eine Ergebnis- oder Spieltagsänderung.
-
-    Ablauf:
-    1. Tipp-Punkte des Spiels neu berechnen.
-    2. Betroffene Spieltagssummen aller Gruppen aktualisieren.
-    3. Historische Ränge ab dem frühesten betroffenen
-       Spieltag neu berechnen.
-    4. Aktuelle Gruppenstände neu aufbauen.
-
-    Rückgabewert:
-        Anzahl der bearbeiteten Gruppen.
+    Liefert alle Gruppen des Turniers, die mindestens
+    ein aktuelles Mitglied besitzen.
     """
 
-    match = (
-        Match.objects
-        .select_for_update()
-        .filter(
-            pk=match_id,
-        )
-        .first()
-    )
-
-    if match is None:
-        return 0
-
-    # Prediction.points vollständig neu berechnen.
-    recalculate_points_for_match(
-        match,
-    )
-
-    affected_matchdays = {
-        matchday
-        for matchday in (
-            previous_matchday,
-            match.matchday,
-        )
-        if matchday is not None
-    }
-
-    # Spiele ohne Spieltag fließen nicht in die
-    # Spieltags- und Ranglistenarchitektur ein.
-    if not affected_matchdays:
-        return 0
-
-    # Jede Gruppe dieses Turniers ist betroffen.
-    #
-    # Auch wenn in einer Gruppe niemand dieses konkrete
-    # Spiel getippt hat, muss dort gegebenenfalls eine
-    # Spieltagszeile mit 0 Punkten angelegt werden.
-    group_ids = list(
+    return list(
         Group.objects
         .filter(
-            tournament_id=match.tournament_id,
+            tournament_id=tournament_id,
             memberships__isnull=False,
         )
         .values_list(
@@ -101,12 +55,30 @@ def process_match_change(
         .order_by("id")
     )
 
+
+def _rebuild_affected_matchdays(
+    *,
+    tournament_id: int,
+    affected_matchdays: set[int],
+) -> int:
+    """
+    Aktualisiert die vorberechneten Tabellen aller Gruppen
+    eines Turniers für die angegebenen Spieltage.
+    """
+
+    if not affected_matchdays:
+        return 0
+
+    group_ids = _get_tournament_group_ids(
+        tournament_id
+    )
+
     if not group_ids:
         return 0
 
     matchday_has_results = {
         matchday: _matchday_has_results(
-            tournament_id=match.tournament_id,
+            tournament_id=tournament_id,
             matchday=matchday,
         )
         for matchday in affected_matchdays
@@ -129,23 +101,103 @@ def process_match_change(
                 )
 
             else:
-                # Wurde das letzte Ergebnis dieses
-                # Spieltags wieder entfernt, darf der
-                # Spieltag nicht mehr ausgewertet bleiben.
+                # Existiert kein ausgewertetes Spiel mehr,
+                # darf dieser Spieltag nicht länger im
+                # vorberechneten Read Model bleiben.
                 MatchdayScore.objects.filter(
                     group_id=group_id,
                     matchday=matchday,
                 ).delete()
 
         # Eine Änderung an einem früheren Spieltag kann
-        # alle späteren kumulierten Ränge verändern.
+        # die kumulierten Punkte und Ränge aller späteren
+        # Spieltage verändern.
         rebuild_group_timeline(
             group_id=group_id,
             start_matchday=start_matchday,
         )
 
         rebuild_group_bonus_points(
-        group_id=group_id,
-)
+            group_id=group_id,
+        )
 
     return len(group_ids)
+
+
+@transaction.atomic
+def process_match_change(
+    *,
+    match_id: int,
+    previous_matchday: int | None = None,
+) -> int:
+    """
+    Verarbeitet eine Ergebnis- oder Spieltagsänderung.
+
+    Ablauf:
+    1. Tipp-Punkte des Spiels neu berechnen.
+    2. Betroffene Spieltagssummen aktualisieren.
+    3. Historische Ränge neu aufbauen.
+    4. Aktuelle Gruppenstände aktualisieren.
+    """
+
+    match = (
+        Match.objects
+        .select_for_update()
+        .filter(
+            pk=match_id,
+        )
+        .first()
+    )
+
+    if match is None:
+        return 0
+
+    recalculate_points_for_match(
+        match,
+    )
+
+    affected_matchdays = {
+        matchday
+        for matchday in (
+            previous_matchday,
+            match.matchday,
+        )
+        if matchday is not None
+    }
+
+    return _rebuild_affected_matchdays(
+        tournament_id=match.tournament_id,
+        affected_matchdays=affected_matchdays,
+    )
+
+
+@transaction.atomic
+def process_match_delete(
+    *,
+    tournament_id: int,
+    matchday: int | None,
+    had_result: bool,
+) -> int:
+    """
+    Aktualisiert das Read Model nach dem Löschen eines Spiels.
+
+    Das Match selbst existiert zu diesem Zeitpunkt nicht mehr.
+    Deshalb werden Turnier, Spieltag und Ergebnisstatus bereits
+    vom Löschsignal übergeben.
+
+    Ein nicht ausgewertetes Spiel beeinflusst die Ranglisten
+    nicht und erfordert daher keinen Rebuild.
+    """
+
+    if (
+        matchday is None
+        or not had_result
+    ):
+        return 0
+
+    return _rebuild_affected_matchdays(
+        tournament_id=tournament_id,
+        affected_matchdays={
+            matchday,
+        },
+    )

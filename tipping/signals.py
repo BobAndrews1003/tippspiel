@@ -1,5 +1,6 @@
 from django.db import transaction
 from django.db.models.signals import (
+    post_delete,
     post_save,
     pre_save,
 )
@@ -8,12 +9,14 @@ from django.dispatch import receiver
 from .models import Match
 from .result_processing import (
     process_match_change,
+    process_match_delete,
 )
 
 
 @receiver(
     pre_save,
     sender=Match,
+    dispatch_uid="tipping_remember_match_state",
 )
 def remember_previous_match_state(
     sender,
@@ -23,16 +26,13 @@ def remember_previous_match_state(
     """
     Merkt sich vor dem Speichern:
 
-    - das bisherige Ergebnis,
     - den bisherigen Spieltag,
-    - ob eine ranglistenrelevante Änderung vorliegt.
+    - ob sich Ergebnis oder relevanter Spieltag geändert haben.
     """
 
     if not instance.pk:
         instance._previous_matchday = None
 
-        # Ein neu erstelltes Spiel muss nur verarbeitet
-        # werden, wenn bereits ein Ergebnis vorliegt.
         instance._standings_relevant_changed = (
             instance.home_score is not None
             and instance.away_score is not None
@@ -90,9 +90,6 @@ def remember_previous_match_state(
         and instance.away_score is not None
     )
 
-    # Eine Spieltagsänderung ist nur relevant,
-    # wenn das Spiel bereits ausgewertet war oder
-    # aktuell ausgewertet ist.
     relevant_matchday_change = (
         matchday_changed
         and (
@@ -110,16 +107,16 @@ def remember_previous_match_state(
 @receiver(
     post_save,
     sender=Match,
+    dispatch_uid="tipping_process_match_change",
 )
 def process_match_after_relevant_change(
     sender,
     instance,
-    created,
     **kwargs,
 ):
     """
-    Startet die vollständige Verarbeitung erst nach
-    erfolgreichem Datenbank-Commit.
+    Startet die Ergebnisverarbeitung nach erfolgreichem
+    Datenbank-Commit.
     """
 
     relevant_change = getattr(
@@ -139,9 +136,56 @@ def process_match_after_relevant_change(
         None,
     )
 
-    transaction.on_commit(
-        lambda: process_match_change(
+    def run_processing():
+        process_match_change(
             match_id=match_id,
             previous_matchday=previous_matchday,
         )
+
+    transaction.on_commit(
+        run_processing
+    )
+
+
+@receiver(
+    post_delete,
+    sender=Match,
+    dispatch_uid="tipping_process_match_delete",
+)
+def process_after_match_delete(
+    sender,
+    instance,
+    **kwargs,
+):
+    """
+    Aktualisiert Spieltagssummen, historische Ränge und
+    Gruppenstände nach dem Löschen eines ausgewerteten Spiels.
+
+    Die zugehörigen Prediction-Zeilen wurden durch die
+    Datenbankkaskade ebenfalls gelöscht.
+    """
+
+    tournament_id = instance.tournament_id
+    matchday = instance.matchday
+
+    had_result = (
+        instance.home_score is not None
+        and instance.away_score is not None
+    )
+
+    if (
+        matchday is None
+        or not had_result
+    ):
+        return
+
+    def run_processing():
+        process_match_delete(
+            tournament_id=tournament_id,
+            matchday=matchday,
+            had_result=had_result,
+        )
+
+    transaction.on_commit(
+        run_processing
     )
