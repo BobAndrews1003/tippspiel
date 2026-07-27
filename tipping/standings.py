@@ -483,19 +483,24 @@ def rebuild_group_timeline(
     start_matchday: int = 1,
 ) -> int:
     """
-    Berechnet innerhalb einer Gruppe für jeden Spieltag:
+    Berechnet innerhalb einer Gruppe ab dem angegebenen
+    Spieltag:
 
     - kumulierte Spielpunkte,
     - Rang nach diesem Spieltag,
     - Rangveränderung gegenüber dem vorherigen
       ausgewerteten Spieltag.
 
-    Bonuspunkte werden bewusst nicht einbezogen, weil die
-    bestehende historische Ranglogik ebenfalls ausschließlich
-    normale Spielpunkte verwendet.
+    Bei einem Teil-Rebuild werden die bereits gespeicherten
+    kumulierten Punkte und Ränge des letzten früheren
+    Spieltags als Ausgangsbasis verwendet. Dadurch müssen
+    die historischen Score-Zeilen vor start_matchday nicht
+    erneut geladen und durchlaufen werden.
 
-    Der Rückgabewert ist die Anzahl der aktualisierten
-    MatchdayScore-Zeilen.
+    Bonuspunkte werden bewusst nicht einbezogen.
+
+    Rückgabewert:
+        Anzahl der aktualisierten MatchdayScore-Zeilen.
     """
 
     if start_matchday < 1:
@@ -514,8 +519,17 @@ def rebuild_group_timeline(
         .filter(
             group_id=group_id,
         )
-        .select_related("user")
-        .order_by("user_id")
+        .select_related(
+            "user",
+        )
+        .only(
+            "user_id",
+            "user__username",
+            "user__email",
+        )
+        .order_by(
+            "user_id",
+        )
     )
 
     user_ids = [
@@ -546,11 +560,26 @@ def rebuild_group_timeline(
         for membership in memberships
     }
 
+    # Nur Score-Zeilen ab dem tatsächlich betroffenen
+    # Spieltag laden.
     scores = list(
         MatchdayScore.objects
         .filter(
             group_id=group_id,
             user_id__in=user_ids,
+            matchday__gte=start_matchday,
+        )
+        .only(
+            "id",
+            "group_id",
+            "user_id",
+            "matchday",
+            "points",
+            "exact_predictions",
+            "cumulative_points",
+            "rank",
+            "rank_change",
+            "updated_at",
         )
         .order_by(
             "matchday",
@@ -568,7 +597,7 @@ def rebuild_group_timeline(
         }
     )
 
-    # Für jeden vorhandenen Spieltag muss jedes aktuelle
+    # Für jeden betroffenen Spieltag muss jedes aktuelle
     # Gruppenmitglied eine Score-Zeile besitzen.
     existing_keys = {
         (
@@ -614,6 +643,18 @@ def rebuild_group_timeline(
                 user_id__in=user_ids,
                 matchday__in=matchdays,
             )
+            .only(
+                "id",
+                "group_id",
+                "user_id",
+                "matchday",
+                "points",
+                "exact_predictions",
+                "cumulative_points",
+                "rank",
+                "rank_change",
+                "updated_at",
+            )
             .order_by(
                 "matchday",
                 "user_id",
@@ -633,53 +674,101 @@ def rebuild_group_timeline(
         for user_id in user_ids
     }
 
-    # Bei einer Teilneuberechnung werden die Punkte vor dem
-    # Startspieltag als Ausgangsbasis geladen.
-    previous_matchdays = [
-        matchday
-        for matchday in matchdays
-        if matchday < start_matchday
-    ]
-
-    for matchday in previous_matchdays:
-        for user_id in user_ids:
-            score = score_by_user_matchday[
-                (
-                    user_id,
-                    matchday,
-                )
-            ]
-
-            cumulative_points[
-                user_id
-            ] += score.points
-
     previous_rank = {
         user_id: None
         for user_id in user_ids
     }
 
-    # Der Rang vor dem Startspieltag dient als Vergleich für
-    # die erste neu berechnete Rangveränderung.
-    if previous_matchdays:
-        previous_rank = _competition_ranks(
-            user_ids=user_ids,
-            cumulative_points=cumulative_points,
-            username_by_id=username_by_id,
+    # ----------------------------------------------------------
+    # Ausgangsbasis eines Teil-Rebuilds
+    #
+    # Statt sämtliche früheren Spieltage erneut zu laden und
+    # zu summieren, wird nur der letzte frühere Spieltag
+    # benötigt.
+    # ----------------------------------------------------------
+
+    if start_matchday > 1:
+        previous_matchday = (
+            MatchdayScore.objects
+            .filter(
+                group_id=group_id,
+                user_id__in=user_ids,
+                matchday__lt=start_matchday,
+            )
+            .order_by(
+                "-matchday",
+            )
+            .values_list(
+                "matchday",
+                flat=True,
+            )
+            .first()
         )
 
-    affected_matchdays = [
-        matchday
-        for matchday in matchdays
-        if matchday >= start_matchday
-    ]
+        if previous_matchday is not None:
+            previous_rows = list(
+                MatchdayScore.objects
+                .filter(
+                    group_id=group_id,
+                    user_id__in=user_ids,
+                    matchday=previous_matchday,
+                )
+                .only(
+                    "user_id",
+                    "cumulative_points",
+                    "rank",
+                )
+                .order_by(
+                    "user_id",
+                )
+            )
 
-    if not affected_matchdays:
-        return 0
+            previous_by_user = {
+                row.user_id: row
+                for row in previous_rows
+            }
+
+            baseline_is_complete = (
+                len(previous_by_user)
+                == len(user_ids)
+                and all(
+                    user_id in previous_by_user
+                    and previous_by_user[
+                        user_id
+                    ].rank is not None
+                    for user_id in user_ids
+                )
+            )
+
+            if not baseline_is_complete:
+                # Sicherheitsfallback bei unvollständigem
+                # Read Model. Der vollständige Rebuild
+                # entspricht dem bisherigen Verhalten.
+                return rebuild_group_timeline(
+                    group_id=group_id,
+                    start_matchday=1,
+                )
+
+            cumulative_points = {
+                user_id: (
+                    previous_by_user[
+                        user_id
+                    ].cumulative_points
+                    or 0
+                )
+                for user_id in user_ids
+            }
+
+            previous_rank = {
+                user_id: previous_by_user[
+                    user_id
+                ].rank
+                for user_id in user_ids
+            }
 
     changed_scores = []
 
-    for matchday in affected_matchdays:
+    for matchday in matchdays:
         for user_id in user_ids:
             score = score_by_user_matchday[
                 (
@@ -728,7 +817,9 @@ def rebuild_group_timeline(
 
             score.updated_at = now
 
-            changed_scores.append(score)
+            changed_scores.append(
+                score
+            )
 
         previous_rank = current_ranks
 
@@ -744,4 +835,3 @@ def rebuild_group_timeline(
     )
 
     return len(changed_scores)
-
