@@ -12,10 +12,11 @@ from django.core.paginator import Paginator
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth import logout
-from django.db.models import Q
+from django.db.models import CharField, Q, Value
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
 from django.db.models import Count
+from django.db.models.functions import Cast, Coalesce, Concat, Lower, NullIf
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -200,47 +201,18 @@ def dashboard(request):
     now = timezone.now()
 
     # --------------------------------------------------------------
-    # Hilfsfunktion für eine stabile alphabetische Sortierung
+    # Teilnehmerzahl der aktiven Gruppe
+    #
+    # Es werden nicht mehr alle Mitgliedschaften und Nutzer
+    # für das Dashboard geladen.
     # --------------------------------------------------------------
 
-    def user_sort_name(user) -> str:
-        return (
-            user.get_username()
-            or user.email
-            or f"user-{user.id}"
-        ).strip().lower()
-
-    # --------------------------------------------------------------
-    # Teilnehmer der aktiven Gruppe
-    # --------------------------------------------------------------
-
-    memberships = list(
+    participant_count = (
         GroupMembership.objects
         .filter(
             group=group,
         )
-        .select_related(
-            "user",
-            "user__tip_profile",
-        )
-        .order_by(
-            "user__username",
-            "user_id",
-        )
-    )
-
-    users = [
-        item.user
-        for item in memberships
-    ]
-
-    user_ids = [
-        user.id
-        for user in users
-    ]
-
-    participant_count = len(
-        users
+        .count()
     )
 
     # --------------------------------------------------------------
@@ -399,68 +371,38 @@ def dashboard(request):
         and now >= bonus_lock_time
     )
 
-    stored_standings = list(
+    # Vor der Bonusfreigabe zählt ausschließlich
+    # match_points, danach total_points.
+    ranking_points_field = (
+        "total_points"
+        if bonus_reveal
+        else "match_points"
+    )
+
+    # Für die persönlichen Dashboardwerte wird nur noch
+    # die Standing-Zeile des angemeldeten Nutzers geladen.
+    current_user_standing = (
         GroupStanding.objects
         .filter(
             group=group,
-            user_id__in=user_ids,
+            user=request.user,
         )
-        .only(
-            "user_id",
-            "match_points",
-            "bonus_points",
-            "total_points",
-            "exact_predictions",
+        .select_related(
+            "user",
+            "user__tip_profile",
         )
+        .first()
     )
 
-    standing_by_user = {
-        standing.user_id: standing
-        for standing in stored_standings
-    }
-
-    total_points_by_user = {}
-    bonus_points_by_user = defaultdict(
-        int
-    )
-
-    for user_id in user_ids:
-        standing = standing_by_user.get(
-            user_id
+    user_total_points = (
+        getattr(
+            current_user_standing,
+            ranking_points_field,
         )
-
-        if standing is None:
-            total_points_by_user[
-                user_id
-            ] = 0
-
-            continue
-
-        if bonus_reveal:
-            total_points_by_user[
-                user_id
-            ] = (
-                standing.total_points
-                or 0
-            )
-
-            bonus_points_by_user[
-                user_id
-            ] = (
-                standing.bonus_points
-                or 0
-            )
-
-        else:
-            # Intern sind Bonuspunkte bereits vorbereitet.
-            # Vor der Freigabe werden sie aber weder gezeigt
-            # noch für die sichtbare Rangfolge verwendet.
-            total_points_by_user[
-                user_id
-            ] = (
-                standing.match_points
-                or 0
-            )
+        or 0
+        if current_user_standing
+        else 0
+    )
 
     # --------------------------------------------------------------
     # Eigene Punkte nach Spieltag
@@ -495,12 +437,6 @@ def dashboard(request):
     # --------------------------------------------------------------
     # Anzahl exakter Ergebnisse des aktuellen Nutzers
     # --------------------------------------------------------------
-
-    current_user_standing = (
-        standing_by_user.get(
-            request.user.id
-        )
-    )
 
     exact_predictions = (
         current_user_standing.exact_predictions
@@ -601,128 +537,144 @@ def dashboard(request):
         )
 
     # --------------------------------------------------------------
-    # Gesamtrangliste
-    # --------------------------------------------------------------
-
-    sorted_users = sorted(
-        users,
-        key=lambda user: (
-            -total_points_by_user.get(
-                user.id,
-                0,
-            ),
-            user_sort_name(
-                user
-            ),
-            user.id,
-        ),
-    )
-
-    leaderboard_rows = []
-
-    current_position = 0
-    previous_total = None
-
-    for index, user in enumerate(
-        sorted_users,
-        start=1,
-    ):
-        user_total = (
-            total_points_by_user.get(
-                user.id,
-                0,
-            )
-        )
-
-        # Gleiche Punktzahl bedeutet gleiche Position.
-        # Der nächste Platz wird dabei übersprungen:
-        # 1, 1, 3 statt 1, 1, 2.
-        if (
-            previous_total is None
-            or user_total != previous_total
-        ):
-            current_position = index
-            previous_total = user_total
-
-        leaderboard_rows.append(
-            {
-                "user": user,
-                "position": current_position,
-                "total": user_total,
-                "bonus": (
-                    bonus_points_by_user.get(
-                        user.id,
-                        0,
-                    )
-                ),
-                "is_current_user": (
-                    user.id
-                    == request.user.id
-                ),
-            }
-        )
-
-    current_user_row = next(
-        (
-            row
-            for row in leaderboard_rows
-            if (
-                row["user"].id
-                == request.user.id
-            )
-        ),
-        None,
-    )
-
-    user_total_points = (
-        current_user_row["total"]
-        if current_user_row
-        else 0
-    )
-
-    user_position = (
-        current_user_row["position"]
-        if (
-            current_user_row
-            and standings_started
-        )
-        else None
-    )
-
-    # --------------------------------------------------------------
-    # Kleine Rangliste:
-    # Top 3 und zusätzlich der aktuelle Benutzer
+    # Kleine Rangliste direkt aus der Datenbank
+    #
+    # Es werden nur die drei führenden Teilnehmer sowie
+    # gegebenenfalls der aktuelle Nutzer geladen.
     # --------------------------------------------------------------
 
     mini_table_rows = []
+    user_position = None
 
     if standings_started:
-        mini_table_rows = [
-            dict(row)
-            for row in leaderboard_rows[:3]
-        ]
+        leaderboard_queryset = (
+            GroupStanding.objects
+            .filter(
+                group=group,
+            )
+            .select_related(
+                "user",
+                "user__tip_profile",
+            )
+            .annotate(
+                dashboard_sort_name=Lower(
+                    Coalesce(
+                        NullIf(
+                            "user__username",
+                            Value(""),
+                        ),
+                        NullIf(
+                            "user__email",
+                            Value(""),
+                        ),
+                        Concat(
+                            Value("user-"),
+                            Cast(
+                                "user_id",
+                                output_field=CharField(),
+                            ),
+                        ),
+                        output_field=CharField(),
+                    )
+                )
+            )
+            .order_by(
+                f"-{ranking_points_field}",
+                "dashboard_sort_name",
+                "user_id",
+            )
+        )
 
-        top_user_ids = {
-            row["user"].id
-            for row in mini_table_rows
-        }
+        top_standings = list(
+            leaderboard_queryset[:3]
+        )
 
-        if (
-            current_user_row
-            and request.user.id
-            not in top_user_ids
+        previous_total = None
+        current_position = 0
+
+        for index, standing in enumerate(
+            top_standings,
+            start=1,
         ):
-            extra_row = dict(
-                current_user_row
+            visible_total = (
+                getattr(
+                    standing,
+                    ranking_points_field,
+                )
+                or 0
             )
 
-            extra_row[
-                "is_extra"
-            ] = True
+            # Wettbewerbsrang:
+            # 1, 1, 3 statt 1, 1, 2.
+            if (
+                previous_total is None
+                or visible_total != previous_total
+            ):
+                current_position = index
+                previous_total = visible_total
 
             mini_table_rows.append(
-                extra_row
+                {
+                    "user": standing.user,
+                    "position": current_position,
+                    "total": visible_total,
+                    "bonus": (
+                        standing.bonus_points or 0
+                        if bonus_reveal
+                        else 0
+                    ),
+                    "is_current_user": (
+                        standing.user_id
+                        == request.user.id
+                    ),
+                }
             )
+
+        if current_user_standing:
+            # Rang = Anzahl der Nutzer mit mehr Punkten + 1.
+            # Dadurch bleibt das Wettbewerbssystem erhalten.
+            user_position = (
+                GroupStanding.objects
+                .filter(
+                    group=group,
+                    **{
+                        (
+                            f"{ranking_points_field}"
+                            "__gt"
+                        ): user_total_points,
+                    },
+                )
+                .count()
+                + 1
+            )
+
+            top_user_ids = {
+                row["user"].id
+                for row in mini_table_rows
+            }
+
+            if (
+                request.user.id
+                not in top_user_ids
+            ):
+                mini_table_rows.append(
+                    {
+                        "user": (
+                            current_user_standing.user
+                        ),
+                        "position": user_position,
+                        "total": user_total_points,
+                        "bonus": (
+                            current_user_standing
+                            .bonus_points
+                            or 0
+                            if bonus_reveal
+                            else 0
+                        ),
+                        "is_current_user": True,
+                        "is_extra": True,
+                    }
+                )
 
     # --------------------------------------------------------------
     # Letzter ausgewerteter Spieltag
