@@ -12,6 +12,7 @@ from django.core.paginator import Paginator
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth import logout
+from django.db.models import Case, IntegerField, OuterRef, Subquery, When
 from django.db.models import CharField, Q, Value
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
@@ -1156,13 +1157,6 @@ def spieltag(request):
     tournament = group.tournament
     now = timezone.now()
 
-    def user_sort_name(user) -> str:
-        return (
-            user.get_username()
-            or user.email
-            or f"user-{user.id}"
-        ).strip().lower()
-
     # -------------------------------------------------------------
     # Spieltage und ausgewählter Bereich
     # -------------------------------------------------------------
@@ -1189,33 +1183,6 @@ def spieltag(request):
         bonus_lock_time
         and now >= bonus_lock_time
     )
-
-    # -------------------------------------------------------------
-    # Aktive Gruppenmitglieder
-    # -------------------------------------------------------------
-
-    memberships = list(
-        GroupMembership.objects
-        .filter(group=group)
-        .select_related(
-            "user",
-            "user__tip_profile",
-        )
-        .order_by(
-            "user__username",
-            "user_id",
-        )
-    )
-
-    users = [
-        item.user
-        for item in memberships
-    ]
-
-    user_ids = [
-        user.id
-        for user in users
-    ]
 
     # -------------------------------------------------------------
     # Aktiven Spieltag bestimmen
@@ -1268,17 +1235,224 @@ def spieltag(request):
     }
 
     # -------------------------------------------------------------
-    # Bonustipps
+    # Mitglieder sortieren und direkt in der Datenbank paginieren
     #
-    # Sie werden nur geladen, wenn der Bonus-Tab geöffnet ist.
-    # Vor der Freigabe wird nur der eigene Bonustipp geladen.
+    # Grundlage bleibt GroupMembership. Dadurch bleiben auch
+    # Mitglieder sichtbar, falls eine vorberechnete Score-Zeile
+    # ausnahmsweise noch nicht existiert.
     # -------------------------------------------------------------
 
-    bonus_by_user = defaultdict(list)
+    member_queryset = (
+        GroupMembership.objects
+        .filter(
+            group=group,
+        )
+        .select_related(
+            "user",
+            "user__tip_profile",
+        )
+        .annotate(
+            page_sort_name=Lower(
+                Coalesce(
+                    NullIf(
+                        "user__username",
+                        Value(""),
+                    ),
+                    NullIf(
+                        "user__email",
+                        Value(""),
+                    ),
+                    Concat(
+                        Value("user-"),
+                        Cast(
+                            "user_id",
+                            output_field=CharField(),
+                        ),
+                    ),
+                    output_field=CharField(),
+                )
+            )
+        )
+    )
+
+    if tab == "matches":
+        if matchday is not None:
+            selected_score_subquery = (
+                MatchdayScore.objects
+                .filter(
+                    group=group,
+                    user_id=OuterRef(
+                        "user_id"
+                    ),
+                    matchday=matchday,
+                )
+                .values(
+                    "points"
+                )[:1]
+            )
+
+            member_queryset = (
+                member_queryset
+                .annotate(
+                    page_points=Coalesce(
+                        Subquery(
+                            selected_score_subquery,
+                            output_field=(
+                                IntegerField()
+                            ),
+                        ),
+                        Value(0),
+                        output_field=(
+                            IntegerField()
+                        ),
+                    )
+                )
+                .order_by(
+                    "-page_points",
+                    "page_sort_name",
+                    "user_id",
+                )
+            )
+
+        else:
+            member_queryset = (
+                member_queryset
+                .annotate(
+                    page_points=Value(
+                        0,
+                        output_field=(
+                            IntegerField()
+                        ),
+                    )
+                )
+                .order_by(
+                    "page_sort_name",
+                    "user_id",
+                )
+            )
+
+    elif bonus_reveal:
+        bonus_points_subquery = (
+            GroupStanding.objects
+            .filter(
+                group=group,
+                user_id=OuterRef(
+                    "user_id"
+                ),
+            )
+            .values(
+                "bonus_points"
+            )[:1]
+        )
+
+        member_queryset = (
+            member_queryset
+            .annotate(
+                page_bonus_points=Coalesce(
+                    Subquery(
+                        bonus_points_subquery,
+                        output_field=(
+                            IntegerField()
+                        ),
+                    ),
+                    Value(0),
+                    output_field=(
+                        IntegerField()
+                    ),
+                )
+            )
+            .order_by(
+                "-page_bonus_points",
+                "page_sort_name",
+                "user_id",
+            )
+        )
+
+    else:
+        # Vor der Bonusfreigabe bleibt der aktuelle Nutzer
+        # an erster Stelle. Die übrigen Nutzer werden stabil
+        # alphabetisch sortiert.
+        member_queryset = (
+            member_queryset
+            .annotate(
+                current_user_priority=Case(
+                    When(
+                        user_id=request.user.id,
+                        then=Value(0),
+                    ),
+                    default=Value(1),
+                    output_field=(
+                        IntegerField()
+                    ),
+                )
+            )
+            .order_by(
+                "current_user_priority",
+                "page_sort_name",
+                "user_id",
+            )
+        )
+
+    paginator = Paginator(
+        member_queryset,
+        GROUP_PAGE_SIZE,
+    )
+
+    page_obj = paginator.get_page(
+        request.GET.get("page")
+    )
+
+    page_memberships = list(
+        page_obj.object_list
+    )
+
+    page_users = [
+        page_membership.user
+        for page_membership
+        in page_memberships
+    ]
+
+    page_user_ids = [
+        page_membership.user_id
+        for page_membership
+        in page_memberships
+    ]
+
+    # -------------------------------------------------------------
+    # Spieltagspunkte nur für die sichtbare Seite
+    # -------------------------------------------------------------
+
+    total_points_by_user = {}
+
+    if tab == "matches":
+        total_points_by_user = {
+            page_membership.user_id: (
+                getattr(
+                    page_membership,
+                    "page_points",
+                    0,
+                )
+                or 0
+            )
+            for page_membership
+            in page_memberships
+        }
+
+    # -------------------------------------------------------------
+    # Bonustipps nur für die sichtbare Seite
+    #
+    # Der eigene Tipp wird zusätzlich geladen, damit my_bonus
+    # auch bei einem manuellen Aufruf einer späteren Seite
+    # weiterhin verfügbar bleibt.
+    # -------------------------------------------------------------
+
+    bonus_by_user = defaultdict(
+        list
+    )
 
     bonus_points_map = {
         user_id: 0
-        for user_id in user_ids
+        for user_id in page_user_ids
     }
 
     my_bonus = []
@@ -1294,20 +1468,44 @@ def spieltag(request):
 
         if bonus_reveal:
             bonus_queryset = (
-                bonus_queryset.filter(
-                    user_id__in=user_ids,
+                bonus_queryset
+                .filter(
+                    Q(
+                        user_id__in=page_user_ids,
+                    )
+                    | Q(
+                        user=request.user,
+                    )
                 )
             )
 
+            bonus_points_map = {
+                page_membership.user_id: (
+                    getattr(
+                        page_membership,
+                        "page_bonus_points",
+                        0,
+                    )
+                    or 0
+                )
+                for page_membership
+                in page_memberships
+            }
+
         else:
             bonus_queryset = (
-                bonus_queryset.filter(
+                bonus_queryset
+                .filter(
                     user=request.user,
                 )
             )
 
         all_bonus = list(
-            bonus_queryset
+            bonus_queryset.order_by(
+                "user_id",
+                "bonus_type",
+                "id",
+            )
         )
 
         for bonus_prediction in all_bonus:
@@ -1321,130 +1519,6 @@ def spieltag(request):
             request.user.id,
             [],
         )
-
-        if bonus_reveal:
-            stored_bonus_rows = (
-                GroupStanding.objects
-                .filter(
-                    group=group,
-                    user_id__in=user_ids,
-                )
-                .values_list(
-                    "user_id",
-                    "bonus_points",
-                )
-            )
-
-            for user_id, bonus_points in stored_bonus_rows:
-                bonus_points_map[
-                    user_id
-                ] = bonus_points or 0
-
-    # -------------------------------------------------------------
-    # Vorbereitete Punkte des ausgewählten Spieltags
-    #
-    # Die Spieltagssummen werden direkt aus MatchdayScore
-    # gelesen. Die einzelnen Tipps bleiben weiterhin in
-    # Prediction und werden erst für die sichtbare Seite geladen.
-    # -------------------------------------------------------------
-
-    total_points_by_user = {
-        user_id: 0
-        for user_id in user_ids
-    }
-
-    if (
-        tab == "matches"
-        and matchday is not None
-    ):
-        stored_point_rows = (
-            MatchdayScore.objects
-            .filter(
-                group=group,
-                user_id__in=user_ids,
-                matchday=matchday,
-            )
-            .values_list(
-                "user_id",
-                "points",
-            )
-        )
-
-        for user_id, points in stored_point_rows:
-            total_points_by_user[
-                user_id
-            ] = points or 0
-
-    # -------------------------------------------------------------
-    # Globale Sortierung vor der Seiteneinteilung
-    # -------------------------------------------------------------
-
-    if tab == "bonus":
-        if bonus_reveal:
-            sorted_users = sorted(
-                users,
-                key=lambda user: (
-                    -bonus_points_map.get(
-                        user.id,
-                        0,
-                    ),
-                    user_sort_name(user),
-                    user.id,
-                ),
-            )
-
-        else:
-            # Vor der Freigabe wird der aktuelle Nutzer
-            # an erster Stelle angezeigt.
-            sorted_users = sorted(
-                users,
-                key=lambda user: (
-                    (
-                        0
-                        if user.id == request.user.id
-                        else 1
-                    ),
-                    user_sort_name(user),
-                    user.id,
-                ),
-            )
-
-    else:
-        # Im normalen Spieltag-Tab wird ausschließlich
-        # nach den Punkten dieses Spieltags sortiert.
-        sorted_users = sorted(
-            users,
-            key=lambda user: (
-                -total_points_by_user.get(
-                    user.id,
-                    0,
-                ),
-                user_sort_name(user),
-                user.id,
-            ),
-        )
-
-    # -------------------------------------------------------------
-    # Seiteneinteilung
-    # -------------------------------------------------------------
-
-    paginator = Paginator(
-        sorted_users,
-        GROUP_PAGE_SIZE,
-    )
-
-    page_obj = paginator.get_page(
-        request.GET.get("page")
-    )
-
-    page_users = list(
-        page_obj.object_list
-    )
-
-    page_user_ids = [
-        user.id
-        for user in page_users
-    ]
 
     # -------------------------------------------------------------
     # Nur Tipps der aktuell sichtbaren Teilnehmer laden
