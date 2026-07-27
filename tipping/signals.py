@@ -140,6 +140,7 @@ def process_match_after_relevant_change(
         process_match_change(
             match_id=match_id,
             previous_matchday=previous_matchday,
+            rebuild_bonus=False,
         )
 
     transaction.on_commit(

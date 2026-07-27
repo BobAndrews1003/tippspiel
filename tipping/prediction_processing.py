@@ -9,8 +9,10 @@ from .models import (
     Prediction,
 )
 from .scoring import points_for_prediction
+from .standing_refresh import (
+    rebuild_group_standing_with_bonus_fallback,
+)
 from .standings import (
-    rebuild_group_bonus_points,
     rebuild_group_timeline,
     rebuild_matchday_scores,
 )
@@ -96,7 +98,11 @@ def _rebuild_affected_groups(
             start_matchday=min(matchdays),
         )
 
-        rebuild_group_bonus_points(
+        # Normale Tippänderungen berechnen Bonustipps
+        # nicht erneut. Bei fehlenden Standing-Zeilen
+        # erfolgt jedoch automatisch ein vollständiger
+        # Bonus-Rebuild.
+        rebuild_group_standing_with_bonus_fallback(
             group_id=group_id,
         )
 

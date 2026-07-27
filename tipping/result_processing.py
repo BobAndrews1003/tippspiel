@@ -8,6 +8,9 @@ from .models import (
 from .scoring import (
     recalculate_points_for_match,
 )
+from .standing_refresh import (
+    rebuild_group_standing_with_bonus_fallback,
+)
 from .standings import (
     rebuild_group_bonus_points,
     rebuild_group_timeline,
@@ -60,6 +63,7 @@ def _rebuild_affected_matchdays(
     *,
     tournament_id: int,
     affected_matchdays: set[int],
+    rebuild_bonus: bool,
 ) -> int:
     """
     Aktualisiert die vorberechneten Tabellen aller Gruppen
@@ -117,9 +121,21 @@ def _rebuild_affected_matchdays(
             start_matchday=start_matchday,
         )
 
-        rebuild_group_bonus_points(
-            group_id=group_id,
-        )
+        if rebuild_bonus:
+            # Ein ausdrücklich angeforderter vollständiger
+            # Rebuild berechnet auch die Bonuspunkte neu.
+            rebuild_group_bonus_points(
+                group_id=group_id,
+            )
+
+        else:
+            # Der normale Signalpfad bewahrt vorhandene
+            # Bonuspunkte. Fehlen Standing-Zeilen, wird
+            # automatisch auf einen vollständigen
+            # Bonus-Rebuild zurückgefallen.
+            rebuild_group_standing_with_bonus_fallback(
+                group_id=group_id,
+            )
 
     return len(group_ids)
 
@@ -129,6 +145,7 @@ def process_match_change(
     *,
     match_id: int,
     previous_matchday: int | None = None,
+    rebuild_bonus: bool = True,
 ) -> int:
     """
     Verarbeitet eine Ergebnis- oder Spieltagsänderung.
@@ -168,6 +185,7 @@ def process_match_change(
     return _rebuild_affected_matchdays(
         tournament_id=match.tournament_id,
         affected_matchdays=affected_matchdays,
+        rebuild_bonus=rebuild_bonus,
     )
 
 
@@ -200,4 +218,5 @@ def process_match_delete(
         affected_matchdays={
             matchday,
         },
+        rebuild_bonus=False,
     )
