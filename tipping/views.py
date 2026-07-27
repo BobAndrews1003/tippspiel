@@ -1373,22 +1373,29 @@ def spieltag(request):
         )
 
         if bonus_reveal:
-            for user in users:
-                bonus_points_map[
-                    user.id
-                ] = bonus_points_for_user(
-                    tournament,
-                    bonus_by_user.get(
-                        user.id,
-                        [],
-                    ),
+            stored_bonus_rows = (
+                GroupStanding.objects
+                .filter(
+                    group=group,
+                    user_id__in=user_ids,
                 )
+                .values_list(
+                    "user_id",
+                    "bonus_points",
+                )
+            )
+
+            for user_id, bonus_points in stored_bonus_rows:
+                bonus_points_map[
+                    user_id
+                ] = bonus_points or 0
 
     # -------------------------------------------------------------
-    # Punkte des ausgewählten Spieltags
+    # Vorbereitete Punkte des ausgewählten Spieltags
     #
-    # Die Datenbank summiert die bereits gespeicherten Punkte.
-    # Es findet keine Berechnung einzelner Tipps mehr statt.
+    # Die Spieltagssummen werden direkt aus MatchdayScore
+    # gelesen. Die einzelnen Tipps bleiben weiterhin in
+    # Prediction und werden erst für die sichtbare Seite geladen.
     # -------------------------------------------------------------
 
     total_points_by_user = {
@@ -1398,31 +1405,25 @@ def spieltag(request):
 
     if (
         tab == "matches"
-        and match_ids
+        and matchday is not None
     ):
         stored_point_rows = (
-            Prediction.objects
+            MatchdayScore.objects
             .filter(
                 group=group,
                 user_id__in=user_ids,
-                match_id__in=match_ids,
-                match__home_score__isnull=False,
-                match__away_score__isnull=False,
-                points__isnull=False,
+                matchday=matchday,
             )
-            .values("user_id")
-            .annotate(
-                total=Sum("points"),
+            .values_list(
+                "user_id",
+                "points",
             )
         )
 
-        for row in stored_point_rows:
-            user_id = row["user_id"]
-
-            if user_id in total_points_by_user:
-                total_points_by_user[
-                    user_id
-                ] = row["total"] or 0
+        for user_id, points in stored_point_rows:
+            total_points_by_user[
+                user_id
+            ] = points or 0
 
     # -------------------------------------------------------------
     # Globale Sortierung vor der Seiteneinteilung
