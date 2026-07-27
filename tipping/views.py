@@ -2026,121 +2026,16 @@ def tabelle(request):
     )
 
     # --------------------------------------------------------------
-    # Gespeicherte Punkte nach Nutzer und Spieltag aggregieren
+    # Vorbereitete Spieltagswerte
     #
-    # Die Datenbank summiert Prediction.points.
-    # Einzelne Tipps werden hier nicht mehr neu berechnet.
+    # Punkte, historische Ränge und Rangveränderungen
+    # werden direkt aus MatchdayScore gelesen.
     # --------------------------------------------------------------
 
     points_by_user_md = {
-        user_id: defaultdict(int)
+        user_id: {}
         for user_id in user_ids
     }
-
-    stored_point_rows = (
-        Prediction.objects
-        .filter(
-            group=group,
-            user_id__in=user_ids,
-            match__tournament=tournament,
-            match__matchday__isnull=False,
-            match__home_score__isnull=False,
-            match__away_score__isnull=False,
-            points__isnull=False,
-        )
-        .values(
-            "user_id",
-            "match__matchday",
-        )
-        .annotate(
-            total=Sum("points"),
-        )
-    )
-
-    for row in stored_point_rows:
-        user_id = row["user_id"]
-        matchday = row[
-            "match__matchday"
-        ]
-
-        if (
-            user_id in points_by_user_md
-            and matchday is not None
-        ):
-            points_by_user_md[
-                user_id
-            ][
-                matchday
-            ] = row["total"] or 0
-
-    # --------------------------------------------------------------
-    # Gesamtpunkte aus normalen Tipps
-    # --------------------------------------------------------------
-
-    total_points_all = {
-        user_id: sum(
-            points_by_user_md[
-                user_id
-            ].values()
-        )
-        for user_id in user_ids
-    }
-
-    # --------------------------------------------------------------
-    # Bonuspunkte
-    # --------------------------------------------------------------
-
-    bonus_points_by_user = defaultdict(
-        int
-    )
-
-    if bonus_reveal:
-        all_bonus = list(
-            BonusPrediction.objects
-            .filter(
-                group=group,
-                tournament=tournament,
-                user_id__in=user_ids,
-            )
-        )
-
-        bonus_by_user = defaultdict(
-            list
-        )
-
-        for bonus_prediction in all_bonus:
-            bonus_by_user[
-                bonus_prediction.user_id
-            ].append(
-                bonus_prediction
-            )
-
-        for user in users:
-            bonus_points = (
-                bonus_points_for_user(
-                    tournament,
-                    bonus_by_user.get(
-                        user.id,
-                        [],
-                    ),
-                )
-            )
-
-            bonus_points_by_user[
-                user.id
-            ] = bonus_points
-
-            total_points_all[
-                user.id
-            ] += bonus_points
-
-    # --------------------------------------------------------------
-    # Rangpositionen und Rangveränderungen
-    #
-    # Die kumulativen Werte müssen weiterhin für alle Nutzer
-    # berechnet werden. Gespeichert werden aber nur die Werte
-    # der aktuell sichtbaren Spieltagsspalten.
-    # --------------------------------------------------------------
 
     rank_by_user_md = {
         user_id: {}
@@ -2152,119 +2047,136 @@ def tabelle(request):
         for user_id in user_ids
     }
 
-    cumulative_points = {
-        user_id: 0
-        for user_id in user_ids
+    visible_result_matchdays = sorted(
+        shown_matchday_set.intersection(
+            result_matchdays
+        )
+    )
+
+    if (
+        user_ids
+        and visible_result_matchdays
+    ):
+        stored_score_rows = (
+            MatchdayScore.objects
+            .filter(
+                group=group,
+                user_id__in=user_ids,
+                matchday__in=(
+                    visible_result_matchdays
+                ),
+            )
+            .values_list(
+                "user_id",
+                "matchday",
+                "points",
+                "rank",
+                "rank_change",
+            )
+        )
+
+        for (
+            user_id,
+            matchday,
+            points,
+            rank,
+            rank_change,
+        ) in stored_score_rows:
+            points_by_user_md[
+                user_id
+            ][
+                matchday
+            ] = points or 0
+
+            rank_by_user_md[
+                user_id
+            ][
+                matchday
+            ] = rank
+
+            rankdiff_by_user_md[
+                user_id
+            ][
+                matchday
+            ] = rank_change
+
+    # --------------------------------------------------------------
+    # Vorbereitete Gesamt- und Bonuspunkte
+    #
+    # Vor der Bonusfreigabe werden nur match_points
+    # angezeigt und für die Sortierung verwendet.
+    # --------------------------------------------------------------
+
+    stored_standing_rows = (
+        GroupStanding.objects
+        .filter(
+            group=group,
+            user_id__in=user_ids,
+        )
+        .values_list(
+            "user_id",
+            "match_points",
+            "bonus_points",
+            "total_points",
+        )
+    )
+
+    standing_by_user = {
+        user_id: {
+            "match_points": (
+                match_points or 0
+            ),
+            "bonus_points": (
+                bonus_points or 0
+            ),
+            "total_points": (
+                total_points or 0
+            ),
+        }
+        for (
+            user_id,
+            match_points,
+            bonus_points,
+            total_points,
+        ) in stored_standing_rows
     }
 
-    previous_rank = {
-        user_id: None
-        for user_id in user_ids
-    }
+    total_points_all = {}
+    bonus_points_by_user = defaultdict(
+        int
+    )
 
-    for matchday in matchdays:
-        if matchday not in result_matchdays:
-            if matchday in shown_matchday_set:
-                for user_id in user_ids:
-                    rank_by_user_md[
-                        user_id
-                    ][
-                        matchday
-                    ] = None
+    for user_id in user_ids:
+        standing = standing_by_user.get(
+            user_id
+        )
 
-                    rankdiff_by_user_md[
-                        user_id
-                    ][
-                        matchday
-                    ] = None
+        if standing is None:
+            total_points_all[
+                user_id
+            ] = 0
 
             continue
 
-        # Punkte des aktuellen Spieltags zu den
-        # kumulierten Punkten addieren.
-        for user_id in user_ids:
-            cumulative_points[
+        if bonus_reveal:
+            total_points_all[
                 user_id
-            ] += points_by_user_md[
-                user_id
-            ].get(
-                matchday,
-                0,
-            )
-
-        sorted_ids_for_matchday = sorted(
-            user_ids,
-            key=lambda user_id: (
-                -cumulative_points[
-                    user_id
-                ],
-                username_by_id[
-                    user_id
-                ],
-                user_id,
-            ),
-        )
-
-        current_ranks = {}
-
-        current_rank = 0
-        previous_points = None
-
-        for position, user_id in enumerate(
-            sorted_ids_for_matchday,
-            start=1,
-        ):
-            user_points = cumulative_points[
-                user_id
+            ] = standing[
+                "total_points"
             ]
 
-            if (
-                previous_points is None
-                or user_points
-                != previous_points
-            ):
-                current_rank = position
-                previous_points = user_points
-
-            current_ranks[
+            bonus_points_by_user[
                 user_id
-            ] = current_rank
-
-        for user_id in user_ids:
-            old_rank = previous_rank[
-                user_id
+            ] = standing[
+                "bonus_points"
             ]
 
-            new_rank = current_ranks[
+        else:
+            total_points_all[
                 user_id
+            ] = standing[
+                "match_points"
             ]
-
-            if matchday in shown_matchday_set:
-                rank_by_user_md[
-                    user_id
-                ][
-                    matchday
-                ] = new_rank
-
-                if old_rank is None:
-                    rankdiff_by_user_md[
-                        user_id
-                    ][
-                        matchday
-                    ] = None
-
-                else:
-                    rankdiff_by_user_md[
-                        user_id
-                    ][
-                        matchday
-                    ] = (
-                        old_rank - new_rank
-                    )
-
-            previous_rank[
-                user_id
-            ] = new_rank
 
     # --------------------------------------------------------------
     # Nutzer global sortieren
