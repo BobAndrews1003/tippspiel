@@ -916,3 +916,146 @@ class BonusPrediction(models.Model):
             f"{self.bonus_type}: "
             f"{self.value}"
         )
+        
+        
+class MatchdayScore(models.Model):
+    group = models.ForeignKey(
+        Group,
+        on_delete=models.CASCADE,
+        related_name="matchday_scores",
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="tip_matchday_scores",
+    )
+
+    matchday = models.PositiveSmallIntegerField()
+
+    points = models.PositiveIntegerField(
+        default=0,
+    )
+
+    exact_predictions = models.PositiveIntegerField(
+        default=0,
+    )
+
+    cumulative_points = models.PositiveIntegerField(
+        default=0,
+    )
+
+    rank = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+    )
+
+    rank_change = models.SmallIntegerField(
+        null=True,
+        blank=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "group",
+                    "user",
+                    "matchday",
+                ],
+                name="uniq_group_user_matchday",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "group",
+                    "matchday",
+                    "rank",
+                ],
+                name="score_group_md_rank_idx",
+            ),
+            models.Index(
+                fields=[
+                    "group",
+                    "user",
+                    "matchday",
+                ],
+                name="score_group_user_md_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.group_id} · "
+            f"{self.user_id} · "
+            f"Spieltag {self.matchday}"
+        )
+
+
+class GroupStanding(models.Model):
+    group = models.ForeignKey(
+        Group,
+        on_delete=models.CASCADE,
+        related_name="standings",
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="tip_group_standings",
+    )
+
+    match_points = models.PositiveIntegerField(
+        default=0,
+    )
+
+    bonus_points = models.PositiveIntegerField(
+        default=0,
+    )
+
+    total_points = models.PositiveIntegerField(
+        default=0,
+    )
+
+    exact_predictions = models.PositiveIntegerField(
+        default=0,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "group",
+                    "user",
+                ],
+                name="uniq_group_user_standing",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "group",
+                    "-total_points",
+                    "user",
+                ],
+                name="standing_group_total_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.group_id} · "
+            f"{self.user_id} · "
+            f"{self.total_points} Punkte"
+        )
