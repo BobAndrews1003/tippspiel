@@ -30,7 +30,16 @@ from .forms import (
     DeleteAccountForm,
     GroupCreateForm,
 )
-from .models import Group, Tournament, Match, Prediction, BonusPrediction, GroupMembership
+from .models import (
+    BonusPrediction,
+    Group,
+    GroupMembership,
+    GroupStanding,
+    Match,
+    MatchdayScore,
+    Prediction,
+    Tournament,
+)
 
 from .scoring import points_for_prediction
 
@@ -377,108 +386,14 @@ def dashboard(request):
     )
 
     # --------------------------------------------------------------
-    # Gesamtpunkte aller aktiven Gruppenmitglieder
+    # Vorbereitete Gesamt- und Spieltagspunkte
     #
-    # Die Datenbank summiert Prediction.points direkt.
-    # Es werden keine einzelnen Tipps in Python nachberechnet.
+    # Die Ranglistenwerte werden nicht mehr bei jedem
+    # Seitenaufruf aus allen Tipps neu berechnet.
     # --------------------------------------------------------------
 
-    total_points_by_user = {
-        user_id: 0
-        for user_id in user_ids
-    }
-
-    stored_total_rows = (
-        Prediction.objects
-        .filter(
-            group=group,
-            user_id__in=user_ids,
-            match__tournament=tournament,
-            match__home_score__isnull=False,
-            match__away_score__isnull=False,
-            points__isnull=False,
-        )
-        .values(
-            "user_id",
-        )
-        .annotate(
-            total=Sum("points"),
-        )
-    )
-
-    for row in stored_total_rows:
-        user_id = row["user_id"]
-
-        if user_id in total_points_by_user:
-            total_points_by_user[
-                user_id
-            ] = row["total"] or 0
-
-    # --------------------------------------------------------------
-    # Eigene Punkte gruppiert nach Spieltag
-    # --------------------------------------------------------------
-
-    user_matchday_points = defaultdict(
-        int
-    )
-
-    own_matchday_rows = (
-        Prediction.objects
-        .filter(
-            group=group,
-            user=request.user,
-            match__tournament=tournament,
-            match__matchday__isnull=False,
-            match__home_score__isnull=False,
-            match__away_score__isnull=False,
-            points__isnull=False,
-        )
-        .values(
-            "match__matchday",
-        )
-        .annotate(
-            total=Sum("points"),
-        )
-        .order_by(
-            "match__matchday",
-        )
-    )
-
-    for row in own_matchday_rows:
-        matchday = row[
-            "match__matchday"
-        ]
-
-        if matchday is not None:
-            user_matchday_points[
-                matchday
-            ] = row["total"] or 0
-
-    # --------------------------------------------------------------
-    # Anzahl exakter Ergebnisse des aktuellen Nutzers
-    # --------------------------------------------------------------
-
-    exact_predictions = (
-        Prediction.objects
-        .filter(
-            group=group,
-            user=request.user,
-            match__tournament=tournament,
-            match__home_score__isnull=False,
-            match__away_score__isnull=False,
-            points=4,
-        )
-        .count()
-    )
-
-    # --------------------------------------------------------------
-    # Bonuspunkte
-    # --------------------------------------------------------------
-
-    bonus_lock_time = (
-        get_bonus_lock_time(
-            tournament
-        )
+    bonus_lock_time = get_bonus_lock_time(
+        tournament
     )
 
     bonus_reveal = bool(
@@ -486,49 +401,114 @@ def dashboard(request):
         and now >= bonus_lock_time
     )
 
+    stored_standings = list(
+        GroupStanding.objects
+        .filter(
+            group=group,
+            user_id__in=user_ids,
+        )
+        .only(
+            "user_id",
+            "match_points",
+            "bonus_points",
+            "total_points",
+            "exact_predictions",
+        )
+    )
+
+    standing_by_user = {
+        standing.user_id: standing
+        for standing in stored_standings
+    }
+
+    total_points_by_user = {}
     bonus_points_by_user = defaultdict(
         int
     )
 
-    if bonus_reveal:
-        bonus_predictions = list(
-            BonusPrediction.objects
-            .filter(
-                group=group,
-                tournament=tournament,
-                user_id__in=user_ids,
-            )
+    for user_id in user_ids:
+        standing = standing_by_user.get(
+            user_id
         )
 
-        bonus_predictions_by_user = (
-            defaultdict(list)
-        )
+        if standing is None:
+            total_points_by_user[
+                user_id
+            ] = 0
 
-        for bonus_prediction in bonus_predictions:
-            bonus_predictions_by_user[
-                bonus_prediction.user_id
-            ].append(
-                bonus_prediction
-            )
+            continue
 
-        for user in users:
-            bonus_points = (
-                bonus_points_for_user(
-                    tournament,
-                    bonus_predictions_by_user.get(
-                        user.id,
-                        [],
-                    ),
-                )
+        if bonus_reveal:
+            total_points_by_user[
+                user_id
+            ] = (
+                standing.total_points
+                or 0
             )
 
             bonus_points_by_user[
-                user.id
-            ] = bonus_points
+                user_id
+            ] = (
+                standing.bonus_points
+                or 0
+            )
 
+        else:
+            # Intern sind Bonuspunkte bereits vorbereitet.
+            # Vor der Freigabe werden sie aber weder gezeigt
+            # noch für die sichtbare Rangfolge verwendet.
             total_points_by_user[
-                user.id
-            ] += bonus_points
+                user_id
+            ] = (
+                standing.match_points
+                or 0
+            )
+
+    # --------------------------------------------------------------
+    # Eigene Punkte nach Spieltag
+    # --------------------------------------------------------------
+
+    user_matchday_points = defaultdict(
+        int
+    )
+
+    if result_matchdays:
+        own_matchday_rows = (
+            MatchdayScore.objects
+            .filter(
+                group=group,
+                user=request.user,
+                matchday__in=result_matchdays,
+            )
+            .values_list(
+                "matchday",
+                "points",
+            )
+            .order_by(
+                "matchday",
+            )
+        )
+
+        for matchday, points in own_matchday_rows:
+            user_matchday_points[
+                matchday
+            ] = points or 0
+
+    # --------------------------------------------------------------
+    # Anzahl exakter Ergebnisse des aktuellen Nutzers
+    # --------------------------------------------------------------
+
+    current_user_standing = (
+        standing_by_user.get(
+            request.user.id
+        )
+    )
+
+    exact_predictions = (
+        current_user_standing.exact_predictions
+        if current_user_standing
+        else 0
+    )
 
     # --------------------------------------------------------------
     # Persönliche Leistungsentwicklung
