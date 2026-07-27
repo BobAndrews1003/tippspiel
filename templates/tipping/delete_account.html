@@ -1,0 +1,144 @@
+{% extends "tipping/base.html" %}
+
+{% block title %}
+  Eliminar cuenta
+{% endblock %}
+
+{% block content %}
+  <div class="container account-delete-container">
+
+    <section class="card account-delete-card">
+      <div class="danger-heading">
+        <div class="danger-icon" aria-hidden="true">
+          !
+        </div>
+
+        <div>
+          <h1>Eliminar cuenta</h1>
+
+          <p class="muted">
+            Esta acción es permanente y no se puede deshacer.
+          </p>
+        </div>
+      </div>
+
+      {% if not account_can_be_deleted %}
+
+        <div class="account-delete-warning">
+          <h2>
+            No puedes eliminar tu cuenta todavía
+          </h2>
+
+          <p>
+            Primero debes transferir la administración o eliminar
+            los siguientes grupos:
+          </p>
+
+          <div class="owned-groups-list">
+            {% for owned_group in owned_groups %}
+              <div class="owned-group-row">
+                <div>
+                  <strong>
+                    {{ owned_group.name }}
+                  </strong>
+
+                  <div class="muted small">
+                    {{ owned_group.tournament.name }}
+                  </div>
+                </div>
+
+                <span class="pill">
+                  Administrador
+                </span>
+              </div>
+            {% endfor %}
+          </div>
+
+          <a
+            href="{% url 'my_groups' %}"
+            class="btn primary"
+          >
+            Ir a Mis grupos
+          </a>
+        </div>
+
+      {% else %}
+
+        <div class="account-delete-information">
+          <p>
+            Al eliminar tu cuenta se borrarán:
+          </p>
+
+          <ul>
+            <li>todos tus pronósticos;</li>
+            <li>todos tus pronósticos especiales;</li>
+            <li>todas tus membresías de grupo;</li>
+            <li>tus datos de acceso y tu correo electrónico.</li>
+          </ul>
+        </div>
+
+        <form
+          method="post"
+          class="account-delete-form"
+          novalidate
+        >
+          {% csrf_token %}
+
+          {% if form.non_field_errors %}
+            <div class="form-error-box">
+              {% for error in form.non_field_errors %}
+                <div>{{ error }}</div>
+              {% endfor %}
+            </div>
+          {% endif %}
+
+          <div class="form-field">
+            <label for="{{ form.password.id_for_label }}">
+              {{ form.password.label }}
+            </label>
+
+            {{ form.password }}
+
+            {% for error in form.password.errors %}
+              <div class="field-error">
+                {{ error }}
+              </div>
+            {% endfor %}
+          </div>
+
+          <div class="form-field">
+            <label for="{{ form.confirmation.id_for_label }}">
+              {{ form.confirmation.label }}
+            </label>
+
+            {{ form.confirmation }}
+
+            {% for error in form.confirmation.errors %}
+              <div class="field-error">
+                {{ error }}
+              </div>
+            {% endfor %}
+          </div>
+
+          <div class="account-delete-actions">
+            <a
+              href="{% url 'my_groups' %}"
+              class="btn"
+            >
+              Cancelar
+            </a>
+
+            <button
+              type="submit"
+              class="btn danger"
+            >
+              Eliminar mi cuenta permanentemente
+            </button>
+          </div>
+        </form>
+
+      {% endif %}
+    </section>
+
+  </div>
+{% endblock %}

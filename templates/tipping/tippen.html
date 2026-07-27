@@ -1,124 +1,273 @@
-{% load static %}
-<link rel="stylesheet" href="{% static 'app.css' %}">
+{% extends "tipping/base.html" %}
 
-{% include "tipping/_nav.html" %}
-
-<div class="container">
-
+{% block title %}
   {% if matchday %}
-    
-    <!-- 🔵 Moderner Header -->
-    <div class="card" style="margin-bottom:16px;">
-      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-        
+    Pronosticar · Fecha {{ matchday }} · {{ group.name }}
+  {% else %}
+    Pronosticar · {{ group.name }}
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+  <div class="container tip-entry-page">
+
+    <!-- =====================================================
+         KOPFBEREICH
+         ===================================================== -->
+
+    <section class="card tip-entry-header">
+      <div class="header-flex">
+
         <div>
-          <h2 style="margin:0;">Pronostica</h2>
-          <div class="muted" style="font-size:14px;">
-            Fecha {{ matchday }}
+          <div class="tip-entry-eyebrow">
+            {{ group.name }}
           </div>
+
+          {% if matchday %}
+            <h1>Pronosticar · Fecha {{ matchday }}</h1>
+
+            <p class="muted">
+              Puedes modificar cada pronóstico hasta el inicio
+              del partido.
+            </p>
+          {% else %}
+            <h1>Pronosticar</h1>
+
+            <p class="muted">
+              Todavía no hay una fecha disponible.
+            </p>
+          {% endif %}
         </div>
 
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
-          {% if prev_md %}
-            <a class="btn" href="/tippen/?md={{ prev_md }}">◀ Anterior</a>
-          {% endif %}
-          {% if next_md %}
-            <a class="btn" href="/tippen/?md={{ next_md }}">Siguiente ▶</a>
-          {% endif %}
+        {% if matchday %}
+          <div class="toolbar-nav">
+
+            {% if prev_md %}
+              <a
+                href="{% url 'tippen' %}?md={{ prev_md }}"
+                class="btn small"
+                aria-label="Fecha anterior"
+              >
+                ◀
+              </a>
+            {% else %}
+              <span
+                class="btn small disabled"
+                aria-hidden="true"
+              >
+                ◀
+              </span>
+            {% endif %}
+
+            {% if next_md %}
+              <a
+                href="{% url 'tippen' %}?md={{ next_md }}"
+                class="btn small"
+                aria-label="Fecha siguiente"
+              >
+                ▶
+              </a>
+            {% else %}
+              <span
+                class="btn small disabled"
+                aria-hidden="true"
+              >
+                ▶
+              </span>
+            {% endif %}
+
+          </div>
+        {% endif %}
+
+      </div>
+    </section>
+
+
+    <!-- =====================================================
+         TIPPS
+         ===================================================== -->
+
+    {% if rows %}
+
+      <form
+        method="post"
+        action="{% url 'tippen' %}?md={{ matchday }}"
+        class="tip-entry-form"
+      >
+        {% csrf_token %}
+
+        <div class="tip-match-list">
+
+          {% for row in rows %}
+
+            <article
+              class="
+                card
+                tip-match-card
+                {% if row.match.kickoff <= now %}
+                  tip-match-card--locked
+                {% endif %}
+              "
+            >
+
+              <!-- Datum und Status -->
+
+              <div class="tip-match-meta">
+
+                <time datetime="{{ row.match.kickoff|date:'c' }}">
+                  {{ row.match.kickoff|date:"d/m/Y · H:i" }}
+                </time>
+
+                {% if row.match.kickoff <= now %}
+                  <span class="tip-match-status tip-match-status--locked">
+                    Cerrado
+                  </span>
+                {% else %}
+                  <span class="tip-match-status tip-match-status--open">
+                    Abierto
+                  </span>
+                {% endif %}
+
+              </div>
+
+
+              <!-- Spielpaarung -->
+
+              <div class="tip-match-teams">
+
+                <span class="tip-match-team tip-match-team--home">
+                  {{ row.match.home_team }}
+                </span>
+
+                <span
+                  class="tip-match-versus"
+                  aria-hidden="true"
+                >
+                  –
+                </span>
+
+                <span class="tip-match-team tip-match-team--away">
+                  {{ row.match.away_team }}
+                </span>
+
+              </div>
+
+
+              <!-- Tippfelder -->
+
+              <div class="tip-score-area">
+
+                <span class="tip-score-label">
+                  Tu pronóstico
+                </span>
+
+                <div class="tip-score-inputs">
+
+                  <label
+                    class="tip-score-field"
+                    for="pred_home_{{ row.match.id }}"
+                  >
+                    <span class="sr-only">
+                      Goles de {{ row.match.home_team }}
+                    </span>
+
+                    <input
+                      type="number"
+                      inputmode="numeric"
+                      pattern="[0-9]*"
+                      min="0"
+                      max="99"
+                      step="1"
+                      autocomplete="off"
+                      id="pred_home_{{ row.match.id }}"
+                      name="pred_home_{{ row.match.id }}"
+                      class="tip-score-input"
+                      value="{% if row.pred %}{{ row.pred.pred_home }}{% endif %}"
+                      aria-label="Goles de {{ row.match.home_team }}"
+                      {% if row.match.kickoff <= now %}
+                        disabled
+                      {% endif %}
+                    >
+                  </label>
+
+                  <span
+                    class="tip-score-separator"
+                    aria-hidden="true"
+                  >
+                    :
+                  </span>
+
+                  <label
+                    class="tip-score-field"
+                    for="pred_away_{{ row.match.id }}"
+                  >
+                    <span class="sr-only">
+                      Goles de {{ row.match.away_team }}
+                    </span>
+
+                    <input
+                      type="number"
+                      inputmode="numeric"
+                      pattern="[0-9]*"
+                      min="0"
+                      max="99"
+                      step="1"
+                      autocomplete="off"
+                      id="pred_away_{{ row.match.id }}"
+                      name="pred_away_{{ row.match.id }}"
+                      class="tip-score-input"
+                      value="{% if row.pred %}{{ row.pred.pred_away }}{% endif %}"
+                      aria-label="Goles de {{ row.match.away_team }}"
+                      {% if row.match.kickoff <= now %}
+                        disabled
+                      {% endif %}
+                    >
+                  </label>
+
+                </div>
+
+                {% if row.match.kickoff <= now %}
+                  <span class="tip-score-note">
+                    Este pronóstico ya no puede modificarse.
+                  </span>
+                {% endif %}
+
+              </div>
+
+            </article>
+
+          {% endfor %}
+
         </div>
 
-      </div>
-    </div>
 
-  <form method="post">
-    {% csrf_token %}
+        <!-- Speichern -->
 
-    <div class="card" style="overflow-x:auto;">
-  <table style="width:100%; border-collapse:collapse;">
-      <tr>
-        <th>Partido</th>
-        <th>Hora y fecha</th>
-        <th>Tu pronostico</th>
-        <th>Estatus</th>
-      </tr>
+        <div class="tip-save-area">
+          <button
+            type="submit"
+            class="btn primary tip-save-button"
+          >
+            Guardar pronósticos
+          </button>
+        </div>
 
-      {% for r in rows %}
-        <tr>
-          <td>{{ r.match.home_team }} – {{ r.match.away_team }}</td>
+      </form>
 
-          <td>
-            {{ r.match.kickoff|date:"d.m.Y H:i" }}
-          </td>
+    {% else %}
 
-          <td>
-            {% if now and r.match.kickoff <= now %}
-              {% if r.pred %}
-                {{ r.pred.pred_home }} : {{ r.pred.pred_away }}
-              {% else %}
-                —
-              {% endif %}
-            {% else %}
-              <input
-                type="number"
-                min="0"
-                name="pred_home_{{ r.match.id }}"
-                style="width:60px"
-                value="{% if r.pred %}{{ r.pred.pred_home }}{% endif %}"
-              />
-              :
-              <input
-                type="number"
-                min="0"
-                name="pred_away_{{ r.match.id }}"
-                style="width:60px"
-                value="{% if r.pred %}{{ r.pred.pred_away }}{% endif %}"
-              />
-            {% endif %}
-          </td>
+      <section class="card tip-entry-empty">
+        <strong>
+          No hay partidos disponibles.
+        </strong>
 
-          <td>
-            {% if now and r.match.kickoff <= now %}
-              cerrado
-            {% else %}
-              abierto
-            {% endif %}
-          </td>
-        </tr>
-      {% endfor %}
-    </table>
+        <p class="muted">
+          Los partidos aparecerán aquí cuando sean agregados
+          al torneo.
+        </p>
+      </section>
 
-    <p style="margin-top: 12px;">
-      <button class="btn" type="submit">Guardar pronósticos</button>
-    </p>
-  </form>
+    {% endif %}
 
-{% else %}
-  <p>No se han encontrado partidos futuros.</p>
-{% endif %}
-
-{% if messages %}
-  <div id="modalBackdrop" style="position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center;">
-    <div style="background:white; padding:16px; border-radius:10px; min-width:320px;">
-      <h3 style="margin-top:0;">Info</h3>
-      {% for message in messages %}
-        <p style="margin:8px 0;">{{ message }}</p>
-      {% endfor %}
-      <div style="text-align:right; margin-top:12px;">
-        <button id="closeModalBtn">OK</button>
-          </table>
-      </div>
-    </div>
   </div>
-
-  <script>
-    (function () {
-      const backdrop = document.getElementById("modalBackdrop");
-      const btn = document.getElementById("closeModalBtn");
-      function close() { backdrop.style.display = "none"; }
-      btn.addEventListener("click", close);
-      backdrop.addEventListener("click", function (e) { if (e.target === backdrop) close(); });
-    })();
-  </script>
-
-    </div> <!-- container -->
-{% endif %}
+{% endblock %}

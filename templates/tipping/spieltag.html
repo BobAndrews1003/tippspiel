@@ -1,174 +1,655 @@
-{% load static %}
-<link rel="stylesheet" href="{% static 'app.css' %}">
+{% extends "tipping/base.html" %}
+{% load team_tags %}
+{% load user_tags %}
 
-{% include "tipping/_nav.html" %}
-
-<div class="container">
-
-  <!-- Tabs (Matches / Bonus) -->
-  <div class="tabs-modern">
-    <a class="tab-modern {% if tab != 'bonus' %}active{% endif %}"
-       href="{% url 'spieltag' %}?tab=matches{% if matchday %}&md={{ matchday }}{% endif %}">
-      Tabla por fecha
-    </a>
-
-    {# ✅ Bonus-Tab-Link nur anzeigen, wenn sichtbar erlaubt #}
-    {% if bonus_reveal %}
-      <a class="tab-modern {% if tab == 'bonus' %}active{% endif %}"
-         href="{% url 'spieltag' %}?tab=bonus{% if matchday %}&md={{ matchday }}{% endif %}">
-        Pronósticos especiales
-        {% if season_start %}
-          <span class="pill">desde {{ season_start|date:"d.m H:i" }}</span>
-        {% endif %}
-      </a>
-    {% endif %}
-  </div>
-
-  {# =================== BONUS TAB =================== #}
+{% block title %}
   {% if tab == "bonus" %}
+    Pronósticos especiales · {{ group.name }}
+  {% elif matchday %}
+    Fecha {{ matchday }} · {{ group.name }}
+  {% else %}
+    Tabla por fecha · {{ group.name }}
+  {% endif %}
+{% endblock %}
 
-    <div class="card header-card">
+{% block content %}
+  <div class="container">
+
+    <!-- =====================================================
+         GEMEINSAMER KOPFBEREICH
+         ===================================================== -->
+
+    <section class="card header-card">
       <div class="header-flex">
+
         <div>
-          <h2>Pronósticos especiales – {{ group.name }}</h2>
-          {% if season_start %}
-            <div class="muted small">Bloqueo: {{ season_start|date:"d.m.Y H:i" }}</div>
+          {% if tab == "bonus" %}
+            <h1 style="margin:0 0 6px;">
+              Pronósticos especiales
+            </h1>
+
+            {% if bonus_reveal %}
+              <div class="muted small">
+                Todos los pronósticos especiales ya son visibles.
+              </div>
+
+            {% elif bonus_lock_time %}
+              <div class="muted small">
+                Los pronósticos de los demás participantes serán
+                visibles desde el inicio del primer partido:
+                {{ bonus_lock_time|date:"d.m.Y H:i" }}.
+              </div>
+
+            {% else %}
+              <div class="muted small">
+                Todavía no existen partidos programados para esta
+                temporada.
+              </div>
+            {% endif %}
+
+          {% elif matchday %}
+            <h1 style="margin:0 0 6px;">
+              Vista por fecha – Fecha {{ matchday }}
+            </h1>
+
+            <div class="muted small">
+              Los pronósticos se revelan después del inicio de cada
+              partido.
+            </div>
+
+          {% else %}
+            <h1 style="margin:0 0 6px;">
+              Tabla por fecha
+            </h1>
+
+            <div class="muted small">
+              No se ha encontrado una fecha disponible.
+            </div>
           {% endif %}
         </div>
-      </div>
-    </div>
 
-    <div class="card table-card">
-      <div class="tablewrap-modern">
-        <table>
-          <thead>
-            <tr>
-              <th class="sticky-left pos">Pos</th>
-              <th class="sticky-left name">Nombre</th>
-              <th>Campeón (mitad de temporada)</th>
-              <th>Campeón</th>
-              <th>1er entrenador despedido</th>
-              <th>Máximo goleador</th>
-              <th>Desciende 1</th>
-              <th>Desciende 2</th>
-              <th class="sticky-right total">Bonus</th>
-            </tr>
-          </thead>
+        <!-- Dropdown und Pfeile -->
 
-          <tbody>
-            {% for row in bonus_rows %}
-              <tr>
-                <td class="sticky-left pos">{{ forloop.counter }}.</td>
-                <td class="sticky-left name">{{ row.user.username }}</td>
+        <div class="tip-page-navigation">
 
-                <td>{{ row.picks.herbstmeister|default:"—" }}</td>
-                <td>{{ row.picks.meister|default:"—" }}</td>
-                <td>{{ row.picks.trainer_first|default:"—" }}</td>
-                <td>{{ row.picks.topscorer|default:"—" }}</td>
-                <td>{{ row.picks.relegation1|default:"—" }}</td>
-                <td>{{ row.picks.relegation2|default:"—" }}</td>
+          <div class="tip-page-selector">
+            <label for="matchdayPageSelector">
+              Ir a
+            </label>
 
-                <td class="sticky-right total">{{ row.points }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+            <select
+              id="matchdayPageSelector"
+              class="tip-page-select"
+              aria-label="Seleccionar fecha o pronósticos especiales"
+            >
+              <optgroup label="Fechas">
+                {% for md in matchdays %}
+                  <option
+                    value="{% url 'spieltag' %}?tab=matches&md={{ md }}"
+                    {% if tab != "bonus" and md == matchday %}
+                      selected
+                    {% endif %}
+                  >
+                    Fecha {{ md }}
+                  </option>
+                {% endfor %}
+              </optgroup>
 
-      <p class="note">
-        Los pronósticos especiales se vuelven visibles al inicio de la temporada.
-        Se suman a la puntuación total (5 puntos por cada acierto).
-      </p>
-    </div>
-
-
-  {# =================== MATCHDAY TAB =================== #}
-  {% else %}
-
-    {% if matchday %}
-      <div class="card header-card">
-        <div class="header-flex">
-          <div>
-            <h2>Vista por fecha – Fecha {{ matchday }}</h2>
-            <div class="muted small">Los pronósticos se revelan después del inicio del partido.</div>
+              <optgroup label="Especiales">
+                <option
+                  value="{% url 'spieltag' %}?tab=bonus{% if matchday %}&md={{ matchday }}{% endif %}"
+                  {% if tab == "bonus" %}
+                    selected
+                  {% endif %}
+                >
+                  Pronósticos especiales
+                </option>
+              </optgroup>
+            </select>
           </div>
 
-          <div class="toolbar-nav">
-            <a class="btn small {% if not prev_md %}disabled{% endif %}"
-               href="{% url 'spieltag' %}?tab=matches&md={{ prev_md }}">
-              ◀
-            </a>
-            <a class="btn small {% if not next_md %}disabled{% endif %}"
-               href="{% url 'spieltag' %}?tab=matches&md={{ next_md }}">
-              ▶
-            </a>
-          </div>
+          {% if tab != "bonus" and matchday %}
+            <div class="toolbar-nav">
+
+              {% if prev_md %}
+                <a
+                  class="btn small"
+                  href="{% url 'spieltag' %}?tab=matches&md={{ prev_md }}"
+                  aria-label="Fecha anterior"
+                >
+                  ◀
+                </a>
+              {% else %}
+                <span
+                  class="btn small disabled"
+                  aria-hidden="true"
+                >
+                  ◀
+                </span>
+              {% endif %}
+
+              {% if next_md %}
+                <a
+                  class="btn small"
+                  href="{% url 'spieltag' %}?tab=matches&md={{ next_md }}"
+                  aria-label="Siguiente fecha"
+                >
+                  ▶
+                </a>
+              {% else %}
+                <span
+                  class="btn small disabled"
+                  aria-hidden="true"
+                >
+                  ▶
+                </span>
+              {% endif %}
+
+            </div>
+          {% endif %}
+
         </div>
       </div>
+    </section>
 
-      <div class="card table-card">
+    <!-- =====================================================
+         BONUSTIPPS
+         ===================================================== -->
+
+    {% if tab == "bonus" %}
+
+      <section
+        class="card table-card"
+        style="margin-top:14px;"
+      >
         <div class="tablewrap-modern">
           <table>
             <thead>
               <tr>
-                <th class="sticky-left pos">Pos</th>
-                <th class="sticky-left name">Nombre</th>
+                <th class="sticky-left pos">
+                  Pos.
+                </th>
 
-                {% for h in matches %}
-                  <th>
-                    <div class="match-head">
-                      {{ h.match.home_team|slice:":3"|upper }}&nbsp;&nbsp;{{ h.match.away_team|slice:":3"|upper }}
-                    </div>
-                    <div class="match-sub">
-                      {% if h.result %}
-                        {{ h.result.0 }}:{{ h.result.1 }}
-                      {% else %}
-                        {{ h.match.kickoff|date:"d.m H:i" }}
-                      {% endif %}
-                    </div>
-                  </th>
-                {% endfor %}
+                <th class="sticky-left name">
+                  Nombre
+                </th>
 
-                <th class="sticky-right total">P</th>
+                <th>
+                  Campeón de mitad de temporada
+                </th>
+
+                <th>
+                  Campeón
+                </th>
+
+                <th>
+                  1er entrenador despedido
+                </th>
+
+                <th>
+                  Máximo goleador
+                </th>
+
+                <th>
+                  Desciende 1
+                </th>
+
+                <th>
+                  Desciende 2
+                </th>
+
+                <th class="sticky-right total">
+                  Bonus
+                </th>
               </tr>
             </thead>
 
             <tbody>
-              {% for row in table_rows %}
-                <tr class="{% if row.user.id == request.user.id %}me{% endif %}">
-                  <td class="sticky-left pos">{{ forloop.counter }}.</td>
-                  <td class="sticky-left name">{{ row.user.username }}</td>
+              {% for row in bonus_rows %}
 
-                  {% for c in row.cells %}
+                <tr
+                  class="{% if row.user.id == request.user.id %}me{% endif %}"
+                >
+                  <td class="sticky-left pos">
+                    {% if page_obj %}
+                      {{ page_obj.start_index|add:forloop.counter0 }}.
+                    {% else %}
+                      {{ forloop.counter }}.
+                    {% endif %}
+                  </td>
+
+                  <td class="sticky-left name">
+                    <a
+                      href="{% url 'user_stats' row.user.id %}"
+                      class="table-user-link table-user-with-avatar"
+                    >
+                      <span
+                        class="table-user-avatar"
+                        aria-hidden="true"
+                      >
+                    {{ row.user|user_initial }} 
+                      </span>
+
+                      <span>
+                        {{ row.user.username|default:row.user.email }}
+                      </span>
+                    </a>
+                  </td>
+
+                  {% if row.reveal %}
+
                     <td>
-                      {% if c.reveal %}
-                        {% if c.pred %}
-                          <div class="tip">{{ c.pred.pred_home }}:{{ c.pred.pred_away }}</div>
-                          <div class="pts">{{ c.points }}</div>
-                        {% else %}
-                          <div class="tip">—</div>
-                          <div class="pts">0</div>
-                        {% endif %}
-                      {% else %}
-                        <div class="hidden-tip">oculto</div>
-                      {% endif %}
+                      {{ row.picks.herbstmeister|default:"—" }}
                     </td>
-                  {% endfor %}
 
-                  <td class="sticky-right total">{{ row.total_points }}</td>
+                    <td>
+                      {{ row.picks.meister|default:"—" }}
+                    </td>
+
+                    <td>
+                      {{ row.picks.trainer_first|default:"—" }}
+                    </td>
+
+                    <td>
+                      {{ row.picks.topscorer|default:"—" }}
+                    </td>
+
+                    <td>
+                      {{ row.picks.relegation1|default:"—" }}
+                    </td>
+
+                    <td>
+                      {{ row.picks.relegation2|default:"—" }}
+                    </td>
+
+                  {% else %}
+
+                    <td>
+                      <div class="hidden-tip">
+                        oculto
+                      </div>
+                    </td>
+
+                    <td>
+                      <div class="hidden-tip">
+                        oculto
+                      </div>
+                    </td>
+
+                    <td>
+                      <div class="hidden-tip">
+                        oculto
+                      </div>
+                    </td>
+
+                    <td>
+                      <div class="hidden-tip">
+                        oculto
+                      </div>
+                    </td>
+
+                    <td>
+                      <div class="hidden-tip">
+                        oculto
+                      </div>
+                    </td>
+
+                    <td>
+                      <div class="hidden-tip">
+                        oculto
+                      </div>
+                    </td>
+
+                  {% endif %}
+
+                  <td class="sticky-right total">
+                    {% if bonus_reveal %}
+                      {{ row.points|default:0 }}
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                </tr>
+
+              {% empty %}
+                <tr>
+                  <td colspan="9">
+                    <span class="muted">
+                      Todavía no hay participantes en este grupo.
+                    </span>
+                  </td>
                 </tr>
               {% endfor %}
             </tbody>
           </table>
         </div>
-      </div>
+
+        <!-- Seitennavigation der Bonustipps -->
+
+        {% if page_obj and page_obj.paginator.num_pages > 1 %}
+          <nav
+            class="pagination"
+            aria-label="Navegación de participantes"
+          >
+            {% if page_obj.has_previous %}
+              <a
+                class="btn small"
+                href="?tab=bonus{% if matchday %}&md={{ matchday }}{% endif %}&page={{ page_obj.previous_page_number }}"
+                rel="prev"
+              >
+                Anterior
+              </a>
+            {% else %}
+              <span
+                class="btn small disabled"
+                aria-hidden="true"
+              >
+                Anterior
+              </span>
+            {% endif %}
+
+            <span class="pagination-status">
+              Página {{ page_obj.number }}
+              de {{ page_obj.paginator.num_pages }}
+            </span>
+
+            {% if page_obj.has_next %}
+              <a
+                class="btn small"
+                href="?tab=bonus{% if matchday %}&md={{ matchday }}{% endif %}&page={{ page_obj.next_page_number }}"
+                rel="next"
+              >
+                Siguiente
+              </a>
+            {% else %}
+              <span
+                class="btn small disabled"
+                aria-hidden="true"
+              >
+                Siguiente
+              </span>
+            {% endif %}
+          </nav>
+
+          <div class="pagination-detail muted small">
+            Participantes
+            {{ page_obj.start_index }}–{{ page_obj.end_index }}
+            de {{ page_obj.paginator.count }}
+          </div>
+        {% endif %}
+
+        <div class="bonus-table-footer">
+          <div>
+            {% if bonus_reveal %}
+              <p class="note">
+                Los pronósticos especiales son visibles desde el inicio
+                del primer partido de la temporada. Cada acierto otorga
+                5 puntos.
+              </p>
+            {% else %}
+              <p class="note">
+                Tus propios pronósticos son visibles. Los pronósticos
+                de los demás participantes se mostrarán cuando comience
+                el primer partido de la temporada.
+
+                {% if bonus_lock_time %}
+                  Cierre:
+                  <strong>
+                    {{ bonus_lock_time|date:"d.m.Y H:i" }}
+                  </strong>.
+                {% endif %}
+              </p>
+            {% endif %}
+          </div>
+
+          {% if not bonus_reveal %}
+            <a
+              href="{% url 'bonus_tips' %}"
+              class="btn primary"
+            >
+              Editar mis pronósticos especiales
+            </a>
+          {% endif %}
+        </div>
+      </section>
+
+    <!-- =====================================================
+         NORMALE SPIELTAGE
+         ===================================================== -->
 
     {% else %}
-      <div class="card">
-        <p>No se han encontrado partidos futuros.</p>
-      </div>
+
+      {% if matchday %}
+
+        <section
+          class="card table-card"
+          style="margin-top:14px;"
+        >
+          <div class="tablewrap-modern">
+            <table>
+              <thead>
+                <tr>
+                  <th class="sticky-left pos">
+                    Pos.
+                  </th>
+
+                  <th class="sticky-left name">
+                    Nombre
+                  </th>
+
+                  {% for header in matches %}
+                    <th>
+                      <div class="match-head">
+                        {{ header.match.home_team|team_abbr }}
+                        &nbsp;&nbsp;
+                        {{ header.match.away_team|team_abbr }}
+                      </div>
+
+                      <div class="match-sub">
+                        {% if header.result %}
+                          {{ header.result.0 }}:{{ header.result.1 }}
+                        {% else %}
+                          {{ header.match.kickoff|date:"d.m H:i" }}
+                        {% endif %}
+                      </div>
+                    </th>
+                  {% endfor %}
+
+                  <th class="sticky-right total">
+                    P
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {% for row in table_rows %}
+
+                  <tr
+                    class="{% if row.user.id == request.user.id %}me{% endif %}"
+                  >
+                    <td class="sticky-left pos">
+                      {% if page_obj %}
+                        {{ page_obj.start_index|add:forloop.counter0 }}.
+                      {% else %}
+                        {{ forloop.counter }}.
+                      {% endif %}
+                    </td>
+
+                    <td class="sticky-left name">
+                      <a
+                        href="{% url 'user_stats' row.user.id %}"
+                        class="table-user-link table-user-with-avatar"
+                      >
+                        <span
+                          class="table-user-avatar"
+                          aria-hidden="true"
+                        >
+                          {{ row.user|user_initial }}
+                        </span>
+
+                        <span>
+                          {{ row.user.username|default:row.user.email }}
+                        </span>
+                      </a>
+                    </td>
+
+                    {% for cell in row.cells %}
+                      <td>
+
+                        {% if cell.can_view_prediction %}
+
+                          {% if cell.pred %}
+                            <div class="tip">
+                              {{ cell.pred.pred_home }}:
+                              {{ cell.pred.pred_away }}
+                            </div>
+
+                            <div class="pts">
+                              {% if cell.reveal and cell.points != None %}
+                                {{ cell.points }}
+                              {% else %}
+                                —
+                              {% endif %}
+                            </div>
+
+                          {% else %}
+                            <div class="tip">
+                              —
+                            </div>
+
+                            <div class="pts">
+                              {% if cell.reveal and cell.points != None %}
+                                {{ cell.points }}
+                              {% else %}
+                                —
+                              {% endif %}
+                            </div>
+                          {% endif %}
+
+                        {% else %}
+                          <div class="hidden-tip">
+                            oculto
+                          </div>
+                        {% endif %}
+
+                      </td>
+                    {% endfor %}
+
+                    <td class="sticky-right total">
+                      {{ row.total_points }}
+                    </td>
+                  </tr>
+
+                {% empty %}
+                  <tr>
+                    <td colspan="{{ matches|length|add:'3' }}">
+                      <span class="muted">
+                        El grupo todavía no tiene participantes.
+                      </span>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Seitennavigation der normalen Tipps -->
+
+          {% if page_obj and page_obj.paginator.num_pages > 1 %}
+            <nav
+              class="pagination"
+              aria-label="Navegación de participantes"
+            >
+              {% if page_obj.has_previous %}
+                <a
+                  class="btn small"
+                  href="?tab=matches&md={{ matchday }}&page={{ page_obj.previous_page_number }}"
+                  rel="prev"
+                >
+                  Anterior
+                </a>
+              {% else %}
+                <span
+                  class="btn small disabled"
+                  aria-hidden="true"
+                >
+                  Anterior
+                </span>
+              {% endif %}
+
+              <span class="pagination-status">
+                Página {{ page_obj.number }}
+                de {{ page_obj.paginator.num_pages }}
+              </span>
+
+              {% if page_obj.has_next %}
+                <a
+                  class="btn small"
+                  href="?tab=matches&md={{ matchday }}&page={{ page_obj.next_page_number }}"
+                  rel="next"
+                >
+                  Siguiente
+                </a>
+              {% else %}
+                <span
+                  class="btn small disabled"
+                  aria-hidden="true"
+                >
+                  Siguiente
+                </span>
+              {% endif %}
+            </nav>
+
+            <div class="pagination-detail muted small">
+              Participantes
+              {{ page_obj.start_index }}–{{ page_obj.end_index }}
+              de {{ page_obj.paginator.count }}
+            </div>
+          {% endif %}
+
+        </section>
+
+      {% else %}
+
+        <section
+          class="card"
+          style="margin-top:14px;"
+        >
+          <div class="alert">
+            No se han encontrado partidos para esta competición.
+          </div>
+        </section>
+
+      {% endif %}
+
     {% endif %}
 
-  {% endif %}
+  </div>
+{% endblock %}
 
-</div>
+{% block extra_js %}
+  {{ block.super }}
+
+  <script>
+    (function () {
+      const selector = document.getElementById(
+        "matchdayPageSelector"
+      );
+
+      if (!selector) {
+        return;
+      }
+
+      selector.addEventListener(
+        "change",
+        function () {
+          const targetUrl = selector.value;
+
+          if (targetUrl) {
+            window.location.href = targetUrl;
+          }
+        }
+      );
+    })();
+  </script>
+{% endblock %}

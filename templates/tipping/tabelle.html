@@ -1,98 +1,453 @@
-{% load static %}
-<link rel="stylesheet" href="{% static 'app.css' %}">
+{% extends "tipping/base.html" %}
+{% load user_tags %}
 
-{% include "tipping/_nav.html" %}
+{% block title %}
+  Tabla general · {{ group.name }}
+{% endblock %}
 
-<div class="container">
+{% block content %}
+  <div class="container">
 
-  <!-- Header -->
-  <div class="card header-card">
-    <div class="header-flex">
-      <div>
-        <h2>Tabla general</h2>
+    <!-- =====================================================
+         HEADER
+         ===================================================== -->
+
+    <section class="card header-card">
+      <div class="header-flex">
+
+        <div>
+          <h1>
+            Tabla general
+          </h1>
+
+          {% if shown_matchdays %}
+            <div class="muted small">
+              Vista actual:
+              Fecha {{ shown_matchdays|first }}–{{ shown_matchdays|last }}
+              ({{ shown_matchdays|length }})
+              de {{ matchdays|length }}
+            </div>
+          {% else %}
+            <div class="muted small">
+              Todavía no hay fechas disponibles.
+            </div>
+          {% endif %}
+        </div>
+
+        <!-- Navigation zwischen Spieltagsfenstern -->
+
+        <div class="toolbar-nav">
+
+          {% if prev_from is not None %}
+            <a
+              class="btn small"
+              href="{% url 'tabelle' %}?view={{ view }}&from={{ prev_from }}&count={{ count }}{% if page_obj %}&page={{ page_obj.number }}{% endif %}"
+              aria-label="Fechas anteriores"
+            >
+              ◀
+            </a>
+          {% else %}
+            <span
+              class="btn small disabled"
+              aria-hidden="true"
+            >
+              ◀
+            </span>
+          {% endif %}
+
+          {% if next_from is not None %}
+            <a
+              class="btn small"
+              href="{% url 'tabelle' %}?view={{ view }}&from={{ next_from }}&count={{ count }}{% if page_obj %}&page={{ page_obj.number }}{% endif %}"
+              aria-label="Siguientes fechas"
+            >
+              ▶
+            </a>
+          {% else %}
+            <span
+              class="btn small disabled"
+              aria-hidden="true"
+            >
+              ▶
+            </span>
+          {% endif %}
+
+        </div>
       </div>
+    </section>
 
-      <div class="toolbar-nav">
-        <a class="btn small {% if prev_from is None %}disabled{% endif %}"
-           href="{% url 'tabelle' %}?view={{ view }}&from={{ prev_from }}&count={{ count }}">
-           ◀
-        </a>
+    <!-- =====================================================
+         TABS
+         ===================================================== -->
 
-        <a class="btn small {% if next_from is None %}disabled{% endif %}"
-           href="{% url 'tabelle' %}?view={{ view }}&from={{ next_from }}&count={{ count }}">
-           ▶
-        </a>
-      </div>
+    <div class="tabs-modern">
+
+      <a
+        class="
+          tab-modern
+          {% if view == 'mdpoints' %}
+            active
+          {% endif %}
+        "
+        href="{% url 'tabelle' %}?view=mdpoints&from={{ from_idx }}&count={{ count }}{% if page_obj %}&page={{ page_obj.number }}{% endif %}"
+      >
+        Puntos por fecha
+      </a>
+
+      <a
+        class="
+          tab-modern
+          {% if view == 'ranks' %}
+            active
+          {% endif %}
+        "
+        href="{% url 'tabelle' %}?view=ranks&from={{ from_idx }}&count={{ count }}{% if page_obj %}&page={{ page_obj.number }}{% endif %}"
+      >
+        Posiciones
+      </a>
+
+      <a
+        class="
+          tab-modern
+          {% if view == 'rankdiff' %}
+            active
+          {% endif %}
+        "
+        href="{% url 'tabelle' %}?view=rankdiff&from={{ from_idx }}&count={{ count }}{% if page_obj %}&page={{ page_obj.number }}{% endif %}"
+      >
+        Diferencia
+      </a>
+
     </div>
 
-    <div class="muted small">
-      Vista actual: Fecha {{ shown_matchdays|first }}–{{ shown_matchdays|last }}
-      ({{ shown_matchdays|length }}) de {{ matchdays|length }}
-    </div>
-  </div>
+    <!-- =====================================================
+         ERKLÄRUNG DER AUSGEWÄHLTEN ANSICHT
+         ===================================================== -->
 
-  <!-- Tabs -->
-  <div class="tabs-modern">
-    <a class="tab-modern {% if view == 'mdpoints' %}active{% endif %}"
-       href="{% url 'tabelle' %}?view=mdpoints">
-       Puntos por fecha
-    </a>
+    <section class="table-view-description">
 
-    <a class="tab-modern {% if view == 'ranks' %}active{% endif %}"
-       href="{% url 'tabelle' %}?view=ranks">
-       Posiciones
-    </a>
+      <div
+        class="table-view-description-icon"
+        aria-hidden="true"
+      >
+        {% if view == "mdpoints" %}
+          P
+        {% elif view == "ranks" %}
+          #
+        {% else %}
+          ↕
+        {% endif %}
+      </div>
 
-    <a class="tab-modern {% if view == 'rankdiff' %}active{% endif %}"
-       href="{% url 'tabelle' %}?view=rankdiff">
-       Diferencia
-    </a>
-  </div>
+      <div class="table-view-description-content">
 
-  <!-- Table -->
-  <div class="card table-card">
-    <div class="tablewrap-modern">
-      <table>
-        <thead>
-          <tr>
-            <th class="sticky-left pos">Pos</th>
-            <th class="sticky-left name">Nombre</th>
+        <strong>
+          {% if view == "mdpoints" %}
+            Puntos obtenidos en cada fecha
 
-            {% for md in shown_matchdays %}
-              <th>{{ md }}</th>
-            {% endfor %}
+          {% elif view == "ranks" %}
+            Posición acumulada después de cada fecha
 
-            <th class="sticky-right total">Suma</th>
-          </tr>
-        </thead>
+          {% else %}
+            Cambio respecto a la fecha anterior
+          {% endif %}
+        </strong>
 
-        <tbody>
-          {% for r in table_rows %}
-            <tr class="{% if r.user.id == me_id %}me{% endif %}">
-              <td class="sticky-left pos">{{ forloop.counter }}.</td>
+        <p>
+          {% if view == "mdpoints" %}
+            Cada columna muestra los puntos obtenidos exclusivamente
+            en esa fecha.
 
-              <td class="sticky-left name">
-                <a href="{% url 'user_stats' r.user.id %}">
-                  {{ r.user.username }}
-                </a>
-              </td>
+          {% elif view == "ranks" %}
+            Cada columna muestra la posición en la tabla general
+            después de sumar los puntos de todas las fechas disputadas
+            hasta ese momento.
 
-              {% for c in r.cells %}
-                <td>
-                  {% if c is None %}
-                    <span class="muted">—</span>
-                  {% else %}
-                    {{ c }}
-                  {% endif %}
-                </td>
+          {% else %}
+            La flecha muestra cuántas posiciones subió o bajó el
+            participante respecto a la última fecha evaluada.
+          {% endif %}
+        </p>
+
+      </div>
+    </section>
+
+    <!-- =====================================================
+         TABELLE
+         ===================================================== -->
+
+    <section class="card table-card">
+
+      <div class="tablewrap-modern">
+
+        <table>
+          <thead>
+            <tr>
+
+              <th class="sticky-left pos">
+                Pos.
+              </th>
+
+              <th class="sticky-left name">
+                Nombre
+              </th>
+
+              {% for md in shown_matchdays %}
+                <th
+                  class="
+                    table-matchday-heading
+                    {% if md == current_matchday %}
+                      table-matchday-heading--current
+                    {% endif %}
+                  "
+                >
+
+                  <span class="table-matchday-heading-label">
+                    {% if view == "mdpoints" %}
+                      Puntos
+
+                    {% elif view == "ranks" %}
+                      Posición
+
+                    {% else %}
+                      Cambio
+                    {% endif %}
+                  </span>
+
+                  <span class="table-matchday-heading-date">
+                    Fecha {{ md }}
+                  </span>
+
+                </th>
               {% endfor %}
 
-              <td class="sticky-right total">{{ r.total }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
+              <th class="sticky-right total">
 
-</div>
+                <span class="table-matchday-heading-label">
+                  Acumulado
+                </span>
+
+                <span class="table-matchday-heading-date">
+                  Puntos totales
+                </span>
+
+              </th>
+
+            </tr>
+          </thead>
+
+          <tbody>
+
+            {% for row in table_rows %}
+
+              <tr
+                class="
+                  {% if row.user.id == me_id %}
+                    me
+                  {% endif %}
+                "
+              >
+
+                <!-- Globale Position über alle Seiten -->
+
+                <td class="sticky-left pos">
+                  {% if page_obj %}
+                    {{ page_obj.start_index|add:forloop.counter0 }}.
+                  {% else %}
+                    {{ forloop.counter }}.
+                  {% endif %}
+                </td>
+
+                <td class="sticky-left name">
+
+                  <a
+                    href="{% url 'user_stats' row.user.id %}"
+                    class="table-user-link table-user-with-avatar"
+                  >
+
+                    <span
+                      class="table-user-avatar"
+                      aria-hidden="true"
+                    >
+                     {{ row.user|user_initial }}
+                    </span>
+
+                    <span>
+                      {{ row.user.username|default:row.user.email }}
+                    </span>
+
+                  </a>
+
+                </td>
+
+                {% for cell in row.cells %}
+                  <td>
+
+                    {% if cell is None %}
+
+                      <span
+                        class="rank-change rank-change-empty"
+                        title="Todavía no hay datos disponibles"
+                      >
+                        —
+                      </span>
+
+                    {% elif view == "rankdiff" %}
+
+                      {% if cell > 0 %}
+
+                        <span
+                          class="rank-change rank-change-up"
+                          title="Subió {{ cell }} posiciones"
+                          aria-label="Subió {{ cell }} posiciones"
+                        >
+                          <span aria-hidden="true">
+                            ▲
+                          </span>
+
+                          +{{ cell }}
+                        </span>
+
+                      {% elif cell < 0 %}
+
+                        <span
+                          class="rank-change rank-change-down"
+                          title="Bajó {{ cell|cut:'-' }} posiciones"
+                          aria-label="Bajó {{ cell|cut:'-' }} posiciones"
+                        >
+                          <span aria-hidden="true">
+                            ▼
+                          </span>
+
+                          {{ cell|cut:"-" }}
+                        </span>
+
+                      {% else %}
+
+                        <span
+                          class="rank-change rank-change-same"
+                          title="Mantuvo la misma posición"
+                          aria-label="Mantuvo la misma posición"
+                        >
+                          —
+                        </span>
+
+                      {% endif %}
+
+                    {% elif view == "ranks" %}
+
+                      <span class="table-rank-value">
+                        {{ cell }}.
+                      </span>
+
+                    {% else %}
+
+                      <span class="table-points-value">
+                        {{ cell }}
+                      </span>
+
+                    {% endif %}
+
+                  </td>
+                {% endfor %}
+
+                <td class="sticky-right total">
+
+                  <strong>
+                    {{ row.total }}
+                  </strong>
+
+                  {% if bonus_reveal and row.bonus %}
+                    <span
+                      class="table-bonus-note"
+                      title="{{ row.bonus }} puntos de bonus"
+                    >
+                      +{{ row.bonus }} bonus
+                    </span>
+                  {% endif %}
+
+                </td>
+
+              </tr>
+
+            {% empty %}
+
+              <tr>
+                <td colspan="{{ shown_matchdays|length|add:'3' }}">
+                  <span class="muted">
+                    Todavía no hay participantes en este grupo.
+                  </span>
+                </td>
+              </tr>
+
+            {% endfor %}
+
+          </tbody>
+        </table>
+
+      </div>
+
+      <!-- ===================================================
+           SEITENNAVIGATION DER TEILNEHMER
+           =================================================== -->
+
+      {% if page_obj and page_obj.paginator.num_pages > 1 %}
+
+        <nav
+          class="pagination"
+          aria-label="Navegación de participantes"
+        >
+
+          {% if page_obj.has_previous %}
+            <a
+              class="btn small"
+              href="?view={{ view }}&from={{ from_idx }}&count={{ count }}&page={{ page_obj.previous_page_number }}"
+              rel="prev"
+            >
+              Anterior
+            </a>
+          {% else %}
+            <span
+              class="btn small disabled"
+              aria-hidden="true"
+            >
+              Anterior
+            </span>
+          {% endif %}
+
+          <span class="pagination-status">
+            Página {{ page_obj.number }}
+            de {{ page_obj.paginator.num_pages }}
+          </span>
+
+          {% if page_obj.has_next %}
+            <a
+              class="btn small"
+              href="?view={{ view }}&from={{ from_idx }}&count={{ count }}&page={{ page_obj.next_page_number }}"
+              rel="next"
+            >
+              Siguiente
+            </a>
+          {% else %}
+            <span
+              class="btn small disabled"
+              aria-hidden="true"
+            >
+              Siguiente
+            </span>
+          {% endif %}
+
+        </nav>
+
+        <div class="pagination-detail muted small">
+          Participantes
+          {{ page_obj.start_index }}–{{ page_obj.end_index }}
+          de {{ page_obj.paginator.count }}
+        </div>
+
+      {% endif %}
+
+    </section>
+
+  </div>
+{% endblock %}

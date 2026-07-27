@@ -155,39 +155,6 @@
     </div>
   {% endif %}
 
-  <!-- Messages (Modal) -->
-  {% if messages %}
-    <div id="modalBackdrop" style="
-      position: fixed; inset: 0; background: rgba(0,0,0,0.55);
-      display: flex; align-items: center; justify-content: center;
-      padding: 16px; z-index: 1000;
-    ">
-      <div class="card" style="max-width:520px; width:100%;">
-        <div class="header-flex">
-          <h3 style="margin:0;">Info</h3>
-          <button class="btn small" id="closeModalBtn" type="button">OK</button>
-        </div>
-
-        <div class="stack" style="margin-top:12px;">
-          {% for message in messages %}
-            <div class="alert">{{ message }}</div>
-          {% endfor %}
-        </div>
-      </div>
-    </div>
-
-    <script>
-      (function () {
-        const backdrop = document.getElementById("modalBackdrop");
-        const btn = document.getElementById("closeModalBtn");
-        function close() { backdrop.style.display = "none"; }
-        btn.addEventListener("click", close);
-        backdrop.addEventListener("click", function (e) {
-          if (e.target === backdrop) close();
-        });
-      })();
-    </script>
-  {% endif %}
 
 </div>
 {% endblock %}

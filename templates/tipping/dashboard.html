@@ -1,0 +1,488 @@
+{% extends "tipping/base.html" %}
+{% load user_tags %}
+
+{% block title %}
+  Inicio · {{ group.name }}
+{% endblock %}
+
+{% block content %}
+  <div class="container dashboard-page">
+
+
+    <!-- =====================================================
+         BEGRÜSSUNG
+         ===================================================== -->
+
+    <section class="dashboard-welcome">
+
+      <div
+        class="dashboard-welcome-avatar"
+        aria-hidden="true"
+      >
+        {{ request.user|user_initial }}
+      </div>
+
+      <div class="dashboard-welcome-content">
+        <div class="dashboard-eyebrow">
+          {{ group.name }}
+        </div>
+
+        <h1>
+          Hola,
+          {{ request.user.username|default:request.user.email }}
+        </h1>
+
+        <p>
+          Aquí encuentras lo más importante de tu grupo,
+          tus pronósticos y tu rendimiento.
+        </p>
+      </div>
+
+    </section>
+
+    <!-- =====================================================
+         HAUPTBEREICH
+         ===================================================== -->
+
+    <div class="dashboard-main-grid">
+
+      <!-- Nächster oder aktueller Spieltag -->
+
+      <section class="card dashboard-action-card">
+
+        {% if current_matchday %}
+
+          <div class="dashboard-card-heading">
+            <div>
+              <div class="dashboard-eyebrow">
+
+                {% if current_matchday_state == "upcoming" %}
+                  Próxima fecha
+
+                {% elif current_matchday_state == "in_progress" %}
+                  Fecha en curso
+
+                {% else %}
+                  Última fecha
+                {% endif %}
+
+              </div>
+
+              <h2>
+                Fecha {{ current_matchday }}
+              </h2>
+            </div>
+
+            {% if missing_predictions > 0 %}
+              <span class="dashboard-status dashboard-status--warning">
+                {{ missing_predictions }} pendientes
+              </span>
+
+            {% elif has_open_matches %}
+              <span class="dashboard-status dashboard-status--success">
+                Completo
+              </span>
+
+            {% else %}
+              <span class="dashboard-status dashboard-status--neutral">
+                Cerrado
+              </span>
+            {% endif %}
+          </div>
+
+          {% if has_open_matches %}
+
+            {% if missing_predictions > 0 %}
+              <p class="dashboard-action-message">
+                Te faltan
+                <strong>
+                  {{ missing_predictions }}
+                </strong>
+
+                {% if missing_predictions == 1 %}
+                  pronóstico
+                {% else %}
+                  pronósticos
+                {% endif %}
+                para esta fecha.
+              </p>
+
+            {% else %}
+              <p class="dashboard-action-message">
+                Todos tus pronósticos disponibles están
+                completos.
+              </p>
+            {% endif %}
+
+            <div class="dashboard-progress">
+              <div class="dashboard-progress-row">
+                <span>
+                  Pronósticos completados
+                </span>
+
+                <strong>
+                  {{ completed_open_predictions }}
+                  de {{ open_matches_count }}
+                </strong>
+              </div>
+            </div>
+
+            {% if next_deadline %}
+              <div class="dashboard-deadline">
+                <span class="dashboard-deadline-label">
+                  Próximo cierre
+                </span>
+
+                <strong>
+                  {{ next_deadline|date:"d/m/Y · H:i" }}
+                </strong>
+              </div>
+            {% endif %}
+
+            <a
+              href="{% url 'tippen' %}?md={{ current_matchday }}"
+              class="btn primary dashboard-primary-button"
+            >
+              {% if missing_predictions > 0 %}
+                Completar pronósticos
+              {% else %}
+                Revisar pronósticos
+              {% endif %}
+            </a>
+
+          {% else %}
+
+            <p class="dashboard-action-message">
+              Los pronósticos de esta fecha ya están
+              cerrados.
+            </p>
+
+            <a
+              href="{% url 'spieltag' %}?md={{ current_matchday }}"
+              class="btn primary dashboard-primary-button"
+            >
+              Ver la fecha
+            </a>
+
+          {% endif %}
+
+        {% else %}
+
+          <div class="dashboard-empty-state">
+            <strong>
+              Todavía no hay fechas disponibles
+            </strong>
+
+            <p>
+              Los próximos partidos aparecerán aquí cuando
+              sean agregados al torneo.
+            </p>
+          </div>
+
+        {% endif %}
+
+      </section>
+
+      <!-- Persönliche Kennzahlen -->
+
+      <section class="dashboard-kpi-grid">
+
+        <article class="card dashboard-kpi">
+          <span class="dashboard-kpi-label">
+            Posición
+          </span>
+
+          <strong class="dashboard-kpi-value">
+            {% if user_position %}
+              {{ user_position }}
+            {% else %}
+              —
+            {% endif %}
+          </strong>
+
+          <span class="dashboard-kpi-note">
+            {% if standings_started %}
+              de {{ participant_count }}
+            {% else %}
+              La tabla aún no ha comenzado
+            {% endif %}
+          </span>
+        </article>
+
+        <article class="card dashboard-kpi">
+          <span class="dashboard-kpi-label">
+            Puntos
+          </span>
+
+          <strong class="dashboard-kpi-value">
+            {{ user_total_points }}
+          </strong>
+
+          <span class="dashboard-kpi-note">
+            Total acumulado
+          </span>
+        </article>
+
+        <article class="card dashboard-kpi">
+          <span class="dashboard-kpi-label">
+            Última fecha
+          </span>
+
+          <strong class="dashboard-kpi-value">
+            {% if last_matchday_points is not None %}
+              {{ last_matchday_points }}
+            {% else %}
+              —
+            {% endif %}
+          </strong>
+
+          <span class="dashboard-kpi-note">
+            {% if last_result_matchday %}
+              Puntos en la fecha {{ last_result_matchday }}
+            {% else %}
+              Todavía sin resultados
+            {% endif %}
+          </span>
+        </article>
+
+      </section>
+
+    </div>
+
+    <!-- =====================================================
+         LEISTUNG UND MINI-TABELLE
+         ===================================================== -->
+
+    <div class="dashboard-secondary-grid">
+
+      <!-- Persönliche Leistungsentwicklung -->
+
+      <section class="card dashboard-panel">
+
+        <header class="dashboard-panel-header">
+          <div>
+            <div class="dashboard-eyebrow">
+              Tu rendimiento
+            </div>
+
+            <h2>
+              Últimas 5 fechas
+            </h2>
+          </div>
+
+          <a
+            href="{% url 'user_stats' request.user.id %}"
+            class="btn small"
+          >
+            Ver estadísticas
+          </a>
+        </header>
+
+        {% if performance_rows %}
+
+          <div class="dashboard-performance-list">
+
+            {% for item in performance_rows %}
+
+              <div class="dashboard-performance-row">
+
+                <span class="dashboard-performance-label">
+                  Fecha {{ item.matchday }}
+                </span>
+
+                <div
+                  class="dashboard-performance-track"
+                  aria-hidden="true"
+                >
+                  <span
+                    class="dashboard-performance-fill"
+                    style="
+                      --performance-width:
+                      {{ item.bar_percent }}%;
+                    "
+                  ></span>
+                </div>
+
+                <strong class="dashboard-performance-points">
+                  {{ item.points }}
+                  <span>pts</span>
+                </strong>
+
+              </div>
+
+            {% endfor %}
+
+          </div>
+
+          <div class="dashboard-performance-summary">
+
+            <div class="dashboard-performance-stat">
+              <span>
+                Promedio
+              </span>
+
+              <strong>
+                {% if average_matchday_points is not None %}
+                  {{ average_matchday_points }}
+                {% else %}
+                  —
+                {% endif %}
+              </strong>
+
+              <small>
+                puntos por fecha
+              </small>
+            </div>
+
+            <div class="dashboard-performance-stat">
+              <span>
+                Resultados exactos
+              </span>
+
+              <strong>
+                {{ exact_predictions }}
+              </strong>
+
+              <small>
+                pronósticos de 4 puntos
+              </small>
+            </div>
+
+            <div class="dashboard-performance-stat">
+              <span>
+                Mejor fecha
+              </span>
+
+              <strong>
+                {% if best_matchday %}
+                  {{ best_matchday_points }}
+                {% else %}
+                  —
+                {% endif %}
+              </strong>
+
+              <small>
+                {% if best_matchday %}
+                  Fecha {{ best_matchday }}
+                {% else %}
+                  todavía sin resultados
+                {% endif %}
+              </small>
+            </div>
+
+          </div>
+
+        {% else %}
+
+          <div class="dashboard-performance-empty">
+
+            <strong>
+              Todavía no hay resultados evaluados
+            </strong>
+
+            <p>
+              Aquí verás tu evolución después de las primeras
+              fechas.
+            </p>
+
+          </div>
+
+        {% endif %}
+
+      </section>
+
+      <!-- Mini-Gesamttabelle -->
+
+      <section class="card dashboard-panel">
+
+        <header class="dashboard-panel-header">
+          <div>
+            <div class="dashboard-eyebrow">
+              Clasificación
+            </div>
+
+            <h2>
+              Tabla general
+            </h2>
+          </div>
+
+          <a
+            href="{% url 'tabelle' %}"
+            class="btn small"
+          >
+            Ver tabla
+          </a>
+        </header>
+
+        {% if mini_table_rows %}
+
+          <div class="dashboard-ranking-list">
+
+            {% for row in mini_table_rows %}
+
+
+              {% if row.is_extra %}
+                <div
+                  class="dashboard-ranking-separator"
+                  aria-hidden="true"
+                >
+                  ···
+                </div>
+              {% endif %}
+
+              <a
+                href="{% url 'user_stats' row.user.id %}"
+                class="
+                  dashboard-ranking-row
+                  {% if row.is_current_user %}
+                    dashboard-ranking-row--me
+                  {% endif %}
+                "
+              >
+
+                <span class="dashboard-ranking-position">
+                  {{ row.position }}.
+                </span>
+
+                <span
+                  class="dashboard-ranking-avatar"
+                  aria-hidden="true"
+                >
+                  {{ row.user|user_initial }}
+                </span>
+
+                <span class="dashboard-ranking-name">
+                  {{ row.user.username|default:row.user.email }}
+                </span>
+
+                <strong class="dashboard-ranking-points">
+                  {{ row.total }}
+                </strong>
+
+              </a>
+
+            {% endfor %}
+
+          </div>
+
+        {% elif standings_started %}
+
+          <div class="dashboard-inline-empty">
+            Todavía no hay participantes en la clasificación.
+          </div>
+
+        {% else %}
+
+          <div class="dashboard-inline-empty">
+            La clasificación aparecerá después de los primeros
+            resultados.
+          </div>
+
+        {% endif %}
+
+      </section>
+
+    </div>
+
+  </div>
+{% endblock %}

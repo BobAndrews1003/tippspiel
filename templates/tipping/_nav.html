@@ -1,3 +1,6 @@
+{% load user_tags %}
+
+
 <!-- NAV_VERSION: 2026-07-14-menu-left -->
 
 <nav class="nav">
@@ -53,8 +56,8 @@
           data-nav-toggle="account"
         >
           <span class="nav-avatar" aria-hidden="true">
-            {{ request.user.username|default:request.user.email|slice:":1"|upper }}
-          </span>
+  {{ request.user|user_initial }}
+</span>
         </button>
       {% endif %}
 
@@ -106,15 +109,22 @@
 
       <div class="nav-links-vertical">
 
-        {% if request.user.is_authenticated %}
+  {% if request.user.is_authenticated %}
 
-          {% if group %}
-            <a
-              href="{% url 'tippen' %}"
-              class="nav-link {% if request.resolver_match.url_name == 'tippen' %}active{% endif %}"
-            >
-              Pronosticar
-            </a>
+    <a
+      href="{% url 'dashboard' %}"
+      class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}"
+    >
+      Inicio
+    </a>
+
+    {% if group %}
+      <a
+        href="{% url 'tippen' %}"
+        class="nav-link {% if request.resolver_match.url_name == 'tippen' %}active{% endif %}"
+      >
+        Pronosticar
+      </a>
 
             <a
               href="{% url 'spieltag' %}"
@@ -182,144 +192,172 @@
   </div>
 
   {% if request.user.is_authenticated %}
-    <!-- Rechtes Konto- und Gruppenmenü -->
-    <div
-      class="nav-account"
-      id="navAccount"
-      aria-hidden="true"
-    >
-      <div class="nav-account-head">
-        <div class="nav-section-title">Cuenta</div>
-
-        <button
-          class="nav-iconbtn"
-          type="button"
-          aria-label="Schließen"
-          data-nav-close
-        >
-          ✕
-        </button>
-      </div>
-
-      <div class="nav-account-body">
-
-        <!-- Benutzerinformationen -->
-        <div class="nav-section">
-          <div class="nav-section-title">Usuario</div>
-
-          <div class="nav-user-info">
-            <strong>
-              {{ request.user.username|default:request.user.email }}
-            </strong>
-
-            {% if request.user.email %}
-              <div class="muted small">
-                {{ request.user.email }}
-              </div>
-            {% endif %}
-          </div>
-        </div>
-
-        <!-- Aktive Gruppe auswählen -->
-        {% if my_groups and my_groups|length > 1 %}
-          <div class="nav-section">
-            <div class="nav-section-title">Grupo activo</div>
-
-            <form
-              method="post"
-              action="{% url 'set_active_group' %}"
-            >
-              {% csrf_token %}
-
-              <select
-                name="group_id"
-                aria-label="Aktive Gruppe auswählen"
-                onchange="this.form.submit()"
-              >
-                {% for g in my_groups %}
-                  <option
-                    value="{{ g.id }}"
-                    {% if group and g.id == group.id %}selected{% endif %}
-                  >
-                    {{ g.name }}
-                  </option>
-                {% endfor %}
-              </select>
-            </form>
-          </div>
-        {% endif %}
-
-        <!-- Zugangscode -->
-        {% if membership and membership.is_creator and group %}
-          <div class="nav-section">
-            <div class="nav-section-title">Código de acceso</div>
-
-            <div class="nav-joinbox">
-              <code class="nav-code">
-                {{ group.join_code }}
-              </code>
-
-              <div class="nav-join-actions">
-  <button
-    class="btn small"
-    type="button"
-    data-copy-value="{{ group.join_code }}"
+  <!-- Rechtes Konto- und Gruppenmenü -->
+  <div
+    class="nav-account"
+    id="navAccount"
+    aria-hidden="true"
   >
-    Copiar código
-  </button>
-</div>
-            </div>
-          </div>
-        {% endif %}
-
-        <!-- Kontoeinstellungen -->
-        <div class="nav-section">
-          <div class="nav-section-title">Configuración</div>
-
-          <div class="nav-links-vertical">
-            <a
-              href="{% url 'account_email' %}"
-              class="nav-link {% if request.resolver_match.url_name == 'account_email' %}active{% endif %}"
-            >
-              Administrar correo electrónico
-            </a>
-
-            <a
-              href="{% url 'account_change_password' %}"
-              class="nav-link {% if request.resolver_match.url_name == 'account_change_password' %}active{% endif %}"
-            >
-              Cambiar contraseña
-            </a>
-          </div>
-        </div>
-
-        <!-- Abmelden -->
-        <div class="nav-section">
-          <div class="nav-userrow">
-            <span class="muted small">
-              {{ request.user.username|default:request.user.email }}
-            </span>
-
-            <form
-              method="post"
-              action="{% url 'account_logout' %}"
-            >
-              {% csrf_token %}
-
-              <button
-                type="submit"
-                class="nav-logout"
-              >
-                Cerrar sesión
-              </button>
-            </form>
-          </div>
-        </div>
-
+    <div class="nav-account-head">
+      <div class="nav-section-title">
+        Cuenta
       </div>
+
+      <button
+        class="nav-iconbtn"
+        type="button"
+        aria-label="Cerrar"
+        data-nav-close
+      >
+        ✕
+      </button>
     </div>
-  {% endif %}
-</nav>
+
+    <div class="nav-account-body">
+
+      <!-- Benutzerinformationen -->
+      <div class="nav-section">
+        <div class="nav-section-title">
+          Usuario
+        </div>
+
+        <div class="nav-user-info">
+          <strong>
+            {{ request.user.username|default:request.user.email }}
+          </strong>
+
+          {% if request.user.email %}
+            <div class="muted small">
+              {{ request.user.email }}
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Aktive Gruppe auswählen -->
+      {% if my_groups and my_groups|length > 1 %}
+        <div class="nav-section">
+          <div class="nav-section-title">
+            Grupo activo
+          </div>
+
+          <form
+            method="post"
+            action="{% url 'set_active_group' %}"
+          >
+            {% csrf_token %}
+
+            <input
+              type="hidden"
+              name="next"
+              value="{{ request.get_full_path }}"
+            >
+
+            <select
+              name="group_id"
+              aria-label="Seleccionar grupo activo"
+              onchange="this.form.submit()"
+            >
+              {% for available_group in my_groups %}
+                <option
+                  value="{{ available_group.id }}"
+                  {% if group and available_group.id == group.id %}
+                    selected
+                  {% endif %}
+                >
+                  {{ available_group.name }}
+                </option>
+              {% endfor %}
+            </select>
+          </form>
+        </div>
+      {% endif %}
+
+      <!-- Konto und Gruppen -->
+      <div class="nav-section">
+        <div class="nav-section-title">
+          Cuenta y grupos
+        </div>
+
+        <div class="nav-links-vertical">
+
+          <a
+            href="{% url 'my_groups' %}"
+            class="
+              nav-link
+              {% if request.resolver_match.url_name == 'my_groups' %}
+                active
+              {% endif %}
+            "
+          >
+            Mis grupos
+          </a>
+
+          <a
+            href="{% url 'account_email' %}"
+            class="
+              nav-link
+              {% if request.resolver_match.url_name == 'account_email' %}
+                active
+              {% endif %}
+            "
+          >
+            Cambiar correo electrónico
+          </a>
+
+
+        </div>
+      </div>
+
+
+      <!-- Gefahrenbereich -->
+<div class="nav-section">
+  <div class="nav-section-title">
+    Zona de peligro
+  </div>
+
+  <div class="nav-links-vertical">
+    <a
+      href="{% url 'delete_account' %}"
+      class="
+        nav-link
+        nav-link-danger
+        {% if request.resolver_match.url_name == 'delete_account' %}
+          active
+        {% endif %}
+      "
+    >
+      Eliminar cuenta
+    </a>
+  </div>
+</div>
+
+      <!-- Abmelden -->
+      <div class="nav-section">
+        <div class="nav-userrow">
+          <span class="muted small">
+            {{ request.user.username|default:request.user.email }}
+          </span>
+
+          <form
+            method="post"
+            action="{% url 'account_logout' %}"
+          >
+            {% csrf_token %}
+
+            <button
+              type="submit"
+              class="nav-logout"
+            >
+              Cerrar sesión
+            </button>
+          </form>
+        </div>
+      </div>
+
+    </div>
+  </div>
+{% endif %}
 
 <script>
 (function () {
@@ -429,42 +467,7 @@
     }
   });
 
-  /*
-   * Zugangscode kopieren
-   */
-  document
-    .querySelectorAll("[data-copy-value]")
-    .forEach((button) => {
-      button.addEventListener("click", async () => {
-        const value = button.getAttribute("data-copy-value");
 
-        try {
-          await navigator.clipboard.writeText(value);
-          showCopiedState(button);
-        } catch (error) {
-          console.error("Code konnte nicht kopiert werden:", error);
-        }
-      });
-    });
-
-  /*
-   * Einladungslink kopieren
-   */
-  document
-    .querySelectorAll("[data-copy-url]")
-    .forEach((button) => {
-      button.addEventListener("click", async () => {
-        const relativeUrl = button.getAttribute("data-copy-url");
-        const fullUrl = window.location.origin + relativeUrl;
-
-        try {
-          await navigator.clipboard.writeText(fullUrl);
-          showCopiedState(button);
-        } catch (error) {
-          console.error("Link konnte nicht kopiert werden:", error);
-        }
-      });
-    });
 
   function showCopiedState(button) {
     const originalText = button.textContent;

@@ -1,0 +1,237 @@
+{% extends "account/base_manage_email.html" %}
+
+{% block head_title %}
+  Cambiar correo electrónico
+{% endblock %}
+
+{% block content %}
+
+  <div class="email-change-page">
+
+    <header class="email-change-header">
+      <h1>Cambiar correo electrónico</h1>
+
+      <p>
+        Ingresa una nueva dirección de correo electrónico.
+        La dirección actual seguirá activa hasta que confirmes
+        la nueva dirección.
+      </p>
+    </header>
+
+    {# ===================================================== #}
+    {# Aktuelle verifizierte Adresse                         #}
+    {# ===================================================== #}
+
+    {% if current_emailaddress %}
+
+      <section class="email-address-card">
+
+        <div class="email-address-card-content">
+          <span class="email-address-label">
+            Correo electrónico actual
+          </span>
+
+          <strong class="email-address-value">
+            {{ current_emailaddress.email }}
+          </strong>
+        </div>
+
+        <span class="email-address-status email-address-status--verified">
+          Verificado
+        </span>
+
+      </section>
+
+    {% elif new_emailaddress %}
+
+      {# Bestehende Adresse ist noch nicht bestätigt #}
+
+      <section class="email-address-card">
+
+        <div class="email-address-card-content">
+          <span class="email-address-label">
+            Correo electrónico actual
+          </span>
+
+          <strong class="email-address-value">
+            {{ new_emailaddress.email }}
+          </strong>
+        </div>
+
+        <span class="email-address-status email-address-status--pending">
+          Sin verificar
+        </span>
+
+      </section>
+
+    {% elif request.user.email %}
+
+      <section class="email-address-card">
+
+        <div class="email-address-card-content">
+          <span class="email-address-label">
+            Correo electrónico actual
+          </span>
+
+          <strong class="email-address-value">
+            {{ request.user.email }}
+          </strong>
+        </div>
+
+      </section>
+
+    {% endif %}
+
+
+    {# ===================================================== #}
+    {# Bereits beantragter E-Mail-Wechsel                    #}
+    {# ===================================================== #}
+
+    {% if new_emailaddress and current_emailaddress %}
+
+      <section class="email-change-pending">
+
+        <div>
+          <span class="email-address-label">
+            Cambio pendiente
+          </span>
+
+          <strong class="email-address-value">
+            {{ new_emailaddress.email }}
+          </strong>
+
+          <p>
+            Esta dirección todavía debe ser confirmada.
+            Revisa tu bandeja de entrada y la carpeta de spam.
+          </p>
+        </div>
+
+        <form
+          id="pending-email"
+          method="post"
+          action="{% url 'account_email' %}"
+          class="email-pending-actions"
+        >
+          {% csrf_token %}
+
+          <input
+            type="hidden"
+            name="email"
+            value="{{ new_emailaddress.email }}"
+          >
+
+          <button
+            type="submit"
+            name="action_send"
+            class="btn"
+          >
+            Reenviar correo de verificación
+          </button>
+
+          <button
+            type="submit"
+            name="action_remove"
+            class="btn email-change-cancel"
+          >
+            Cancelar cambio
+          </button>
+        </form>
+
+      </section>
+
+    {% elif new_emailaddress %}
+
+      {# Die einzige vorhandene Adresse ist unbestätigt #}
+
+      <form
+        method="post"
+        action="{% url 'account_email' %}"
+        class="email-verification-resend"
+      >
+        {% csrf_token %}
+
+        <input
+          type="hidden"
+          name="email"
+          value="{{ new_emailaddress.email }}"
+        >
+
+        <button
+          type="submit"
+          name="action_send"
+          class="btn"
+        >
+          Reenviar correo de verificación
+        </button>
+      </form>
+
+    {% endif %}
+
+
+    {# ===================================================== #}
+    {# Formular für die neue Adresse                         #}
+    {# ===================================================== #}
+
+    <form
+      method="post"
+      action="{% url 'account_email' %}"
+      class="email-change-form"
+    >
+      {% csrf_token %}
+
+      {% if form.non_field_errors %}
+        <div class="form-error">
+          {% for error in form.non_field_errors %}
+            <div>{{ error }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <div class="field">
+
+        <label for="{{ form.email.id_for_label }}">
+          Nuevo correo electrónico
+        </label>
+
+        <input
+          type="email"
+          name="email"
+          id="{{ form.email.id_for_label }}"
+          value="{{ form.email.value|default:'' }}"
+          placeholder="nombre@ejemplo.com"
+          autocomplete="email"
+          required
+        >
+
+        {% if form.email.errors %}
+          <div class="form-error">
+            {% for error in form.email.errors %}
+              <div>{{ error }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+
+      </div>
+
+      <button
+        type="submit"
+        name="action_add"
+        class="btn primary email-change-submit"
+      >
+        Cambiar correo electrónico
+      </button>
+
+    </form>
+
+    <div class="email-change-footer">
+      <a
+        href="{% url 'dashboard' %}"
+        class="btn"
+      >
+        Volver al inicio
+      </a>
+    </div>
+
+  </div>
+
+{% endblock %}

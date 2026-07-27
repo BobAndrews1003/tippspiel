@@ -1,0 +1,468 @@
+{% extends "tipping/base.html" %}
+
+{% block title %}
+  Mis grupos
+{% endblock %}
+
+{% block content %}
+  <div class="container">
+
+    <section class="card groups-page-header">
+      <div class="header-flex">
+        <div>
+          <h1>Mis grupos</h1>
+
+          <p class="muted" style="margin:0;">
+            Administra tus grupos y selecciona el grupo activo.
+          </p>
+        </div>
+
+        <div class="groups-header-actions">
+          <a
+            href="{% url 'join_group' %}"
+            class="btn"
+          >
+            Unirse a un grupo
+          </a>
+
+          <a
+            href="{% url 'create_group' %}"
+            class="btn primary"
+          >
+            Crear grupo
+          </a>
+        </div>
+      </div>
+    </section>
+
+    {% if group_rows %}
+
+      <div class="group-management-grid">
+
+        {% for row in group_rows %}
+          <section
+            class="
+              card
+              group-management-card
+              {% if row.is_active %}
+                active-group-card
+              {% endif %}
+            "
+          >
+            <div class="group-management-head">
+              <div>
+                <div class="group-card-label">
+                  {{ row.group.tournament.name }}
+                </div>
+
+                <h2>
+                  {{ row.group.name }}
+                </h2>
+              </div>
+
+              <div class="group-card-badges">
+                {% if row.is_active %}
+                  <span class="pill">
+                    Grupo activo
+                  </span>
+                {% endif %}
+
+                {% if row.is_owner %}
+                  <span class="pill">
+                    Administrador
+                  </span>
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="group-details-list">
+
+              <div class="group-detail-row">
+                <span class="muted">
+                  Miembros
+                </span>
+
+                <strong>
+                  {{ row.member_count }}
+                </strong>
+              </div>
+
+              <div class="group-detail-row">
+                <span class="muted">
+                  Código de invitación
+                </span>
+
+                <div class="group-code-row">
+                  <code>
+                    {{ row.group.join_code }}
+                  </code>
+
+                  <button
+                    type="button"
+                    class="btn small"
+                    data-copy-group-code="{{ row.group.join_code }}"
+                  >
+                    Copiar
+                  </button>
+                </div>
+              </div>
+
+              {% if row.group.owner %}
+                <div class="group-detail-row">
+                  <span class="muted">
+                    Administrador
+                  </span>
+
+                  <strong>
+                    {{ row.group.owner.username }}
+                  </strong>
+                </div>
+              {% endif %}
+
+            </div>
+
+            <!-- Gruppe aktivieren oder Status anzeigen -->
+            <div class="group-card-actions">
+
+              {% if not row.is_active %}
+                <form
+                  method="post"
+                  action="{% url 'set_active_group' %}"
+                >
+                  {% csrf_token %}
+
+                  <input
+                    type="hidden"
+                    name="group_id"
+                    value="{{ row.group.id }}"
+                  >
+
+                  <input
+                    type="hidden"
+                    name="next"
+                    value="{% url 'my_groups' %}"
+                  >
+
+                  <button
+                    type="submit"
+                    class="btn primary"
+                  >
+                    Activar grupo
+                  </button>
+                </form>
+              {% else %}
+                <span class="group-active-note">
+                  Este es tu grupo activo.
+                </span>
+              {% endif %}
+
+              {% if not row.is_owner %}
+                <form
+                  method="post"
+                  action="{% url 'leave_group' row.group.id %}"
+                  data-leave-group-form
+                  data-group-name="{{ row.group.name }}"
+                >
+                  {% csrf_token %}
+
+                  <button
+                    type="submit"
+                    class="btn danger-outline"
+                  >
+                    Abandonar grupo
+                  </button>
+                </form>
+              {% endif %}
+
+            </div>
+
+            <!-- Verwaltungsfunktionen für Eigentümer -->
+            {% if row.is_owner %}
+              <details class="group-owner-tools">
+                <summary>
+                  Administrar grupo
+                </summary>
+
+                <div class="group-owner-tools-content">
+
+                  <!-- Verwaltung übertragen -->
+                  <section class="group-admin-block">
+                    <h3>
+                      Transferir administración
+                    </h3>
+
+                    {% if row.transfer_candidates %}
+                      <p class="muted small">
+                        El nuevo administrador debe ser miembro
+                        del grupo.
+                      </p>
+
+                      <form
+                        method="post"
+                        action="{% url 'transfer_group_ownership' row.group.id %}"
+                        class="group-transfer-form"
+                        data-transfer-group-form
+                        data-group-name="{{ row.group.name }}"
+                      >
+                        {% csrf_token %}
+
+                        <select
+                          name="new_owner_id"
+                          required
+                          aria-label="Seleccionar nuevo administrador"
+                        >
+                          <option value="">
+                            Seleccionar miembro…
+                          </option>
+
+                          {% for candidate in row.transfer_candidates %}
+                            <option value="{{ candidate.user.id }}">
+                              {{ candidate.user.username|default:candidate.user.email }}
+                            </option>
+                          {% endfor %}
+                        </select>
+
+                        <button
+                          type="submit"
+                          class="btn"
+                        >
+                          Transferir administración
+                        </button>
+                      </form>
+
+                    {% else %}
+                      <p class="muted small">
+                        No puedes transferir la administración porque
+                        todavía no hay otro miembro en este grupo.
+                      </p>
+                    {% endif %}
+                  </section>
+
+                  <!-- Gruppe löschen -->
+                  <section class="group-admin-block group-danger-zone">
+                    <h3>
+                      Eliminar grupo
+                    </h3>
+
+                    <p class="muted small">
+                      Se eliminarán permanentemente el grupo,
+                      sus membresías y todos sus pronósticos.
+                    </p>
+
+                    <p class="muted small">
+                      Para confirmar, escribe exactamente:
+                      <strong>{{ row.group.name }}</strong>
+                    </p>
+
+                    <form
+                      method="post"
+                      action="{% url 'delete_group' row.group.id %}"
+                      class="group-delete-form"
+                      data-delete-group-form
+                      data-group-name="{{ row.group.name }}"
+                    >
+                      {% csrf_token %}
+
+                      <input
+                        type="text"
+                        name="confirmation"
+                        placeholder="{{ row.group.name }}"
+                        autocomplete="off"
+                        required
+                      >
+
+                      <button
+                        type="submit"
+                        class="btn danger"
+                      >
+                        Eliminar grupo permanentemente
+                      </button>
+                    </form>
+                  </section>
+
+                </div>
+              </details>
+            {% endif %}
+
+          </section>
+        {% endfor %}
+
+      </div>
+
+    {% else %}
+
+      <section class="card groups-empty-state">
+        <h2>
+          Todavía no perteneces a ningún grupo
+        </h2>
+
+        <p class="muted">
+          Puedes crear un grupo nuevo o unirte a uno mediante
+          un código de invitación.
+        </p>
+
+        <div class="groups-header-actions">
+          <a
+            href="{% url 'join_group' %}"
+            class="btn"
+          >
+            Unirse a un grupo
+          </a>
+
+          <a
+            href="{% url 'create_group' %}"
+            class="btn primary"
+          >
+            Crear grupo
+          </a>
+        </div>
+      </section>
+
+    {% endif %}
+
+  </div>
+{% endblock %}
+
+{% block extra_js %}
+  {{ block.super }}
+
+  <script>
+    (function () {
+      /*
+       * Gruppencode kopieren
+       */
+      document
+        .querySelectorAll("[data-copy-group-code]")
+        .forEach((button) => {
+          button.addEventListener("click", async function () {
+            const code = button.getAttribute(
+              "data-copy-group-code"
+            );
+
+            try {
+              await navigator.clipboard.writeText(code);
+
+              const oldText = button.textContent;
+
+              button.textContent = "Copiado ✓";
+              button.disabled = true;
+
+              window.setTimeout(function () {
+                button.textContent = oldText;
+                button.disabled = false;
+              }, 1500);
+            } catch (error) {
+              console.error(
+                "No se pudo copiar el código:",
+                error
+              );
+            }
+          });
+        });
+
+      /*
+       * Gruppe verlassen
+       */
+      document
+        .querySelectorAll("[data-leave-group-form]")
+        .forEach((form) => {
+          form.addEventListener("submit", function (event) {
+            const groupName = form.getAttribute(
+              "data-group-name"
+            );
+
+            const confirmed = window.confirm(
+              "¿Realmente quieres abandonar el grupo «"
+              + groupName
+              + "»?"
+            );
+
+            if (!confirmed) {
+              event.preventDefault();
+            }
+          });
+        });
+
+      /*
+       * Verwaltung übertragen
+       */
+      document
+        .querySelectorAll("[data-transfer-group-form]")
+        .forEach((form) => {
+          form.addEventListener("submit", function (event) {
+            const select = form.querySelector(
+              'select[name="new_owner_id"]'
+            );
+
+            if (!select || !select.value) {
+              event.preventDefault();
+              return;
+            }
+
+            const groupName = form.getAttribute(
+              "data-group-name"
+            );
+
+            const selectedOption = (
+              select.options[select.selectedIndex]
+            );
+
+            const newOwnerName = selectedOption.textContent.trim();
+
+            const confirmed = window.confirm(
+              "¿Quieres transferir la administración de «"
+              + groupName
+              + "» a "
+              + newOwnerName
+              + "?"
+            );
+
+            if (!confirmed) {
+              event.preventDefault();
+            }
+          });
+        });
+
+      /*
+       * Gruppe löschen
+       */
+      document
+        .querySelectorAll("[data-delete-group-form]")
+        .forEach((form) => {
+          form.addEventListener("submit", function (event) {
+            const groupName = form.getAttribute(
+              "data-group-name"
+            );
+
+            const confirmationInput = form.querySelector(
+              'input[name="confirmation"]'
+            );
+
+            if (
+              !confirmationInput
+              || confirmationInput.value.trim() !== groupName
+            ) {
+              event.preventDefault();
+
+              window.alert(
+                "Debes escribir exactamente el nombre del grupo."
+              );
+
+              return;
+            }
+
+            const confirmed = window.confirm(
+              "Esta acción es permanente. "
+              + "¿Realmente quieres eliminar el grupo «"
+              + groupName
+              + "»?"
+            );
+
+            if (!confirmed) {
+              event.preventDefault();
+            }
+          });
+        });
+    })();
+  </script>
+{% endblock %}

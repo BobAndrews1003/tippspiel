@@ -16,15 +16,161 @@
 </head>
 
 <body class="{% block body_class %}{% endblock %}">
-  <!-- DEPLOY_MARKER: allauth-layout-2026-07-13 -->
+  <!-- DEPLOY_MARKER: messages-modal-2026-07-14 -->
 
   {% include "tipping/_nav.html" %}
+
+  {% block app_messages %}
+    {% if messages %}
+      <div
+        class="app-message-backdrop"
+        id="appMessageBackdrop"
+      >
+        <section
+          class="app-message-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="appMessageTitle"
+          tabindex="-1"
+        >
+          <button
+            type="button"
+            class="app-message-close"
+            data-message-close
+            aria-label="Cerrar mensaje"
+          >
+            ×
+          </button>
+
+          <div class="app-message-list">
+            {% for message in messages %}
+              <article
+                class="app-message-item app-message-item--{{ message.tags|default:'info' }}"
+              >
+                <div
+                  class="app-message-icon"
+                  aria-hidden="true"
+                >
+                  {% if "success" in message.tags %}
+                    ✓
+                  {% elif "error" in message.tags %}
+                    !
+                  {% elif "warning" in message.tags %}
+                    !
+                  {% else %}
+                    i
+                  {% endif %}
+                </div>
+
+                <div class="app-message-content">
+                  <div
+                    class="app-message-title"
+                    {% if forloop.first %}id="appMessageTitle"{% endif %}
+                  >
+                    {% if "success" in message.tags %}
+                      Guardado correctamente
+                    {% elif "error" in message.tags %}
+                      No se pudo completar
+                    {% elif "warning" in message.tags %}
+                      Atención
+                    {% else %}
+                      Información
+                    {% endif %}
+                  </div>
+
+                  <p>{{ message }}</p>
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+
+          <div class="app-message-actions">
+            <button
+              type="button"
+              class="btn primary app-message-confirm"
+              data-message-close
+            >
+              Aceptar
+            </button>
+          </div>
+        </section>
+      </div>
+    {% endif %}
+  {% endblock app_messages %}
 
   <main class="{% block main_class %}{% endblock %}">
     {% block page_content %}
       {% block content %}{% endblock %}
     {% endblock %}
   </main>
+
+  {% if messages %}
+    <script>
+      (function () {
+        const backdrop = document.getElementById(
+          "appMessageBackdrop"
+        );
+
+        if (!backdrop) {
+          return;
+        }
+
+        const modal = backdrop.querySelector(
+          ".app-message-modal"
+        );
+
+        const closeButtons = backdrop.querySelectorAll(
+          "[data-message-close]"
+        );
+
+        let isClosing = false;
+
+        function closeMessage() {
+          if (isClosing) {
+            return;
+          }
+
+          isClosing = true;
+
+          backdrop.classList.add("is-closing");
+          document.body.classList.remove(
+            "app-message-is-open"
+          );
+
+          window.setTimeout(() => {
+            backdrop.remove();
+          }, 180);
+        }
+
+        document.body.classList.add(
+          "app-message-is-open"
+        );
+
+        closeButtons.forEach((button) => {
+          button.addEventListener(
+            "click",
+            closeMessage
+          );
+        });
+
+        backdrop.addEventListener("click", (event) => {
+          if (event.target === backdrop) {
+            closeMessage();
+          }
+        });
+
+        document.addEventListener("keydown", (event) => {
+          if (event.key === "Escape") {
+            closeMessage();
+          }
+        });
+
+        if (modal) {
+          modal.focus();
+        }
+      })();
+    </script>
+  {% endif %}
 
   {% block extra_js %}{% endblock %}
 </body>

@@ -4,44 +4,196 @@ import os
 import dj_database_url
 
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
+# ============================================================
+# Hilfsfunktionen
+# ============================================================
+
+def env_list(name: str) -> list[str]:
+    """
+    Liest eine durch Kommas getrennte Umgebungsvariable
+    als bereinigte Liste ein.
+    """
+    value = os.environ.get(name, "")
+
+    return [
+        item.strip()
+        for item in value.split(",")
+        if item.strip()
+    ]
+
+
+def env_bool(
+    name: str,
+    default: bool = False,
+) -> bool:
+    """
+    Akzeptiert Werte wie:
+    1, true, yes und on.
+    """
+    default_value = "1" if default else "0"
+
+    return (
+        os.environ
+        .get(name, default_value)
+        .strip()
+        .lower()
+        in {"1", "true", "yes", "on"}
+    )
+
+
+def env_int(
+    name: str,
+    default: int,
+) -> int:
+    """
+    Liest eine Ganzzahl aus einer Umgebungsvariable.
+    """
+    raw_value = os.environ.get(
+        name,
+        str(default),
+    ).strip()
+
+    try:
+        return int(raw_value)
+
+    except ValueError as exc:
+        raise RuntimeError(
+            f"{name} muss eine ganze Zahl sein."
+        ) from exc
+
+
+# ============================================================
+# Basisverzeichnis
+# ============================================================
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-# ---------------------------------------------------------------------
-# Core security / environment
-# ---------------------------------------------------------------------
+# ============================================================
+# Umgebung und zentrale Sicherheitswerte
+# ============================================================
 
-# In Railway: set SECRET_KEY as environment variable
-SECRET_KEY = os.environ.get(
-    "SECRET_KEY",
+# Sicherer Standard:
+# Ohne ausdrückliche Umgebungsvariable wird DEBUG nicht aktiviert.
+DEBUG = env_bool(
+    "DEBUG",
+    default=False,
+)
+
+
+# Dieser Schlüssel darf nur lokal verwendet werden.
+DEV_SECRET_KEY = (
     "django-insecure-dev-only-change-me"
 )
 
-# In Railway: set DEBUG=0
-DEBUG = os.environ.get("DEBUG", "1") == "1"
+SECRET_KEY = os.environ.get(
+    "SECRET_KEY",
+    DEV_SECRET_KEY,
+).strip()
 
-# In Railway: set ALLOWED_HOSTS="yourapp.up.railway.app"
-# For local dev we allow localhost.
-allowed_hosts_env = os.environ.get("ALLOWED_HOSTS", "")
-ALLOWED_HOSTS = [h.strip() for h in allowed_hosts_env.split(",") if h.strip()]
+
+# Verhindert einen Produktionsstart mit einem schwachen
+# oder versehentlich veröffentlichten Schlüssel.
+if not DEBUG:
+
+    if SECRET_KEY == DEV_SECRET_KEY:
+        raise RuntimeError(
+            "SECRET_KEY muss in der "
+            "Produktionsumgebung gesetzt werden."
+        )
+
+    if (
+        len(SECRET_KEY) < 50
+        or len(set(SECRET_KEY)) < 5
+        or SECRET_KEY.startswith(
+            "django-insecure-"
+        )
+    ):
+        raise RuntimeError(
+            "SECRET_KEY muss mindestens 50 Zeichen "
+            "lang, ausreichend zufällig und ohne "
+            "'django-insecure-' Präfix sein."
+        )
+
+
+# ============================================================
+# Hosts und CSRF
+# ============================================================
+
+ALLOWED_HOSTS = env_list(
+    "ALLOWED_HOSTS"
+)
+
+
 if DEBUG:
-    ALLOWED_HOSTS += ["127.0.0.1", "localhost"]
-
-# CSRF: needed for POST requests on Railway domain
-# In Railway: set CSRF_TRUSTED_ORIGINS="https://yourapp.up.railway.app"
-csrf_env = os.environ.get("CSRF_TRUSTED_ORIGINS", "")
-CSRF_TRUSTED_ORIGINS = [o.strip() for o in csrf_env.split(",") if o.strip()]
-
-# Optional: if behind proxy (common on PaaS) – helps Django detect https
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    ALLOWED_HOSTS.extend(
+        [
+            "127.0.0.1",
+            "localhost",
+        ]
+    )
 
 
-# ---------------------------------------------------------------------
-# Application definition
-# ---------------------------------------------------------------------
+# Duplikate entfernen, Reihenfolge beibehalten.
+ALLOWED_HOSTS = list(
+    dict.fromkeys(ALLOWED_HOSTS)
+)
+
+
+if not DEBUG and not ALLOWED_HOSTS:
+    raise RuntimeError(
+        "ALLOWED_HOSTS muss in der "
+        "Produktionsumgebung gesetzt werden."
+    )
+
+
+CSRF_TRUSTED_ORIGINS = env_list(
+    "CSRF_TRUSTED_ORIGINS"
+)
+
+
+# In Produktion keine unverschlüsselten vertrauenswürdigen
+# Ursprünge zulassen.
+if not DEBUG:
+
+    invalid_csrf_origins = [
+        origin
+        for origin in CSRF_TRUSTED_ORIGINS
+        if not origin.startswith(
+            "https://"
+        )
+    ]
+
+    if invalid_csrf_origins:
+        raise RuntimeError(
+            "CSRF_TRUSTED_ORIGINS darf in "
+            "Produktion nur HTTPS-Ursprünge "
+            "enthalten."
+        )
+
+
+# Nur aktivieren, wenn der Hosting-Proxy den Header
+# zuverlässig selbst setzt und fremde Werte entfernt.
+if env_bool(
+    "TRUST_X_FORWARDED_PROTO",
+    default=False,
+):
+    SECURE_PROXY_SSL_HEADER = (
+        "HTTP_X_FORWARDED_PROTO",
+        "https",
+    )
+
+
+# Hostnamen weiterhin über ALLOWED_HOSTS prüfen.
+USE_X_FORWARDED_HOST = False
+
+
+# ============================================================
+# Installierte Anwendungen
+# ============================================================
 
 INSTALLED_APPS = [
+    # Django
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -54,136 +206,472 @@ INSTALLED_APPS = [
     "allauth.account",
     "allauth.socialaccount",
 
-    # Social Login
-    "allauth.socialaccount.providers.google",
-    "allauth.socialaccount.providers.microsoft",
-
-    # Eigene App
-    "tipping",
+    # Eigene Anwendung
+    "tipping.apps.TippingConfig",
 ]
+
+
+# ============================================================
+# Middleware
+# ============================================================
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+
+    # WhiteNoise direkt nach SecurityMiddleware.
     "whitenoise.middleware.WhiteNoiseMiddleware",
+
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
-    "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "django.contrib.messages.middleware.MessageMiddleware",
 
+    (
+        "django.contrib.auth.middleware."
+        "AuthenticationMiddleware"
+    ),
+
+    (
+        "django.contrib.messages.middleware."
+        "MessageMiddleware"
+    ),
+
+    # django-allauth
     "allauth.account.middleware.AccountMiddleware",
 
-    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    (
+        "django.middleware.clickjacking."
+        "XFrameOptionsMiddleware"
+    ),
 ]
+
 
 ROOT_URLCONF = "tippspiel.urls"
 
+
+# ============================================================
+# Templates
+# ============================================================
+
 TEMPLATES = [
     {
-        "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "templates"],
+        "BACKEND": (
+            "django.template.backends.django."
+            "DjangoTemplates"
+        ),
+
+        "DIRS": [
+            BASE_DIR / "templates",
+        ],
+
         "APP_DIRS": True,
+
         "OPTIONS": {
             "context_processors": [
-                "django.template.context_processors.request",
-                "django.contrib.auth.context_processors.auth",
-                "django.contrib.messages.context_processors.messages",
-                "tipping.context_processors.active_group_context",  # ✅ neu
+                (
+                    "django.template."
+                    "context_processors.request"
+                ),
+                (
+                    "django.contrib.auth."
+                    "context_processors.auth"
+                ),
+                (
+                    "django.contrib.messages."
+                    "context_processors.messages"
+                ),
+                (
+                    "tipping.context_processors."
+                    "active_group_context"
+                ),
             ],
         },
     },
 ]
 
+
 WSGI_APPLICATION = "tippspiel.wsgi.application"
 
-AUTHENTICATION_BACKENDS = [
-    # Normaler Django-Login und Django-Admin
-    "django.contrib.auth.backends.ModelBackend",
 
-    # Login über django-allauth
-    "allauth.account.auth_backends.AuthenticationBackend",
+# ============================================================
+# Authentifizierungs-Backends
+# ============================================================
+
+AUTHENTICATION_BACKENDS = [
+    # Django-Login und Django-Admin
+    (
+        "django.contrib.auth.backends."
+        "ModelBackend"
+    ),
+
+    # django-allauth
+    (
+        "allauth.account.auth_backends."
+        "AuthenticationBackend"
+    ),
 ]
 
-# ---------------------------------------------------------------------
-# Database
-# ---------------------------------------------------------------------
-# Railway provides DATABASE_URL (usually PostgreSQL). Local default: sqlite.
-DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+
+# ============================================================
+# Datenbank
+# ============================================================
+
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    "",
+).strip()
+
+
+# In Produktion niemals still auf SQLite zurückfallen.
+if not DEBUG and not DATABASE_URL:
+    raise RuntimeError(
+        "DATABASE_URL muss in der "
+        "Produktionsumgebung gesetzt werden."
+    )
+
 
 if DATABASE_URL:
-    is_postgres = DATABASE_URL.startswith(("postgres://", "postgresql://"))
+
+    is_postgres = DATABASE_URL.startswith(
+        (
+            "postgres://",
+            "postgresql://",
+        )
+    )
+
+    if not DEBUG and not is_postgres:
+        raise RuntimeError(
+            "In Produktion wird eine "
+            "PostgreSQL-Datenbank erwartet."
+        )
+
     DATABASES = {
         "default": dj_database_url.config(
             default=DATABASE_URL,
-            conn_max_age=600,
-            ssl_require=(is_postgres and (not DEBUG)),
+
+            conn_max_age=env_int(
+                "DATABASE_CONN_MAX_AGE",
+                600,
+            ),
+
+            conn_health_checks=True,
+
+            # Kann bei einem internen, bereits geschützten
+            # Datenbanknetzwerk notfalls deaktiviert werden.
+            ssl_require=env_bool(
+                "DATABASE_SSL_REQUIRED",
+                default=not DEBUG,
+            ),
         )
     }
+
+
 else:
+    # Nur für lokale Entwicklung.
     DATABASES = {
         "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
+            "ENGINE": (
+                "django.db.backends.sqlite3"
+            ),
+            "NAME": (
+                BASE_DIR / "db.sqlite3"
+            ),
         }
     }
 
 
+# ============================================================
+# Cache
+# ============================================================
 
-# ---------------------------------------------------------------------
-# Password validation
-# ---------------------------------------------------------------------
+REDIS_URL = os.environ.get(
+    "REDIS_URL",
+    "",
+).strip()
+
+
+if REDIS_URL:
+    # Gemeinsamer Cache für mehrere Serverprozesse.
+    # Dafür muss das Python-Paket "redis" installiert sein.
+    CACHES = {
+        "default": {
+            "BACKEND": (
+                "django.core.cache.backends.redis."
+                "RedisCache"
+            ),
+
+            "LOCATION": REDIS_URL,
+
+            "KEY_PREFIX": os.environ.get(
+                "CACHE_KEY_PREFIX",
+                "catoliga",
+            ),
+
+            "TIMEOUT": 300,
+        }
+    }
+
+
+else:
+    # Für Entwicklung und kleine Testinstallationen.
+    # Dieser Cache wird nicht zwischen mehreren Workern geteilt.
+    CACHES = {
+        "default": {
+            "BACKEND": (
+                "django.core.cache.backends.locmem."
+                "LocMemCache"
+            ),
+
+            "LOCATION": (
+                "catoliga-local-cache"
+            ),
+
+            "TIMEOUT": 300,
+        }
+    }
+
+
+# ============================================================
+# Passwortvalidierung
+# ============================================================
 
 AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
-    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
-    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+    {
+        "NAME": (
+            "django.contrib.auth."
+            "password_validation."
+            "UserAttributeSimilarityValidator"
+        )
+    },
+    {
+        "NAME": (
+            "django.contrib.auth."
+            "password_validation."
+            "MinimumLengthValidator"
+        ),
+        "OPTIONS": {
+            "min_length": 12,
+        },
+    },
+    {
+        "NAME": (
+            "django.contrib.auth."
+            "password_validation."
+            "CommonPasswordValidator"
+        )
+    },
+    {
+        "NAME": (
+            "django.contrib.auth."
+            "password_validation."
+            "NumericPasswordValidator"
+        )
+    },
 ]
 
 
-# ---------------------------------------------------------------------
-# Internationalization
-# ---------------------------------------------------------------------
+# ============================================================
+# Sprache und Zeitzone
+# ============================================================
 
-LANGUAGE_CODE = "de"
+LANGUAGE_CODE = "es"
+
+LANGUAGES = [
+    (
+        "es",
+        "Español",
+    ),
+]
+
 TIME_ZONE = "America/Guayaquil"
+
 USE_I18N = True
+
 USE_TZ = True
 
 
-# ---------------------------------------------------------------------
-# Static files
-# ---------------------------------------------------------------------
+# ============================================================
+# Statische Dateien
+# ============================================================
 
 STATIC_URL = "/static/"
-STATICFILES_DIRS = [BASE_DIR / "static"]     # <— dein Quell-Ordner
-STATIC_ROOT = BASE_DIR / "staticfiles"
+
+STATICFILES_DIRS = [
+    BASE_DIR / "static",
+]
+
+STATIC_ROOT = (
+    BASE_DIR / "staticfiles"
+)
 
 
-# WhiteNoise storage (recommended)
+# ============================================================
+# Hochgeladene Mediendateien
+# ============================================================
+
+MEDIA_URL = "/media/"
+
+MEDIA_ROOT = Path(
+    os.environ.get(
+        "MEDIA_ROOT",
+        str(
+            BASE_DIR / "media"
+        ),
+    )
+)
+
+
+FILE_UPLOAD_PERMISSIONS = 0o640
+
+FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o750
+
+
+# Begrenzung der Anzahl hochgeladener Dateien.
+# Die maximale Avatargröße muss zusätzlich in forms.py
+# und möglichst beim Hosting-Proxy geprüft werden.
+DATA_UPLOAD_MAX_NUMBER_FILES = env_int(
+    "DATA_UPLOAD_MAX_NUMBER_FILES",
+    5,
+)
+
+
+DATA_UPLOAD_MAX_NUMBER_FIELDS = env_int(
+    "DATA_UPLOAD_MAX_NUMBER_FIELDS",
+    1000,
+)
+
+
+# ============================================================
+# Datei- und Static-Storage
+# ============================================================
+
 STORAGES = {
+    # Benutzer-Uploads wie Avatare.
+    "default": {
+        "BACKEND": (
+            "django.core.files.storage."
+            "FileSystemStorage"
+        ),
+    },
+
+    # Lokal einfache statische Speicherung,
+    # in Produktion WhiteNoise mit Manifest.
     "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-    }
+        "BACKEND": (
+            (
+                "django.contrib.staticfiles."
+                "storage.StaticFilesStorage"
+            )
+            if DEBUG
+            else
+            (
+                "whitenoise.storage."
+                "CompressedManifestStaticFilesStorage"
+            )
+        ),
+    },
 }
 
 
-# ---------------------------------------------------------------------
-# Auth redirects
-# ---------------------------------------------------------------------
+# ============================================================
+# E-Mail
+# ============================================================
 
-# ---------------------------------------------------------------------
-# Authentication / django-allauth
-# ---------------------------------------------------------------------
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND",
+    (
+        (
+            "django.core.mail.backends.console."
+            "EmailBackend"
+        )
+        if DEBUG
+        else
+        (
+            "django.core.mail.backends.smtp."
+            "EmailBackend"
+        )
+    ),
+).strip()
+
+
+EMAIL_HOST = os.environ.get(
+    "EMAIL_HOST",
+    "",
+).strip()
+
+
+EMAIL_PORT = env_int(
+    "EMAIL_PORT",
+    587,
+)
+
+
+EMAIL_HOST_USER = os.environ.get(
+    "EMAIL_HOST_USER",
+    "",
+).strip()
+
+
+EMAIL_HOST_PASSWORD = os.environ.get(
+    "EMAIL_HOST_PASSWORD",
+    "",
+)
+
+
+EMAIL_USE_TLS = env_bool(
+    "EMAIL_USE_TLS",
+    default=not DEBUG,
+)
+
+
+EMAIL_USE_SSL = env_bool(
+    "EMAIL_USE_SSL",
+    default=False,
+)
+
+
+EMAIL_TIMEOUT = env_int(
+    "EMAIL_TIMEOUT",
+    10,
+)
+
+
+DEFAULT_FROM_EMAIL = os.environ.get(
+    "DEFAULT_FROM_EMAIL",
+    "CatoLiga <noreply@localhost>",
+).strip()
+
+
+SERVER_EMAIL = os.environ.get(
+    "SERVER_EMAIL",
+    DEFAULT_FROM_EMAIL,
+).strip()
+
+
+if EMAIL_USE_TLS and EMAIL_USE_SSL:
+    raise RuntimeError(
+        "EMAIL_USE_TLS und EMAIL_USE_SSL "
+        "dürfen nicht gleichzeitig aktiviert sein."
+    )
+
+
+# ============================================================
+# Authentifizierung und django-allauth
+# ============================================================
 
 LOGIN_URL = "account_login"
-LOGIN_REDIRECT_URL = "tippen"
+
+LOGIN_REDIRECT_URL = "dashboard"
+
 LOGOUT_REDIRECT_URL = "account_login"
 
-# Login mit Benutzername oder E-Mail-Adresse
-ACCOUNT_LOGIN_METHODS = {"username", "email"}
 
-# Felder bei einer normalen Registrierung
+# Anmeldung über Benutzername oder E-Mail-Adresse.
+ACCOUNT_LOGIN_METHODS = {
+    "username",
+    "email",
+}
+
+
 ACCOUNT_SIGNUP_FIELDS = [
     "username*",
     "email*",
@@ -191,30 +679,293 @@ ACCOUNT_SIGNUP_FIELDS = [
     "password2*",
 ]
 
-# Nach Registrierung direkt zur Gruppenauswahl
-ACCOUNT_SIGNUP_REDIRECT_URL = "join_group"
 
-# Für den lokalen Aufbau zunächst keine Bestätigungsmail
-ACCOUNT_EMAIL_VERIFICATION = "none"
+ACCOUNT_SIGNUP_REDIRECT_URL = (
+    "join_group"
+)
 
-# E-Mail-Adressen dürfen nicht mehrfach verwendet werden
+
+# Nutzer können genau eine E-Mail-Adresse verwalten
+# und diese über einen Bestätigungsprozess ersetzen.
+ACCOUNT_CHANGE_EMAIL = True
+
+
 ACCOUNT_UNIQUE_EMAIL = True
 
-# Social Login nur über sichere POST-Anfragen starten
-SOCIALACCOUNT_LOGIN_ON_GET = False
+
+# Lokal keine Bestätigungsmails.
+# In Produktion ist E-Mail-Verifizierung verpflichtend.
+ACCOUNT_EMAIL_VERIFICATION = os.environ.get(
+    "ACCOUNT_EMAIL_VERIFICATION",
+    (
+        "none"
+        if DEBUG
+        else
+        "mandatory"
+    ),
+).strip().lower()
 
 
-# ---------------------------------------------------------------------
-# Production hardening (safe defaults)
-# ---------------------------------------------------------------------
+if ACCOUNT_EMAIL_VERIFICATION not in {
+    "none",
+    "optional",
+    "mandatory",
+}:
+    raise RuntimeError(
+        "ACCOUNT_EMAIL_VERIFICATION muss "
+        "'none', 'optional' oder 'mandatory' sein."
+    )
+
+
+# Erschwert das Ermitteln existierender Accounts.
+ACCOUNT_PREVENT_ENUMERATION = True
+
+
+# Vor sensiblen Kontoänderungen Passwort erneut abfragen.
+ACCOUNT_REAUTHENTICATION_REQUIRED = True
+
+ACCOUNT_REAUTHENTICATION_TIMEOUT = 300
+
+
+# Sitzung nicht dauerhaft über den Browser-Neustart merken.
+ACCOUNT_SESSION_REMEMBER = False
+
+
+# Abmelden nur über POST, nicht über einen einfachen GET-Link.
+ACCOUNT_LOGOUT_ON_GET = False
+
+
+# Eine Bestätigungsmail wird nicht bereits durch einen
+# bloßen Linkaufruf bestätigt.
+ACCOUNT_CONFIRM_EMAIL_ON_GET = False
+
+
+# Nach Passwort-Reset nicht automatisch einloggen.
+ACCOUNT_LOGIN_ON_PASSWORD_RESET = False
+
+
+ACCOUNT_EMAIL_CONFIRMATION_EXPIRE_DAYS = 3
+
+
+ACCOUNT_EMAIL_VERIFICATION_SUPPORTS_RESEND = True
+
+ACCOUNT_EMAIL_VERIFICATION_SUPPORTS_CHANGE = False
+
+
+# Sicherheitsbenachrichtigungen bei Kontoänderungen.
+ACCOUNT_EMAIL_NOTIFICATIONS = env_bool(
+    "ACCOUNT_EMAIL_NOTIFICATIONS",
+    default=not DEBUG,
+)
+
+
+# Einfache zusätzliche Bot-Falle bei der Registrierung.
+ACCOUNT_SIGNUP_FORM_HONEYPOT_FIELD = (
+    "phone_number"
+)
+
+
+ACCOUNT_USERNAME_MIN_LENGTH = 3
+
+
+# Proxy-Informationen werden standardmäßig nicht vertraut.
+# Erst passend zur echten Hostingarchitektur konfigurieren.
+ALLAUTH_TRUSTED_PROXY_COUNT = env_int(
+    "ALLAUTH_TRUSTED_PROXY_COUNT",
+    0,
+)
+
+
+ALLAUTH_TRUSTED_CLIENT_IP_HEADER = (
+    os.environ.get(
+        "ALLAUTH_TRUSTED_CLIENT_IP_HEADER",
+        "",
+    ).strip()
+    or None
+)
+
+
+# Bei verpflichtender Verifizierung darf Produktion
+# nicht ohne funktionierende Mailkonfiguration starten.
+if (
+    not DEBUG
+    and ACCOUNT_EMAIL_VERIFICATION
+    == "mandatory"
+):
+
+    if not os.environ.get(
+        "DEFAULT_FROM_EMAIL",
+        "",
+    ).strip():
+        raise RuntimeError(
+            "DEFAULT_FROM_EMAIL muss in Produktion "
+            "für die E-Mail-Bestätigung gesetzt werden."
+        )
+
+    if (
+        EMAIL_BACKEND
+        == (
+            "django.core.mail.backends.smtp."
+            "EmailBackend"
+        )
+        and not EMAIL_HOST
+    ):
+        raise RuntimeError(
+            "EMAIL_HOST muss für das SMTP-Backend "
+            "in Produktion gesetzt werden."
+        )
+
+
+# ============================================================
+# Allgemeine Django-Einstellungen
+# ============================================================
+
+DEFAULT_AUTO_FIELD = (
+    "django.db.models.BigAutoField"
+)
+
+
+# ============================================================
+# Sitzungen, Cookies und Sicherheitsheader
+# ============================================================
+
+SESSION_COOKIE_HTTPONLY = True
+
+SESSION_COOKIE_SAMESITE = "Lax"
+
+CSRF_COOKIE_SAMESITE = "Lax"
+
+
+# Die App darf nicht in fremde Frames eingebettet werden.
+X_FRAME_OPTIONS = "DENY"
+
+
+SECURE_CONTENT_TYPE_NOSNIFF = True
+
+SECURE_REFERRER_POLICY = "same-origin"
+
+SECURE_CROSS_ORIGIN_OPENER_POLICY = (
+    "same-origin"
+)
+
+
+# ============================================================
+# Produktionssicherheit
+# ============================================================
+
 if not DEBUG:
-    # Send cookies only via HTTPS
+
     SESSION_COOKIE_SECURE = True
+
     CSRF_COOKIE_SECURE = True
 
-    # Basic secure headers (optional but recommended)
-    SECURE_HSTS_SECONDS = int(os.environ.get("SECURE_HSTS_SECONDS", "0"))  # set >0 when you have HTTPS stable
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
 
-    SECURE_SSL_REDIRECT = os.environ.get("SECURE_SSL_REDIRECT", "0") == "1"
+    SECURE_SSL_REDIRECT = env_bool(
+        "SECURE_SSL_REDIRECT",
+        default=True,
+    )
+
+
+    # Anfangs bewusst nur eine Stunde.
+    # Nach erfolgreichem Produktionstest kann der Wert
+    # schrittweise erhöht werden.
+    SECURE_HSTS_SECONDS = env_int(
+        "SECURE_HSTS_SECONDS",
+        3600,
+    )
+
+
+    # Erst aktivieren, wenn wirklich sämtliche Subdomains
+    # ausschließlich HTTPS verwenden.
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool(
+        "SECURE_HSTS_INCLUDE_SUBDOMAINS",
+        default=False,
+    )
+
+
+    # Nicht voreilig aktivieren.
+    SECURE_HSTS_PRELOAD = env_bool(
+        "SECURE_HSTS_PRELOAD",
+        default=False,
+    )
+
+
+else:
+
+    SESSION_COOKIE_SECURE = False
+
+    CSRF_COOKIE_SECURE = False
+
+    SECURE_SSL_REDIRECT = False
+
+    SECURE_HSTS_SECONDS = 0
+
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+
+    SECURE_HSTS_PRELOAD = False
+
+
+# ============================================================
+# Logging
+# ============================================================
+
+LOG_LEVEL = os.environ.get(
+    "LOG_LEVEL",
+    (
+        "DEBUG"
+        if DEBUG
+        else
+        "INFO"
+    ),
+).strip().upper()
+
+
+LOGGING = {
+    "version": 1,
+
+    "disable_existing_loggers": False,
+
+    "formatters": {
+        "standard": {
+            "format": (
+                "{levelname} {asctime} "
+                "{name}: {message}"
+            ),
+            "style": "{",
+        },
+    },
+
+    "handlers": {
+        "console": {
+            "class": (
+                "logging.StreamHandler"
+            ),
+            "formatter": "standard",
+        },
+    },
+
+    "root": {
+        "handlers": [
+            "console",
+        ],
+        "level": LOG_LEVEL,
+    },
+
+    "loggers": {
+        "django.security": {
+            "handlers": [
+                "console",
+            ],
+            "level": "WARNING",
+            "propagate": False,
+        },
+
+        "tipping": {
+            "handlers": [
+                "console",
+            ],
+            "level": LOG_LEVEL,
+            "propagate": False,
+        },
+    },
+}

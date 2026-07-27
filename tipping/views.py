@@ -4,21 +4,34 @@ from collections import Counter, defaultdict
 
 from typing import Optional
 
-
+from django.core.paginator import Paginator
 from django.contrib import messages
 from django.contrib.auth import get_user_model
+from django.contrib.auth import logout
+from django.db.models import Q
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
+from django.db.models import Sum
+from django.db.models import Count
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_http_methods, require_POST
+from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 
+from .forms import (
+    BonusPredictionForm,
+    DeleteAccountForm,
+    GroupCreateForm,
+)
+from .models import Group, Tournament, Match, Prediction, BonusPrediction, GroupMembership
 
-from .forms import GroupCreateForm, BonusPredictionForm
-from .models import Group, GroupMembership, Match, Prediction, BonusPrediction
+from .scoring import points_for_prediction
 
 User = get_user_model()
+
+GROUP_PAGE_SIZE = 50
 
 
 # ---------------------------------------------------------------------
@@ -30,34 +43,20 @@ def _outcome(h: int, a: int) -> int:
     return (h > a) - (h < a)
 
 
-def points_for_prediction(match: Match, pred: Prediction | None) -> int:
-    """
-    Kicktipp-like:
-    4 = exaktes Ergebnis
-    3 = richtige Tordifferenz
-    2 = richtige Tendenz (S/U/N)
-    0 = falsch / keine Daten
-    """
-    if pred is None:
-        return 0
-    if match.home_score is None or match.away_score is None:
-        return 0
-    if pred.pred_home is None or pred.pred_away is None:
-        return 0
+def _prediction_points(
+    match,
+    prediction,
+):
+    if prediction is None:
+        return None
 
-    # 3 Punkte: exakter Tipp
-    if pred.pred_home == match.home_score and pred.pred_away == match.away_score:
-        return 4
+    if (
+        match.home_score is None
+        or match.away_score is None
+    ):
+        return None
 
-    # 2 Punkte: richtige Tordifferenz
-    if (pred.pred_home - pred.pred_away) == (match.home_score - match.away_score):
-        return 3
-
-    # 1 Punkt: richtige Tendenz
-    if _outcome(pred.pred_home, pred.pred_away) == _outcome(match.home_score, match.away_score):
-        return 2
-
-    return 0
+    return prediction.points
 
 
 def bonus_points_for_user(tournament, preds: list[BonusPrediction]) -> int:
@@ -118,34 +117,7 @@ def bonus_points_for_user(tournament, preds: list[BonusPrediction]) -> int:
 # Membership / Matchday helpers
 # ---------------------------------------------------------------------
 
-def _get_membership(request):
-    """
-    Gibt die Membership der aktuell aktiven Gruppe zurück.
-    Die aktive Gruppe wird in der Session gespeichert.
-    """
 
-    qs = (
-        GroupMembership.objects
-        .filter(user=request.user)
-        .select_related("group__tournament")
-        .order_by("id")
-    )
-
-    if not qs.exists():
-        return None
-
-    active_group_id = request.session.get("active_group_id")
-
-    # Falls Session-Gruppe existiert → prüfen ob gültig
-    if active_group_id:
-        membership = qs.filter(group_id=active_group_id).first()
-        if membership:
-            return membership
-
-    # Fallback: erste Gruppe setzen
-    membership = qs.first()
-    request.session["active_group_id"] = membership.group_id
-    return membership
 
 def _require_active_membership(request) -> Optional[GroupMembership]:
     """
@@ -249,131 +221,1068 @@ def _prev_next_md(tournament, matchday):
     )
     return prev_md, next_md
 
+def _get_bonus_lock_time(tournament):
+    """
+    Bonustipps werden mit dem Anstoß des ersten Saisonspiels gesperrt
+    und für alle Teilnehmer sichtbar.
+
+    Falls noch keine Spiele existieren, wird optional season_start
+    als Ersatz verwendet.
+    """
+    first_kickoff = (
+        Match.objects
+        .filter(tournament=tournament)
+        .order_by("kickoff")
+        .values_list("kickoff", flat=True)
+        .first()
+    )
+
+    return first_kickoff or tournament.season_start
+
 
 # ---------------------------------------------------------------------
 # Views
 # ---------------------------------------------------------------------
-
 @login_required
-def tippen(request):
-    # ✅ Einheitlich: aktive Gruppe aus Session holen (oder fallback), sonst redirect
-    membership = _require_active_membership(request)
+def dashboard(request):
+    membership = _require_active_membership(
+        request
+    )
+
     if not membership:
         return redirect("join_group")
 
     group = membership.group
     tournament = group.tournament
-
     now = timezone.now()
 
-    # Spieltag wählen (Default: nächstes zukünftiges Spiel oder ?md=)
-    matchday = _get_selected_matchday(request, tournament, now)
-    if matchday is None:
-        return render(request, "tipping/tippen.html", {
-            "group": group,
-            "matchday": None,
-            "rows": [],
-            "prev_md": None,
-            "next_md": None,
-            "now": now,
-        })
+    # --------------------------------------------------------------
+    # Hilfsfunktion für eine stabile alphabetische Sortierung
+    # --------------------------------------------------------------
 
-    def _matches_for_md(md: int):
+    def user_sort_name(user) -> str:
         return (
+            user.get_username()
+            or user.email
+            or f"user-{user.id}"
+        ).strip().lower()
+
+    # --------------------------------------------------------------
+    # Teilnehmer der aktiven Gruppe
+    # --------------------------------------------------------------
+
+    memberships = list(
+        GroupMembership.objects
+        .filter(
+            group=group,
+        )
+        .select_related(
+            "user",
+            "user__tip_profile",
+        )
+        .order_by(
+            "user__username",
+            "user_id",
+        )
+    )
+
+    users = [
+        item.user
+        for item in memberships
+    ]
+
+    user_ids = [
+        user.id
+        for user in users
+    ]
+
+    participant_count = len(
+        users
+    )
+
+    # --------------------------------------------------------------
+    # Aktuellen beziehungsweise nächsten Spieltag bestimmen
+    # --------------------------------------------------------------
+
+    current_matchday = _get_selected_matchday(
+        request,
+        tournament,
+        now,
+    )
+
+    current_matches = []
+
+    if current_matchday is not None:
+        current_matches = list(
             Match.objects
-            .filter(tournament=tournament, matchday=md)
-            .order_by("kickoff", "home_team")
+            .filter(
+                tournament=tournament,
+                matchday=current_matchday,
+            )
+            .order_by(
+                "kickoff",
+                "home_team",
+            )
         )
 
-    matches = _matches_for_md(matchday)
+    # --------------------------------------------------------------
+    # Bereits vollständig abgegebene eigene Tipps
+    #
+    # Wir laden keine vollständigen Prediction-Objekte mehr,
+    # sondern nur die IDs der Spiele mit einem vollständigen Tipp.
+    # --------------------------------------------------------------
 
-    # Falls aus irgendeinem Grund md leer ist → nochmal Default bestimmen
-    if not matches.exists():
-        matchday = _get_selected_matchday(request, tournament, now)
-        if matchday is None:
-            return render(request, "tipping/tippen.html", {
+    completed_prediction_match_ids = set(
+        Prediction.objects
+        .filter(
+            group=group,
+            user=request.user,
+            match__in=current_matches,
+            pred_home__isnull=False,
+            pred_away__isnull=False,
+        )
+        .values_list(
+            "match_id",
+            flat=True,
+        )
+    )
+
+    # Ein Spiel ist offen, wenn:
+    # - noch kein vollständiges Ergebnis existiert und
+    # - der Anstoß noch nicht erreicht wurde.
+    open_matches = [
+        match
+        for match in current_matches
+        if (
+            not match.has_result
+            and now < match.kickoff
+        )
+    ]
+
+    locked_matches = [
+        match
+        for match in current_matches
+        if (
+            match.has_result
+            or now >= match.kickoff
+        )
+    ]
+
+    has_open_matches = bool(
+        open_matches
+    )
+
+    missing_predictions = sum(
+        1
+        for match in open_matches
+        if (
+            match.id
+            not in completed_prediction_match_ids
+        )
+    )
+
+    completed_open_predictions = (
+        len(open_matches)
+        - missing_predictions
+    )
+
+    next_deadline = min(
+        (
+            match.kickoff
+            for match in open_matches
+        ),
+        default=None,
+    )
+
+    if not current_matches:
+        current_matchday_state = "empty"
+
+    elif open_matches and locked_matches:
+        current_matchday_state = (
+            "in_progress"
+        )
+
+    elif open_matches:
+        current_matchday_state = (
+            "upcoming"
+        )
+
+    else:
+        current_matchday_state = (
+            "closed"
+        )
+
+    # --------------------------------------------------------------
+    # Spieltage mit vollständigen Ergebnissen
+    # --------------------------------------------------------------
+
+    result_matchdays = list(
+        Match.objects
+        .filter(
+            tournament=tournament,
+            home_score__isnull=False,
+            away_score__isnull=False,
+        )
+        .exclude(
+            matchday__isnull=True,
+        )
+        .values_list(
+            "matchday",
+            flat=True,
+        )
+        .distinct()
+        .order_by(
+            "matchday",
+        )
+    )
+
+    standings_started = bool(
+        result_matchdays
+    )
+
+    # --------------------------------------------------------------
+    # Gesamtpunkte aller aktiven Gruppenmitglieder
+    #
+    # Die Datenbank summiert Prediction.points direkt.
+    # Es werden keine einzelnen Tipps in Python nachberechnet.
+    # --------------------------------------------------------------
+
+    total_points_by_user = {
+        user_id: 0
+        for user_id in user_ids
+    }
+
+    stored_total_rows = (
+        Prediction.objects
+        .filter(
+            group=group,
+            user_id__in=user_ids,
+            match__tournament=tournament,
+            match__home_score__isnull=False,
+            match__away_score__isnull=False,
+            points__isnull=False,
+        )
+        .values(
+            "user_id",
+        )
+        .annotate(
+            total=Sum("points"),
+        )
+    )
+
+    for row in stored_total_rows:
+        user_id = row["user_id"]
+
+        if user_id in total_points_by_user:
+            total_points_by_user[
+                user_id
+            ] = row["total"] or 0
+
+    # --------------------------------------------------------------
+    # Eigene Punkte gruppiert nach Spieltag
+    # --------------------------------------------------------------
+
+    user_matchday_points = defaultdict(
+        int
+    )
+
+    own_matchday_rows = (
+        Prediction.objects
+        .filter(
+            group=group,
+            user=request.user,
+            match__tournament=tournament,
+            match__matchday__isnull=False,
+            match__home_score__isnull=False,
+            match__away_score__isnull=False,
+            points__isnull=False,
+        )
+        .values(
+            "match__matchday",
+        )
+        .annotate(
+            total=Sum("points"),
+        )
+        .order_by(
+            "match__matchday",
+        )
+    )
+
+    for row in own_matchday_rows:
+        matchday = row[
+            "match__matchday"
+        ]
+
+        if matchday is not None:
+            user_matchday_points[
+                matchday
+            ] = row["total"] or 0
+
+    # --------------------------------------------------------------
+    # Anzahl exakter Ergebnisse des aktuellen Nutzers
+    # --------------------------------------------------------------
+
+    exact_predictions = (
+        Prediction.objects
+        .filter(
+            group=group,
+            user=request.user,
+            match__tournament=tournament,
+            match__home_score__isnull=False,
+            match__away_score__isnull=False,
+            points=4,
+        )
+        .count()
+    )
+
+    # --------------------------------------------------------------
+    # Bonuspunkte
+    # --------------------------------------------------------------
+
+    bonus_lock_time = (
+        _get_bonus_lock_time(
+            tournament
+        )
+    )
+
+    bonus_reveal = bool(
+        bonus_lock_time
+        and now >= bonus_lock_time
+    )
+
+    bonus_points_by_user = defaultdict(
+        int
+    )
+
+    if bonus_reveal:
+        bonus_predictions = list(
+            BonusPrediction.objects
+            .filter(
+                group=group,
+                tournament=tournament,
+                user_id__in=user_ids,
+            )
+        )
+
+        bonus_predictions_by_user = (
+            defaultdict(list)
+        )
+
+        for bonus_prediction in bonus_predictions:
+            bonus_predictions_by_user[
+                bonus_prediction.user_id
+            ].append(
+                bonus_prediction
+            )
+
+        for user in users:
+            bonus_points = (
+                bonus_points_for_user(
+                    tournament,
+                    bonus_predictions_by_user.get(
+                        user.id,
+                        [],
+                    ),
+                )
+            )
+
+            bonus_points_by_user[
+                user.id
+            ] = bonus_points
+
+            total_points_by_user[
+                user.id
+            ] += bonus_points
+
+    # --------------------------------------------------------------
+    # Persönliche Leistungsentwicklung
+    # --------------------------------------------------------------
+
+    evaluated_matchday_points = [
+        user_matchday_points.get(
+            matchday,
+            0,
+        )
+        for matchday in result_matchdays
+    ]
+
+    if evaluated_matchday_points:
+        average_matchday_points = round(
+            sum(
+                evaluated_matchday_points
+            )
+            / len(
+                evaluated_matchday_points
+            ),
+            1,
+        )
+
+    else:
+        average_matchday_points = None
+
+    best_matchday = None
+    best_matchday_points = None
+
+    if result_matchdays:
+        best_matchday = max(
+            result_matchdays,
+            key=lambda matchday: (
+                user_matchday_points.get(
+                    matchday,
+                    0,
+                ),
+                matchday,
+            ),
+        )
+
+        best_matchday_points = (
+            user_matchday_points.get(
+                best_matchday,
+                0,
+            )
+        )
+
+    # Neuester ausgewerteter Spieltag zuerst.
+    recent_matchdays = list(
+        reversed(
+            result_matchdays[-5:]
+        )
+    )
+
+    recent_points = [
+        user_matchday_points.get(
+            matchday,
+            0,
+        )
+        for matchday in recent_matchdays
+    ]
+
+    maximum_recent_points = max(
+        recent_points,
+        default=0,
+    )
+
+    performance_rows = []
+
+    for matchday, points in zip(
+        recent_matchdays,
+        recent_points,
+    ):
+        if maximum_recent_points > 0:
+            bar_percent = round(
+                points
+                / maximum_recent_points
+                * 100
+            )
+
+        else:
+            bar_percent = 0
+
+        performance_rows.append(
+            {
+                "matchday": matchday,
+                "points": points,
+                "bar_percent": bar_percent,
+            }
+        )
+
+    # --------------------------------------------------------------
+    # Gesamtrangliste
+    # --------------------------------------------------------------
+
+    sorted_users = sorted(
+        users,
+        key=lambda user: (
+            -total_points_by_user.get(
+                user.id,
+                0,
+            ),
+            user_sort_name(
+                user
+            ),
+            user.id,
+        ),
+    )
+
+    leaderboard_rows = []
+
+    current_position = 0
+    previous_total = None
+
+    for index, user in enumerate(
+        sorted_users,
+        start=1,
+    ):
+        user_total = (
+            total_points_by_user.get(
+                user.id,
+                0,
+            )
+        )
+
+        # Gleiche Punktzahl bedeutet gleiche Position.
+        # Der nächste Platz wird dabei übersprungen:
+        # 1, 1, 3 statt 1, 1, 2.
+        if (
+            previous_total is None
+            or user_total != previous_total
+        ):
+            current_position = index
+            previous_total = user_total
+
+        leaderboard_rows.append(
+            {
+                "user": user,
+                "position": current_position,
+                "total": user_total,
+                "bonus": (
+                    bonus_points_by_user.get(
+                        user.id,
+                        0,
+                    )
+                ),
+                "is_current_user": (
+                    user.id
+                    == request.user.id
+                ),
+            }
+        )
+
+    current_user_row = next(
+        (
+            row
+            for row in leaderboard_rows
+            if (
+                row["user"].id
+                == request.user.id
+            )
+        ),
+        None,
+    )
+
+    user_total_points = (
+        current_user_row["total"]
+        if current_user_row
+        else 0
+    )
+
+    user_position = (
+        current_user_row["position"]
+        if (
+            current_user_row
+            and standings_started
+        )
+        else None
+    )
+
+    # --------------------------------------------------------------
+    # Kleine Rangliste:
+    # Top 3 und zusätzlich der aktuelle Benutzer
+    # --------------------------------------------------------------
+
+    mini_table_rows = []
+
+    if standings_started:
+        mini_table_rows = [
+            dict(row)
+            for row in leaderboard_rows[:3]
+        ]
+
+        top_user_ids = {
+            row["user"].id
+            for row in mini_table_rows
+        }
+
+        if (
+            current_user_row
+            and request.user.id
+            not in top_user_ids
+        ):
+            extra_row = dict(
+                current_user_row
+            )
+
+            extra_row[
+                "is_extra"
+            ] = True
+
+            mini_table_rows.append(
+                extra_row
+            )
+
+    # --------------------------------------------------------------
+    # Letzter ausgewerteter Spieltag
+    # --------------------------------------------------------------
+
+    last_result_matchday = (
+        result_matchdays[-1]
+        if result_matchdays
+        else None
+    )
+
+    last_matchday_points = None
+
+    if last_result_matchday is not None:
+        last_matchday_points = (
+            user_matchday_points.get(
+                last_result_matchday,
+                0,
+            )
+        )
+
+    # --------------------------------------------------------------
+    # Template rendern
+    # --------------------------------------------------------------
+
+    return render(
+        request,
+        "tipping/dashboard.html",
+        {
+            "group": group,
+            "tournament": tournament,
+
+            "current_matchday": (
+                current_matchday
+            ),
+            "current_matchday_state": (
+                current_matchday_state
+            ),
+            "current_matches_count": len(
+                current_matches
+            ),
+            "open_matches_count": len(
+                open_matches
+            ),
+            "has_open_matches": (
+                has_open_matches
+            ),
+            "missing_predictions": (
+                missing_predictions
+            ),
+            "completed_open_predictions": (
+                completed_open_predictions
+            ),
+            "next_deadline": (
+                next_deadline
+            ),
+
+            "participant_count": (
+                participant_count
+            ),
+            "user_position": (
+                user_position
+            ),
+            "user_total_points": (
+                user_total_points
+            ),
+
+            "standings_started": (
+                standings_started
+            ),
+            "mini_table_rows": (
+                mini_table_rows
+            ),
+
+            "last_result_matchday": (
+                last_result_matchday
+            ),
+            "last_matchday_points": (
+                last_matchday_points
+            ),
+
+            "bonus_reveal": (
+                bonus_reveal
+            ),
+            "bonus_lock_time": (
+                bonus_lock_time
+            ),
+
+            "performance_rows": (
+                performance_rows
+            ),
+            "average_matchday_points": (
+                average_matchday_points
+            ),
+            "exact_predictions": (
+                exact_predictions
+            ),
+            "best_matchday": (
+                best_matchday
+            ),
+            "best_matchday_points": (
+                best_matchday_points
+            ),
+        },
+    )
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def tippen(request):
+    membership = _require_active_membership(
+        request
+    )
+
+    if not membership:
+        return redirect("join_group")
+
+    group = membership.group
+    tournament = group.tournament
+    now = timezone.now()
+
+    # --------------------------------------------------------------
+    # Verfügbare Spieltage
+    # --------------------------------------------------------------
+
+    matchdays = list(
+        Match.objects
+        .filter(
+            tournament=tournament,
+        )
+        .exclude(
+            matchday__isnull=True,
+        )
+        .values_list(
+            "matchday",
+            flat=True,
+        )
+        .distinct()
+        .order_by(
+            "matchday",
+        )
+    )
+
+    # --------------------------------------------------------------
+    # Gewählten Spieltag bestimmen
+    # --------------------------------------------------------------
+
+    matchday = _get_selected_matchday(
+        request,
+        tournament,
+        now,
+    )
+
+    if matchday is None:
+        return render(
+            request,
+            "tipping/tippen.html",
+            {
                 "group": group,
                 "matchday": None,
+                "matchdays": matchdays,
                 "rows": [],
                 "prev_md": None,
                 "next_md": None,
                 "now": now,
-            })
-        matches = _matches_for_md(matchday)
+            },
+        )
 
-    prev_md, next_md = _prev_next_md(tournament, matchday)
+    def _matches_for_md(md: int):
+        return list(
+            Match.objects
+            .filter(
+                tournament=tournament,
+                matchday=md,
+            )
+            .order_by(
+                "kickoff",
+                "home_team",
+            )
+        )
 
-    preds = {
-        p.match_id: p
-        for p in Prediction.objects.filter(user=request.user, group=group, match__in=matches)
+    matches = _matches_for_md(
+        matchday
+    )
+
+    # --------------------------------------------------------------
+    # Fallback bei ungültigem Spieltag
+    # --------------------------------------------------------------
+
+    if not matches:
+        if matchdays:
+            matchday = matchdays[0]
+
+            matches = _matches_for_md(
+                matchday
+            )
+
+        else:
+            return render(
+                request,
+                "tipping/tippen.html",
+                {
+                    "group": group,
+                    "matchday": None,
+                    "matchdays": matchdays,
+                    "rows": [],
+                    "prev_md": None,
+                    "next_md": None,
+                    "now": now,
+                },
+            )
+
+    prev_md, next_md = _prev_next_md(
+        tournament,
+        matchday,
+    )
+
+    # --------------------------------------------------------------
+    # Eigene vorhandene Tipps
+    # --------------------------------------------------------------
+
+    predictions = {
+        prediction.match_id: prediction
+        for prediction in (
+            Prediction.objects
+            .filter(
+                user=request.user,
+                group=group,
+                match__in=matches,
+            )
+        )
     }
-    rows = [{"match": m, "pred": preds.get(m.id)} for m in matches]
+
+    rows = [
+        {
+            "match": match,
+            "pred": predictions.get(
+                match.id
+            ),
+        }
+        for match in matches
+    ]
+
+    # --------------------------------------------------------------
+    # Tipps speichern
+    # --------------------------------------------------------------
 
     if request.method == "POST":
         saved = 0
         skipped_locked = 0
-        now = timezone.now()  # Locking immer mit aktuellem "jetzt"
+        skipped_invalid = 0
 
-        for m in matches:
-            # ab Anstoß sperren
-            if m.kickoff <= now:
-                skipped_locked += 1
-                continue
-
-            hk = f"pred_home_{m.id}"
-            ak = f"pred_away_{m.id}"
-
-            home_val = request.POST.get(hk, "").strip()
-            away_val = request.POST.get(ak, "").strip()
-
-            if home_val == "" or away_val == "":
-                continue
-
-            try:
-                ph = int(home_val)
-                pa = int(away_val)
-                if ph < 0 or pa < 0:
-                    continue
-            except ValueError:
-                continue
-
-            Prediction.objects.update_or_create(
-                user=request.user,
-                group=group,
-                match=m,
-                defaults={"pred_home": ph, "pred_away": pa},
+        with transaction.atomic():
+            # Mitgliedschaft unmittelbar vor dem Schreiben
+            # erneut kontrollieren und während der Transaktion
+            # gegen parallele Änderungen sperren.
+            membership_exists = (
+                GroupMembership.objects
+                .select_for_update()
+                .filter(
+                    pk=membership.pk,
+                    user=request.user,
+                    group=group,
+                )
+                .exists()
             )
-            saved += 1
+
+            if not membership_exists:
+                messages.error(
+                    request,
+                    (
+                        "Ya no perteneces "
+                        "a este grupo."
+                    ),
+                )
+
+                request.session.pop(
+                    "active_group_id",
+                    None,
+                )
+
+                return redirect(
+                    "join_group"
+                )
+
+            # Spiele erneut aus der Datenbank laden.
+            # In PostgreSQL werden die Zeilen bis zum Ende
+            # der Transaktion gesperrt.
+            locked_matches = {
+                match.id: match
+                for match in (
+                    Match.objects
+                    .select_for_update()
+                    .filter(
+                        id__in=[
+                            match.id
+                            for match in matches
+                        ],
+                        tournament=tournament,
+                        matchday=matchday,
+                    )
+                )
+            }
+
+            for original_match in matches:
+                match = locked_matches.get(
+                    original_match.id
+                )
+
+                if match is None:
+                    skipped_invalid += 1
+                    continue
+
+                home_key = (
+                    f"pred_home_{match.id}"
+                )
+
+                away_key = (
+                    f"pred_away_{match.id}"
+                )
+
+                home_value = (
+                    request.POST
+                    .get(
+                        home_key,
+                        "",
+                    )
+                    .strip()
+                )
+
+                away_value = (
+                    request.POST
+                    .get(
+                        away_key,
+                        "",
+                    )
+                    .strip()
+                )
+
+                # Leere oder unvollständige Eingaben
+                # werden nicht verändert.
+                if (
+                    home_value == ""
+                    or away_value == ""
+                ):
+                    continue
+
+                # Sehr lange manipulierte Zahlenwerte
+                # bereits vor int() verwerfen.
+                if (
+                    len(home_value) > 3
+                    or len(away_value) > 3
+                ):
+                    skipped_invalid += 1
+                    continue
+
+                try:
+                    pred_home = int(
+                        home_value
+                    )
+
+                    pred_away = int(
+                        away_value
+                    )
+
+                except (
+                    TypeError,
+                    ValueError,
+                ):
+                    skipped_invalid += 1
+                    continue
+
+                if not (
+                    0 <= pred_home <= MAX_GOALS
+                    and
+                    0 <= pred_away <= MAX_GOALS
+                ):
+                    skipped_invalid += 1
+                    continue
+
+                # Die Frist möglichst unmittelbar vor dem
+                # tatsächlichen Schreiben prüfen.
+                if (
+                    match.has_result
+                    or timezone.now()
+                    >= match.kickoff
+                ):
+                    skipped_locked += 1
+                    continue
+
+                Prediction.objects.update_or_create(
+                    user=request.user,
+                    group=group,
+                    match=match,
+                    defaults={
+                        "pred_home": pred_home,
+                        "pred_away": pred_away,
+                        "points": None,
+                        "scored_at": None,
+                    },
+                )
+
+                saved += 1
+
+        # ----------------------------------------------------------
+        # Rückmeldungen
+        # ----------------------------------------------------------
 
         if saved > 0:
-            if skipped_locked > 0:
-                messages.success(
+            messages.success(
                 request,
-                f"Tipps gespeichert ✅ ({saved}) — "
-                f"{skipped_locked} Spiel(e) waren gesperrt."
-        )
-            else:
-                    messages.success(
+                (
+                    f"Se guardaron correctamente "
+                    f"{saved} pronóstico(s)."
+                ),
+            )
+
+        if skipped_locked > 0:
+            messages.warning(
                 request,
-                f"Tipps gespeichert ✅ ({saved})"
+                (
+                    f"{skipped_locked} partido(s) "
+                    "ya estaban bloqueados y no "
+                    "fueron modificados."
+                ),
+            )
+
+        if skipped_invalid > 0:
+            messages.error(
+                request,
+                (
+                    f"{skipped_invalid} pronóstico(s) "
+                    "contenían valores no válidos."
+                ),
+            )
+
+        if (
+            saved == 0
+            and skipped_locked == 0
+            and skipped_invalid == 0
+        ):
+            messages.info(
+                request,
+                (
+                    "No se introdujeron nuevos "
+                    "pronósticos."
+                ),
+            )
+
+        return redirect(
+            f"{request.path}?md={matchday}"
         )
 
-        # ✅ Wichtig: im gleichen Spieltag bleiben
-        return redirect(f"{request.path}?md={matchday}")
+    # --------------------------------------------------------------
+    # Seite anzeigen
+    # --------------------------------------------------------------
 
-    return render(request, "tipping/tippen.html", {
-        "group": group,
-        "matchday": matchday,
-        "rows": rows,
-        "prev_md": prev_md,
-        "next_md": next_md,
-        "now": now,
-    })
-
+    return render(
+        request,
+        "tipping/tippen.html",
+        {
+            "group": group,
+            "matchday": matchday,
+            "matchdays": matchdays,
+            "rows": rows,
+            "prev_md": prev_md,
+            "next_md": next_md,
+            "now": now,
+        },
+    )
 
 @login_required
 def spieltag(request):
     membership = _require_active_membership(request)
+
     if not membership:
         return redirect("join_group")
 
@@ -381,207 +1290,17 @@ def spieltag(request):
     tournament = group.tournament
     now = timezone.now()
 
-    tab = request.GET.get("tab", "matches")
-    if tab not in {"matches", "bonus"}:
-        tab = "matches"
+    def user_sort_name(user) -> str:
+        return (
+            user.get_username()
+            or user.email
+            or f"user-{user.id}"
+        ).strip().lower()
 
-    # Bonustipps sind für alle erst sichtbar, wenn season_start gesetzt UND erreicht
-    season_start = tournament.season_start
-    bonus_reveal = bool(season_start and now >= season_start)
+    # -------------------------------------------------------------
+    # Spieltage und ausgewählter Bereich
+    # -------------------------------------------------------------
 
-    # --- Spieler in Gruppe ---
-    memberships = list(
-        GroupMembership.objects
-        .filter(group=group)
-        .select_related("user")
-        .order_by("user__username")
-    )
-    users = [m.user for m in memberships]
-
-    # --- BONUSTAB ---
-    bonus_rows = []
-    my_bonus = None
-
-    if tab == "bonus":
-        # lade alle Bonustipps der Gruppe
-        all_bonus = list(
-            BonusPrediction.objects
-            .filter(group=group, tournament=tournament, user__in=users)
-            .select_related("user")
-        )
-
-        # gruppieren: user_id -> list[BonusPrediction]
-        bonus_by_user = defaultdict(list)
-        for bp in all_bonus:
-            bonus_by_user[bp.user_id].append(bp)
-
-        # eigene Bonustipps (für Anzeige vor Lock)
-        my_bonus = bonus_by_user.get(request.user.id, [])
-
-        if bonus_reveal:
-            for u in users:
-                preds = bonus_by_user.get(u.id, [])
-                pts = bonus_points_for_user(tournament, preds)
-                by_type = {p.bonus_type: p.value for p in preds}
-
-                bonus_rows.append({
-                    "user": u,
-                    "points": pts,
-                    "picks": {
-                        "herbstmeister": by_type.get("herbstmeister", ""),
-                        "meister": by_type.get("meister", ""),
-                        "trainer_first": by_type.get("trainer_first", ""),
-                        "topscorer": by_type.get("topscorer", ""),
-                        "relegation1": by_type.get("relegation1", ""),
-                        "relegation2": by_type.get("relegation2", ""),
-                    }
-                })
-
-            bonus_rows.sort(key=lambda r: (-r["points"], r["user"].username.lower()))
-
-    # --- MATCHTAB (dein bisheriger Code) ---
-    # (Hier bleibt dein bisheriger Matchday/Matrix-Code, nur: total_points += bonus_points wenn reveal)
-
-    matchday = _get_selected_matchday(request, tournament, now)
-    if matchday is None:
-        return render(request, "tipping/spieltag.html", {
-            "group": group,
-            "tab": tab,
-            "matchday": None,
-            "matches": [],
-            "table_rows": [],
-            "prev_md": None,
-            "next_md": None,
-            "now": now,
-            "season_start": season_start,
-            "bonus_reveal": bonus_reveal,
-            "bonus_rows": bonus_rows,
-            "my_bonus": my_bonus,
-        })
-
-    matches = list(
-        Match.objects.filter(tournament=tournament, matchday=matchday)
-        .order_by("kickoff", "home_team")
-    )
-    prev_md, next_md = _prev_next_md(tournament, matchday)
-
-    all_preds = (
-        Prediction.objects
-        .filter(group=group, match__in=matches, user__in=users)
-        .select_related("user", "match")
-    )
-    pred_map = {(p.user_id, p.match_id): p for p in all_preds}
-
-    match_headers = [
-        {
-            "match": m,
-            "result": (m.home_score, m.away_score)
-            if (m.home_score is not None and m.away_score is not None)
-            else None,
-        }
-        for m in matches
-    ]
-
-    # Bonuspunkte (pro User) nur addieren, wenn reveal
-    bonus_points_map = {}
-    if bonus_reveal:
-        all_bonus = list(
-            BonusPrediction.objects
-            .filter(group=group, tournament=tournament, user__in=users)
-            .select_related("user")
-        )
-        bonus_by_user = defaultdict(list)
-        for bp in all_bonus:
-            bonus_by_user[bp.user_id].append(bp)
-        for u in users:
-            bonus_points_map[u.id] = bonus_points_for_user(tournament, bonus_by_user.get(u.id, []))
-    else:
-        for u in users:
-            bonus_points_map[u.id] = 0
-
-    table_rows = []
-    for u in users:
-        total_points = 0
-        cells = []
-
-        for m in matches:
-            reveal = (m.kickoff <= now)
-            p = pred_map.get((u.id, m.id))
-
-            cell_points = points_for_prediction(m, p) if reveal else None
-            if cell_points is not None:
-                total_points += cell_points
-
-            cells.append({"reveal": reveal, "pred": p, "points": cell_points})
-
-        # ✅ Bonuspunkte (nur wenn reveal, sonst 0)
-        total_points_with_bonus = total_points + bonus_points_map.get(u.id, 0)
-
-        table_rows.append({
-            "user": u,
-            "cells": cells,
-            "total_points": total_points,
-            "bonus_points": bonus_points_map.get(u.id, 0),
-            "total_with_bonus": total_points_with_bonus,
-        })
-
-    # sortiert nach Total inkl Bonus sobald reveal
-    if bonus_reveal:
-        table_rows.sort(key=lambda r: (-r["total_with_bonus"], r["user"].username.lower()))
-    else:
-        table_rows.sort(key=lambda r: (-r["total_points"], r["user"].username.lower()))
-
-    return render(request, "tipping/spieltag.html", {
-        "group": group,
-        "tab": tab,
-        "matchday": matchday,
-        "matches": match_headers,
-        "table_rows": table_rows,
-        "prev_md": prev_md,
-        "next_md": next_md,
-        "now": now,
-        "season_start": season_start,
-        "bonus_reveal": bonus_reveal,
-        "bonus_rows": bonus_rows,
-        "my_bonus": my_bonus,
-    })
-
-
-
-@login_required
-def tabelle(request):
-    # ✅ Einheitlich: aktive Gruppe aus Session holen (oder fallback), sonst redirect
-    membership = _require_active_membership(request)
-    if not membership:
-        return redirect("join_group")
-
-    group = membership.group
-    tournament = group.tournament
-
-    # ✅ Bonus erst sichtbar/gewertet, wenn season_start erreicht ist
-    now = timezone.now()
-    season_start = tournament.season_start
-    bonus_reveal = bool(season_start and now >= season_start)
-
-    # --- View Tab (mdpoints / ranks / rankdiff) -----------------------------
-    view = request.GET.get("view", "mdpoints")
-    if view not in {"mdpoints", "ranks", "rankdiff"}:
-        view = "mdpoints"
-
-    # --- Spaltenfenster (Pagination über Spieltage) -------------------------
-    try:
-        from_idx = int(request.GET.get("from", "0"))
-    except ValueError:
-        from_idx = 0
-
-    try:
-        count = int(request.GET.get("count", "8"))
-    except ValueError:
-        count = 8
-
-    count = max(4, min(count, 15))
-
-    # --- Alle Spieltage im Turnier -----------------------------------------
     matchdays = list(
         Match.objects
         .filter(tournament=tournament)
@@ -591,213 +1310,1181 @@ def tabelle(request):
         .order_by("matchday")
     )
 
-    if not matchdays:
-        return render(request, "tipping/tabelle.html", {
-            "group": group,
-            "view": view,
-            "matchdays": [],
-            "shown_matchdays": [],
-            "table_rows": [],
-            "prev_from": None,
-            "next_from": None,
-            "count": count,
-            "me_id": request.user.id,
-            "bonus_enabled": True,
-            "bonus_reveal": bonus_reveal,
-        })
+    tab = request.GET.get("tab", "matches")
 
-    # from_idx clamp
-    if from_idx < 0:
-        from_idx = 0
-    if from_idx >= len(matchdays):
-        from_idx = max(0, len(matchdays) - count)
+    if tab not in {"matches", "bonus"}:
+        tab = "matches"
 
-    shown_matchdays = matchdays[from_idx:from_idx + count]
-    prev_from = from_idx - count if (from_idx - count) >= 0 else None
-    next_from = from_idx + count if (from_idx + count) < len(matchdays) else None
+    bonus_lock_time = _get_bonus_lock_time(
+        tournament
+    )
 
-    # --- Alle Spieler der Gruppe -------------------------------------------
+    bonus_reveal = bool(
+        bonus_lock_time
+        and now >= bonus_lock_time
+    )
+
+    # -------------------------------------------------------------
+    # Aktive Gruppenmitglieder
+    # -------------------------------------------------------------
+
     memberships = list(
         GroupMembership.objects
         .filter(group=group)
-        .select_related("user")
-        .order_by("user__username")
+        .select_related(
+            "user",
+            "user__tip_profile",
+        )
+        .order_by(
+            "user__username",
+            "user_id",
+        )
     )
-    users = [m.user for m in memberships]
 
-    # ----------------------------------------------------------------------
-    # Σ = Gesamtpunkte über ALLE Spieltage (nur Matches mit Ergebnis)
-    # ----------------------------------------------------------------------
-    finished_preds = (
+    users = [
+        item.user
+        for item in memberships
+    ]
+
+    user_ids = [
+        user.id
+        for user in users
+    ]
+
+    # -------------------------------------------------------------
+    # Aktiven Spieltag bestimmen
+    # -------------------------------------------------------------
+
+    matchday = _get_selected_matchday(
+        request,
+        tournament,
+        now,
+    )
+
+    matches = []
+    prev_md = None
+    next_md = None
+
+    # Spiele werden nur im normalen Spieltag-Tab benötigt.
+    if (
+        tab == "matches"
+        and matchday is not None
+    ):
+        matches = list(
+            Match.objects
+            .filter(
+                tournament=tournament,
+                matchday=matchday,
+            )
+            .order_by(
+                "kickoff",
+                "home_team",
+            )
+        )
+
+        prev_md, next_md = _prev_next_md(
+            tournament,
+            matchday,
+        )
+
+    match_ids = [
+        match.id
+        for match in matches
+    ]
+
+    locked_match_ids = {
+        match.id
+        for match in matches
+        if (
+            match.has_result
+            or now >= match.kickoff
+        )
+    }
+
+    # -------------------------------------------------------------
+    # Bonustipps
+    #
+    # Sie werden nur geladen, wenn der Bonus-Tab geöffnet ist.
+    # Vor der Freigabe wird nur der eigene Bonustipp geladen.
+    # -------------------------------------------------------------
+
+    bonus_by_user = defaultdict(list)
+
+    bonus_points_map = {
+        user_id: 0
+        for user_id in user_ids
+    }
+
+    my_bonus = []
+
+    if tab == "bonus":
+        bonus_queryset = (
+            BonusPrediction.objects
+            .filter(
+                group=group,
+                tournament=tournament,
+            )
+        )
+
+        if bonus_reveal:
+            bonus_queryset = (
+                bonus_queryset.filter(
+                    user_id__in=user_ids,
+                )
+            )
+
+        else:
+            bonus_queryset = (
+                bonus_queryset.filter(
+                    user=request.user,
+                )
+            )
+
+        all_bonus = list(
+            bonus_queryset
+        )
+
+        for bonus_prediction in all_bonus:
+            bonus_by_user[
+                bonus_prediction.user_id
+            ].append(
+                bonus_prediction
+            )
+
+        my_bonus = bonus_by_user.get(
+            request.user.id,
+            [],
+        )
+
+        if bonus_reveal:
+            for user in users:
+                bonus_points_map[
+                    user.id
+                ] = bonus_points_for_user(
+                    tournament,
+                    bonus_by_user.get(
+                        user.id,
+                        [],
+                    ),
+                )
+
+    # -------------------------------------------------------------
+    # Punkte des ausgewählten Spieltags
+    #
+    # Die Datenbank summiert die bereits gespeicherten Punkte.
+    # Es findet keine Berechnung einzelner Tipps mehr statt.
+    # -------------------------------------------------------------
+
+    total_points_by_user = {
+        user_id: 0
+        for user_id in user_ids
+    }
+
+    if (
+        tab == "matches"
+        and match_ids
+    ):
+        stored_point_rows = (
+            Prediction.objects
+            .filter(
+                group=group,
+                user_id__in=user_ids,
+                match_id__in=match_ids,
+                match__home_score__isnull=False,
+                match__away_score__isnull=False,
+                points__isnull=False,
+            )
+            .values("user_id")
+            .annotate(
+                total=Sum("points"),
+            )
+        )
+
+        for row in stored_point_rows:
+            user_id = row["user_id"]
+
+            if user_id in total_points_by_user:
+                total_points_by_user[
+                    user_id
+                ] = row["total"] or 0
+
+    # -------------------------------------------------------------
+    # Globale Sortierung vor der Seiteneinteilung
+    # -------------------------------------------------------------
+
+    if tab == "bonus":
+        if bonus_reveal:
+            sorted_users = sorted(
+                users,
+                key=lambda user: (
+                    -bonus_points_map.get(
+                        user.id,
+                        0,
+                    ),
+                    user_sort_name(user),
+                    user.id,
+                ),
+            )
+
+        else:
+            # Vor der Freigabe wird der aktuelle Nutzer
+            # an erster Stelle angezeigt.
+            sorted_users = sorted(
+                users,
+                key=lambda user: (
+                    (
+                        0
+                        if user.id == request.user.id
+                        else 1
+                    ),
+                    user_sort_name(user),
+                    user.id,
+                ),
+            )
+
+    else:
+        # Im normalen Spieltag-Tab wird ausschließlich
+        # nach den Punkten dieses Spieltags sortiert.
+        sorted_users = sorted(
+            users,
+            key=lambda user: (
+                -total_points_by_user.get(
+                    user.id,
+                    0,
+                ),
+                user_sort_name(user),
+                user.id,
+            ),
+        )
+
+    # -------------------------------------------------------------
+    # Seiteneinteilung
+    # -------------------------------------------------------------
+
+    paginator = Paginator(
+        sorted_users,
+        GROUP_PAGE_SIZE,
+    )
+
+    page_obj = paginator.get_page(
+        request.GET.get("page")
+    )
+
+    page_users = list(
+        page_obj.object_list
+    )
+
+    page_user_ids = [
+        user.id
+        for user in page_users
+    ]
+
+    # -------------------------------------------------------------
+    # Nur Tipps der aktuell sichtbaren Teilnehmer laden
+    #
+    # Fremde Tipps werden nur für gesperrte Spiele geladen.
+    # Der eigene Tipp bleibt auch vor dem Anstoß sichtbar.
+    # -------------------------------------------------------------
+
+    prediction_map = {}
+
+    if (
+        tab == "matches"
+        and matches
+        and page_user_ids
+    ):
+        page_predictions = (
+            Prediction.objects
+            .filter(
+                group=group,
+                user_id__in=page_user_ids,
+                match_id__in=match_ids,
+            )
+            .filter(
+                Q(
+                    match_id__in=locked_match_ids,
+                )
+                | Q(
+                    user=request.user,
+                )
+            )
+        )
+
+        prediction_map = {
+            (
+                prediction.user_id,
+                prediction.match_id,
+            ): prediction
+            for prediction in page_predictions
+        }
+
+    # -------------------------------------------------------------
+    # Bonustabelle der sichtbaren Teilnehmer
+    # -------------------------------------------------------------
+
+    bonus_rows = []
+
+    if tab == "bonus":
+        for user in page_users:
+            predictions = bonus_by_user.get(
+                user.id,
+                [],
+            )
+
+            by_type = {
+                prediction.bonus_type: prediction.value
+                for prediction in predictions
+            }
+
+            row_reveal = (
+                bonus_reveal
+                or user.id == request.user.id
+            )
+
+            if row_reveal:
+                visible_picks = {
+                    "herbstmeister": by_type.get(
+                        "herbstmeister",
+                        "",
+                    ),
+                    "meister": by_type.get(
+                        "meister",
+                        "",
+                    ),
+                    "trainer_first": by_type.get(
+                        "trainer_first",
+                        "",
+                    ),
+                    "topscorer": by_type.get(
+                        "topscorer",
+                        "",
+                    ),
+                    "relegation1": by_type.get(
+                        "relegation1",
+                        "",
+                    ),
+                    "relegation2": by_type.get(
+                        "relegation2",
+                        "",
+                    ),
+                }
+
+            else:
+                visible_picks = {}
+
+            bonus_rows.append(
+                {
+                    "user": user,
+                    "reveal": row_reveal,
+                    "picks": visible_picks,
+                    "points": (
+                        bonus_points_map.get(
+                            user.id,
+                            0,
+                        )
+                        if bonus_reveal
+                        else None
+                    ),
+                }
+            )
+
+    # -------------------------------------------------------------
+    # Tabellenköpfe der normalen Spiele
+    # -------------------------------------------------------------
+
+    match_headers = [
+        {
+            "match": match,
+            "result": (
+                match.home_score,
+                match.away_score,
+            )
+            if match.has_result
+            else None,
+        }
+        for match in matches
+    ]
+
+    # -------------------------------------------------------------
+    # Spieltagsmatrix der sichtbaren Teilnehmer
+    # -------------------------------------------------------------
+
+    table_rows = []
+
+    if tab == "matches":
+        for user in page_users:
+            cells = []
+
+            for match in matches:
+                reveal = (
+                    match.id in locked_match_ids
+                )
+
+                can_view_prediction = (
+                    reveal
+                    or user.id == request.user.id
+                )
+
+                prediction = prediction_map.get(
+                    (
+                        user.id,
+                        match.id,
+                    )
+                )
+
+                # Punkte werden direkt aus Prediction.points gelesen.
+                # Vor dem Ergebnis bleibt der Wert None.
+                cell_points = (
+                    prediction.points
+                    if (
+                        reveal
+                        and match.has_result
+                        and prediction is not None
+                    )
+                    else None
+                )
+
+                cells.append(
+                    {
+                        "reveal": reveal,
+                        "can_view_prediction": (
+                            can_view_prediction
+                        ),
+                        "pred": (
+                            prediction
+                            if can_view_prediction
+                            else None
+                        ),
+                        "points": cell_points,
+                    }
+                )
+
+            total_points = (
+                total_points_by_user.get(
+                    user.id,
+                    0,
+                )
+            )
+
+            table_rows.append(
+                {
+                    "user": user,
+                    "cells": cells,
+                    "total_points": total_points,
+                }
+            )
+
+    # -------------------------------------------------------------
+    # Template rendern
+    # -------------------------------------------------------------
+
+    return render(
+        request,
+        "tipping/spieltag.html",
+        {
+            "group": group,
+            "tab": tab,
+            "matchday": matchday,
+            "matchdays": matchdays,
+            "matches": match_headers,
+            "table_rows": table_rows,
+            "prev_md": prev_md,
+            "next_md": next_md,
+            "now": now,
+            "bonus_lock_time": bonus_lock_time,
+            "bonus_reveal": bonus_reveal,
+            "bonus_rows": bonus_rows,
+            "my_bonus": my_bonus,
+            "page_obj": page_obj,
+        },
+    )
+
+@login_required
+def tabelle(request):
+    membership = _require_active_membership(
+        request
+    )
+
+    if not membership:
+        return redirect("join_group")
+
+    group = membership.group
+    tournament = group.tournament
+    now = timezone.now()
+
+    def user_sort_name(user) -> str:
+        return (
+            user.get_username()
+            or user.email
+            or f"user-{user.id}"
+        ).strip().lower()
+
+    # --------------------------------------------------------------
+    # Bonusfreigabe
+    # --------------------------------------------------------------
+
+    season_start = tournament.season_start
+
+    bonus_lock_time = _get_bonus_lock_time(
+        tournament
+    )
+
+    bonus_reveal = bool(
+        bonus_lock_time
+        and now >= bonus_lock_time
+    )
+
+    # --------------------------------------------------------------
+    # Ausgewählte Ansicht
+    # --------------------------------------------------------------
+
+    view = request.GET.get(
+        "view",
+        "mdpoints",
+    )
+
+    if view not in {
+        "mdpoints",
+        "ranks",
+        "rankdiff",
+    }:
+        view = "mdpoints"
+
+    # --------------------------------------------------------------
+    # Anzahl der sichtbaren Spieltagsspalten
+    # --------------------------------------------------------------
+
+    try:
+        count = int(
+            request.GET.get(
+                "count",
+                "8",
+            )
+        )
+
+    except (
+        TypeError,
+        ValueError,
+    ):
+        count = 8
+
+    count = max(
+        4,
+        min(
+            count,
+            15,
+        ),
+    )
+
+    # --------------------------------------------------------------
+    # Alle vorhandenen Spieltage
+    # --------------------------------------------------------------
+
+    matchdays = list(
+        Match.objects
+        .filter(
+            tournament=tournament,
+        )
+        .exclude(
+            matchday__isnull=True,
+        )
+        .values_list(
+            "matchday",
+            flat=True,
+        )
+        .distinct()
+        .order_by(
+            "matchday",
+        )
+    )
+
+    # --------------------------------------------------------------
+    # Leerer Zustand ohne Spieltage
+    # --------------------------------------------------------------
+
+    if not matchdays:
+        return render(
+            request,
+            "tipping/tabelle.html",
+            {
+                "group": group,
+                "view": view,
+                "matchdays": [],
+                "shown_matchdays": [],
+                "table_rows": [],
+                "prev_from": None,
+                "next_from": None,
+                "from_idx": 0,
+                "count": count,
+                "me_id": request.user.id,
+                "bonus_enabled": True,
+                "bonus_reveal": bonus_reveal,
+                "bonus_lock_time": bonus_lock_time,
+                "season_start": season_start,
+                "current_matchday": None,
+                "page_obj": None,
+            },
+        )
+
+    # --------------------------------------------------------------
+    # Aktuellen beziehungsweise nächsten Spieltag bestimmen
+    # --------------------------------------------------------------
+
+    current_matchday = (
+        Match.objects
+        .filter(
+            tournament=tournament,
+            kickoff__gte=now,
+        )
+        .exclude(
+            matchday__isnull=True,
+        )
+        .order_by(
+            "kickoff",
+            "matchday",
+        )
+        .values_list(
+            "matchday",
+            flat=True,
+        )
+        .first()
+    )
+
+    # Falls kein zukünftiges Spiel existiert,
+    # wird der zuletzt begonnene Spieltag verwendet.
+    if current_matchday is None:
+        current_matchday = (
+            Match.objects
+            .filter(
+                tournament=tournament,
+                kickoff__lt=now,
+            )
+            .exclude(
+                matchday__isnull=True,
+            )
+            .order_by(
+                "-kickoff",
+                "-matchday",
+            )
+            .values_list(
+                "matchday",
+                flat=True,
+            )
+            .first()
+        )
+
+    if current_matchday not in matchdays:
+        current_matchday = matchdays[-1]
+
+    # --------------------------------------------------------------
+    # Sichtbares Spieltagsfenster bestimmen
+    # --------------------------------------------------------------
+
+    current_matchday_index = matchdays.index(
+        current_matchday
+    )
+
+    default_from_idx = max(
+        0,
+        current_matchday_index - count + 1,
+    )
+
+    from_parameter = request.GET.get(
+        "from"
+    )
+
+    if from_parameter is None:
+        from_idx = default_from_idx
+
+    else:
+        try:
+            from_idx = int(
+                from_parameter
+            )
+
+        except (
+            TypeError,
+            ValueError,
+        ):
+            from_idx = default_from_idx
+
+    max_from_idx = max(
+        0,
+        len(matchdays) - count,
+    )
+
+    from_idx = max(
+        0,
+        min(
+            from_idx,
+            max_from_idx,
+        ),
+    )
+
+    shown_matchdays = matchdays[
+        from_idx:from_idx + count
+    ]
+
+    shown_matchday_set = set(
+        shown_matchdays
+    )
+
+    prev_from = (
+        max(
+            0,
+            from_idx - count,
+        )
+        if from_idx > 0
+        else None
+    )
+
+    next_from = (
+        min(
+            from_idx + count,
+            max_from_idx,
+        )
+        if from_idx < max_from_idx
+        else None
+    )
+
+    # --------------------------------------------------------------
+    # Aktive Gruppenmitglieder
+    # --------------------------------------------------------------
+
+    memberships = list(
+        GroupMembership.objects
+        .filter(
+            group=group,
+        )
+        .select_related(
+            "user",
+            "user__tip_profile",
+        )
+        .order_by(
+            "user__username",
+            "user_id",
+        )
+    )
+
+    users = [
+        item.user
+        for item in memberships
+    ]
+
+    users_by_id = {
+        user.id: user
+        for user in users
+    }
+
+    user_ids = list(
+        users_by_id.keys()
+    )
+
+    username_by_id = {
+        user.id: user_sort_name(
+            user
+        )
+        for user in users
+    }
+
+    # --------------------------------------------------------------
+    # Spieltage mit vollständigen Ergebnissen
+    # --------------------------------------------------------------
+
+    result_matchdays = set(
+        Match.objects
+        .filter(
+            tournament=tournament,
+            home_score__isnull=False,
+            away_score__isnull=False,
+        )
+        .exclude(
+            matchday__isnull=True,
+        )
+        .values_list(
+            "matchday",
+            flat=True,
+        )
+        .distinct()
+    )
+
+    # --------------------------------------------------------------
+    # Gespeicherte Punkte nach Nutzer und Spieltag aggregieren
+    #
+    # Die Datenbank summiert Prediction.points.
+    # Einzelne Tipps werden hier nicht mehr neu berechnet.
+    # --------------------------------------------------------------
+
+    points_by_user_md = {
+        user_id: defaultdict(int)
+        for user_id in user_ids
+    }
+
+    stored_point_rows = (
         Prediction.objects
         .filter(
             group=group,
+            user_id__in=user_ids,
             match__tournament=tournament,
+            match__matchday__isnull=False,
             match__home_score__isnull=False,
             match__away_score__isnull=False,
+            points__isnull=False,
         )
-        .select_related("match", "user")
+        .values(
+            "user_id",
+            "match__matchday",
+        )
+        .annotate(
+            total=Sum("points"),
+        )
     )
 
-    total_points_all = {u.id: 0 for u in users}
-    for pr in finished_preds:
-        total_points_all[pr.user_id] = total_points_all.get(pr.user_id, 0) + points_for_prediction(pr.match, pr)
+    for row in stored_point_rows:
+        user_id = row["user_id"]
+        matchday = row[
+            "match__matchday"
+        ]
 
-    # ----------------------------------------------------------------------
-    # ✅ BONUS: +5 Punkte pro richtigem Bonustipp (nur wenn Bonus "reveal")
-    # ----------------------------------------------------------------------
-    bonus_points_by_user = defaultdict(int)
+        if (
+            user_id in points_by_user_md
+            and matchday is not None
+        ):
+            points_by_user_md[
+                user_id
+            ][
+                matchday
+            ] = row["total"] or 0
+
+    # --------------------------------------------------------------
+    # Gesamtpunkte aus normalen Tipps
+    # --------------------------------------------------------------
+
+    total_points_all = {
+        user_id: sum(
+            points_by_user_md[
+                user_id
+            ].values()
+        )
+        for user_id in user_ids
+    }
+
+    # --------------------------------------------------------------
+    # Bonuspunkte
+    # --------------------------------------------------------------
+
+    bonus_points_by_user = defaultdict(
+        int
+    )
 
     if bonus_reveal:
         all_bonus = list(
             BonusPrediction.objects
-            .filter(group=group, tournament=tournament, user__in=users)
-            .select_related("user")
+            .filter(
+                group=group,
+                tournament=tournament,
+                user_id__in=user_ids,
+            )
         )
 
-        bonus_by_user = defaultdict(list)
-        for bp in all_bonus:
-            bonus_by_user[bp.user_id].append(bp)
+        bonus_by_user = defaultdict(
+            list
+        )
 
-        for u in users:
-            bonus_points_by_user[u.id] = bonus_points_for_user(
-                tournament,
-                bonus_by_user.get(u.id, [])
+        for bonus_prediction in all_bonus:
+            bonus_by_user[
+                bonus_prediction.user_id
+            ].append(
+                bonus_prediction
             )
 
-        # Bonuspunkte auf Σ draufaddieren
-        for u in users:
-            total_points_all[u.id] = total_points_all.get(u.id, 0) + bonus_points_by_user.get(u.id, 0)
+        for user in users:
+            bonus_points = (
+                bonus_points_for_user(
+                    tournament,
+                    bonus_by_user.get(
+                        user.id,
+                        [],
+                    ),
+                )
+            )
 
-    # ----------------------------------------------------------------------
-    # Spalten-Fenster: md_points / ranks / rankdiff nur für shown_matchdays
-    # ----------------------------------------------------------------------
-    matches = list(
-        Match.objects
-        .filter(tournament=tournament, matchday__in=shown_matchdays)
-        .order_by("matchday", "kickoff", "home_team")
-    )
+            bonus_points_by_user[
+                user.id
+            ] = bonus_points
 
-    matches_by_md = {md: [] for md in shown_matchdays}
-    for m in matches:
-        matches_by_md[m.matchday].append(m)
+            total_points_all[
+                user.id
+            ] += bonus_points
 
-    match_ids = [m.id for m in matches]
+    # --------------------------------------------------------------
+    # Rangpositionen und Rangveränderungen
+    #
+    # Die kumulativen Werte müssen weiterhin für alle Nutzer
+    # berechnet werden. Gespeichert werden aber nur die Werte
+    # der aktuell sichtbaren Spieltagsspalten.
+    # --------------------------------------------------------------
 
-    all_preds = list(
-        Prediction.objects
-        .filter(group=group, match_id__in=match_ids, user__in=users)
-        .select_related("user", "match")
-    )
-    pred_map = {(p.user_id, p.match_id): p for p in all_preds}
+    rank_by_user_md = {
+        user_id: {}
+        for user_id in user_ids
+    }
 
-    # md_points[user_id][md] = int oder None (wenn an dem Spieltag noch keine Ergebnisse existieren)
-    md_points = {u.id: {md: None for md in shown_matchdays} for u in users}
+    rankdiff_by_user_md = {
+        user_id: {}
+        for user_id in user_ids
+    }
 
-    for u in users:
-        for md in shown_matchdays:
-            md_matches = matches_by_md.get(md, [])
-            if not md_matches:
-                md_points[u.id][md] = None
-                continue
+    cumulative_points = {
+        user_id: 0
+        for user_id in user_ids
+    }
 
-            scored_any = False
-            total = 0
+    previous_rank = {
+        user_id: None
+        for user_id in user_ids
+    }
 
-            for m in md_matches:
-                if m.home_score is None or m.away_score is None:
-                    continue
-                scored_any = True
-                p = pred_map.get((u.id, m.id))
-                total += points_for_prediction(m, p)
+    for matchday in matchdays:
+        if matchday not in result_matchdays:
+            if matchday in shown_matchday_set:
+                for user_id in user_ids:
+                    rank_by_user_md[
+                        user_id
+                    ][
+                        matchday
+                    ] = None
 
-            md_points[u.id][md] = total if scored_any else None
+                    rankdiff_by_user_md[
+                        user_id
+                    ][
+                        matchday
+                    ] = None
 
-    # --- Ränge pro Spieltag -------------------------------------------------
-    rank_by_md = {md: {} for md in shown_matchdays}
-
-    for md in shown_matchdays:
-        any_results = any(
-            (m.home_score is not None and m.away_score is not None)
-            for m in matches_by_md.get(md, [])
-        )
-        if not any_results:
-            for u in users:
-                rank_by_md[md][u.id] = None
             continue
 
-        sortable = []
-        for u in users:
-            pts = md_points[u.id][md]
-            pts = pts if pts is not None else 0
-            sortable.append((pts, u.username.lower(), u.id))
+        # Punkte des aktuellen Spieltags zu den
+        # kumulierten Punkten addieren.
+        for user_id in user_ids:
+            cumulative_points[
+                user_id
+            ] += points_by_user_md[
+                user_id
+            ].get(
+                matchday,
+                0,
+            )
 
-        sortable.sort(key=lambda x: (-x[0], x[1]))
+        sorted_ids_for_matchday = sorted(
+            user_ids,
+            key=lambda user_id: (
+                -cumulative_points[
+                    user_id
+                ],
+                username_by_id[
+                    user_id
+                ],
+                user_id,
+            ),
+        )
 
-        rank = 0
-        last_pts = None
-        for idx, (pts, _name, uid) in enumerate(sortable, start=1):
-            if last_pts is None or pts != last_pts:
-                rank = idx
-                last_pts = pts
-            rank_by_md[md][uid] = rank
+        current_ranks = {}
 
-    # --- Platzierungsdifferenz (vs vorherige Spalte im Fenster) -------------
-    rankdiff_by_md = {md: {} for md in shown_matchdays}
+        current_rank = 0
+        previous_points = None
 
-    for i, md in enumerate(shown_matchdays):
-        prev_md_local = shown_matchdays[i - 1] if i > 0 else None
+        for position, user_id in enumerate(
+            sorted_ids_for_matchday,
+            start=1,
+        ):
+            user_points = cumulative_points[
+                user_id
+            ]
 
-        for u in users:
-            cur = rank_by_md[md].get(u.id)
+            if (
+                previous_points is None
+                or user_points
+                != previous_points
+            ):
+                current_rank = position
+                previous_points = user_points
 
-            if prev_md_local is None:
-                rankdiff_by_md[md][u.id] = None
-                continue
+            current_ranks[
+                user_id
+            ] = current_rank
 
-            prev = rank_by_md[prev_md_local].get(u.id)
+        for user_id in user_ids:
+            old_rank = previous_rank[
+                user_id
+            ]
 
-            if cur is None or prev is None:
-                rankdiff_by_md[md][u.id] = None
-            else:
-                # positiv = verbessert (z.B. von 5 auf 3 -> +2)
-                rankdiff_by_md[md][u.id] = prev - cur
+            new_rank = current_ranks[
+                user_id
+            ]
 
-    # --- Template Rows ------------------------------------------------------
+            if matchday in shown_matchday_set:
+                rank_by_user_md[
+                    user_id
+                ][
+                    matchday
+                ] = new_rank
+
+                if old_rank is None:
+                    rankdiff_by_user_md[
+                        user_id
+                    ][
+                        matchday
+                    ] = None
+
+                else:
+                    rankdiff_by_user_md[
+                        user_id
+                    ][
+                        matchday
+                    ] = (
+                        old_rank - new_rank
+                    )
+
+            previous_rank[
+                user_id
+            ] = new_rank
+
+    # --------------------------------------------------------------
+    # Nutzer global sortieren
+    #
+    # Bonuspunkte werden nach ihrer Freigabe in der
+    # Gesamtplatzierung berücksichtigt.
+    # --------------------------------------------------------------
+
+    sorted_user_ids = sorted(
+        user_ids,
+        key=lambda user_id: (
+            -total_points_all.get(
+                user_id,
+                0,
+            ),
+            username_by_id[
+                user_id
+            ],
+            user_id,
+        ),
+    )
+
+    # --------------------------------------------------------------
+    # Teilnehmer paginieren
+    # --------------------------------------------------------------
+
+    paginator = Paginator(
+        sorted_user_ids,
+        GROUP_PAGE_SIZE,
+    )
+
+    page_obj = paginator.get_page(
+        request.GET.get("page")
+    )
+
+    page_user_ids = list(
+        page_obj.object_list
+    )
+
+    # --------------------------------------------------------------
+    # Tabellenzeilen nur für die sichtbare Teilnehmerseite
+    # --------------------------------------------------------------
+
     table_rows = []
-    for u in users:
+
+    for user_id in page_user_ids:
+        user = users_by_id[
+            user_id
+        ]
+
         if view == "mdpoints":
-            cells = [md_points[u.id][md] for md in shown_matchdays]
+            cells = [
+                (
+                    points_by_user_md[
+                        user_id
+                    ].get(
+                        matchday,
+                        0,
+                    )
+                    if matchday
+                    in result_matchdays
+                    else None
+                )
+                for matchday in shown_matchdays
+            ]
+
         elif view == "ranks":
-            cells = [rank_by_md[md][u.id] for md in shown_matchdays]
-        else:  # rankdiff
-            cells = [rankdiff_by_md[md][u.id] for md in shown_matchdays]
+            cells = [
+                rank_by_user_md[
+                    user_id
+                ].get(
+                    matchday
+                )
+                for matchday in shown_matchdays
+            ]
 
-        table_rows.append({
-            "user": u,
-            "cells": cells,
-            "bonus": bonus_points_by_user.get(u.id, 0) if bonus_reveal else None,  # optional im Template
-            "total": total_points_all.get(u.id, 0),  # enthält Bonus nur wenn reveal
-        })
+        else:
+            cells = [
+                rankdiff_by_user_md[
+                    user_id
+                ].get(
+                    matchday
+                )
+                for matchday in shown_matchdays
+            ]
 
-    # Sortierung wie Kicktipp: Σ absteigend, dann Username
-    table_rows.sort(key=lambda r: (-r["total"], r["user"].username.lower()))
+        table_rows.append(
+            {
+                "user": user,
+                "cells": cells,
+                "bonus": (
+                    bonus_points_by_user.get(
+                        user_id,
+                        0,
+                    )
+                    if bonus_reveal
+                    else None
+                ),
+                "total": (
+                    total_points_all.get(
+                        user_id,
+                        0,
+                    )
+                ),
+            }
+        )
 
-    return render(request, "tipping/tabelle.html", {
-        "group": group,
-        "view": view,
-        "matchdays": matchdays,
-        "shown_matchdays": shown_matchdays,
-        "table_rows": table_rows,
-        "prev_from": prev_from,
-        "next_from": next_from,
-        "count": count,
-        "me_id": request.user.id,
-        "bonus_enabled": True,
-        "bonus_reveal": bonus_reveal,
-        "season_start": season_start,
-    })
-    
+    # --------------------------------------------------------------
+    # Template rendern
+    # --------------------------------------------------------------
+
+    return render(
+        request,
+        "tipping/tabelle.html",
+        {
+            "group": group,
+            "view": view,
+            "matchdays": matchdays,
+            "shown_matchdays": shown_matchdays,
+            "table_rows": table_rows,
+            "prev_from": prev_from,
+            "next_from": next_from,
+            "from_idx": from_idx,
+            "count": count,
+            "current_matchday": (
+                current_matchday
+            ),
+            "me_id": request.user.id,
+            "bonus_enabled": True,
+            "bonus_reveal": bonus_reveal,
+            "bonus_lock_time": (
+                bonus_lock_time
+            ),
+            "season_start": season_start,
+            "page_obj": page_obj,
+        },
+    )
     
 @login_required
 def join_group(request):
@@ -850,11 +2537,14 @@ def user_stats(request, user_id: int):
     tournament = group.tournament
 
     # Ziel-User muss Mitglied der aktiven Gruppe sein
-    target_user = get_object_or_404(
-        User,
-        id=user_id,
-        groupmembership__group=group,
-    )
+    target_membership = get_object_or_404(
+    GroupMembership.objects
+    .select_related("user"),
+    group=group,
+    user_id=user_id,
+)
+
+    target_user = target_membership.user
 
     # Nur Spiele mit Ergebnis (sonst kann man keine Punkte/Tabellen berechnen)
     matches_with_result = Match.objects.filter(
@@ -907,7 +2597,10 @@ def user_stats(request, user_id: int):
             tip_counts["Remis"] += 1
 
         # B) Trefferkategorie
-        pts = points_for_prediction(m, p)
+        pts = _prediction_points(m, p)
+
+        if pts is None:
+            continue
         if pts == 4:
             hit_counts["Ergebnis"] += 1
         elif pts == 3:
@@ -999,13 +2692,15 @@ def create_group(request: HttpRequest):
         if form.is_valid():
             try:
                 with transaction.atomic():
-                    group = form.save()
+                    group = form.save(commit=False)
+                    group.owner = request.user
+                    group.save()
 
                     GroupMembership.objects.create(
-                        user=request.user,
-                        group=group,
-                        is_creator=True,
-                    )
+                    user=request.user,
+                    group=group,
+                    is_creator=True,
+    )
 
                 request.session["active_group_id"] = group.id
 
@@ -1022,6 +2717,317 @@ def create_group(request: HttpRequest):
 
     return render(request, "tipping/create_group.html", {"form": form})
 
+@login_required
+def my_groups(request):
+    active_membership = _require_active_membership(request)
+
+    active_group_id = (
+        active_membership.group_id
+        if active_membership
+        else None
+    )
+
+    memberships = list(
+        GroupMembership.objects
+        .filter(user=request.user)
+        .select_related(
+            "group__tournament",
+            "group__owner",
+        )
+        .annotate(
+            member_count=Count(
+                "group__memberships",
+                distinct=True,
+            )
+        )
+        .order_by("group__name")
+    )
+
+    group_rows = []
+
+    for membership in memberships:
+        current_group = membership.group
+
+        # owner ist die Hauptinformation.
+        # is_creator bleibt als Fallback für ältere Datensätze.
+        is_owner = (
+            current_group.owner_id == request.user.id
+            or (
+                current_group.owner_id is None
+                and membership.is_creator
+            )
+        )
+
+        transfer_candidates = []
+
+        if is_owner:
+            transfer_candidates = list(
+                GroupMembership.objects
+                .filter(group=current_group)
+                .exclude(user=request.user)
+                .select_related("user")
+                .order_by("user__username")
+            )
+
+        group_rows.append({
+            "membership": membership,
+            "group": current_group,
+            "is_owner": is_owner,
+            "is_active": (
+                current_group.id == active_group_id
+            ),
+            "member_count": membership.member_count,
+            "transfer_candidates": transfer_candidates,
+        })
+
+    return render(
+        request,
+        "tipping/my_groups.html",
+        {
+            "group": (
+                active_membership.group
+                if active_membership
+                else None
+            ),
+            "group_rows": group_rows,
+            "active_group_id": active_group_id,
+        },
+    )
+    
+@login_required
+@require_POST
+def transfer_group_ownership(
+    request,
+    group_id,
+):
+    new_owner_id = (
+        request.POST
+        .get("new_owner_id", "")
+        .strip()
+    )
+
+    if not new_owner_id.isdigit():
+        messages.error(
+            request,
+            (
+                "Selecciona un nuevo "
+                "administrador válido."
+            ),
+        )
+        return redirect("my_groups")
+
+    with transaction.atomic():
+        current_group = get_object_or_404(
+            Group.objects.select_for_update(),
+            id=group_id,
+        )
+
+        current_membership = (
+            GroupMembership.objects
+            .filter(
+                group=current_group,
+                user=request.user,
+            )
+            .first()
+        )
+
+        is_owner = (
+            current_group.owner_id
+            == request.user.id
+            or (
+                current_group.owner_id is None
+                and current_membership is not None
+                and current_membership.is_creator
+            )
+        )
+
+        if not is_owner:
+            messages.error(
+                request,
+                (
+                    "No tienes permiso para "
+                    "administrar este grupo."
+                ),
+            )
+            return redirect("my_groups")
+
+        if int(new_owner_id) == request.user.id:
+            messages.error(
+                request,
+                (
+                    "Ya eres el administrador "
+                    "de este grupo."
+                ),
+            )
+            return redirect("my_groups")
+
+        new_owner_membership = (
+            GroupMembership.objects
+            .select_for_update()
+            .select_related("user")
+            .filter(
+                group=current_group,
+                user_id=new_owner_id,
+            )
+            .first()
+        )
+
+        if not new_owner_membership:
+            messages.error(
+                request,
+                (
+                    "El nuevo administrador debe "
+                    "ser miembro del grupo."
+                ),
+            )
+            return redirect("my_groups")
+
+        # Zuerst den eigentlichen Eigentümer ändern.
+        current_group.owner = (
+            new_owner_membership.user
+        )
+
+        current_group.save(
+            update_fields=["owner"],
+        )
+
+        # Das aktuelle Gruppenobjekt mit dem
+        # neuen Eigentümer verwenden.
+        new_owner_membership.group = (
+            current_group
+        )
+
+        GroupMembership.objects.filter(
+            group=current_group,
+        ).update(
+            is_creator=False,
+        )
+
+        new_owner_membership.is_creator = True
+
+        new_owner_membership.save(
+            update_fields=["is_creator"],
+        )
+
+        new_owner_name = (
+            new_owner_membership.user.username
+            or new_owner_membership.user.email
+            or f"Jugador {new_owner_membership.user_id}"
+        )
+
+        group_name = current_group.name
+
+    messages.success(
+        request,
+        (
+            f"La administración de «{group_name}» "
+            f"fue transferida a {new_owner_name}."
+        ),
+    )
+
+    return redirect("my_groups")
+
+@login_required
+@require_POST
+def delete_group(request, group_id):
+    confirmation = (
+        request.POST
+        .get("confirmation", "")
+        .strip()
+    )
+
+    with transaction.atomic():
+        current_group = get_object_or_404(
+            Group.objects
+            .select_for_update()
+            .select_related("owner"),
+            id=group_id,
+        )
+
+        current_membership = (
+            GroupMembership.objects
+            .filter(
+                group=current_group,
+                user=request.user,
+            )
+            .first()
+        )
+
+        is_owner = (
+            current_group.owner_id == request.user.id
+            or (
+                current_group.owner_id is None
+                and current_membership is not None
+                and current_membership.is_creator
+            )
+        )
+
+        if not is_owner:
+            messages.error(
+                request,
+                "No tienes permiso para eliminar este grupo.",
+            )
+            return redirect("my_groups")
+
+        if confirmation != current_group.name:
+            messages.error(
+                request,
+                (
+                    "El nombre introducido no coincide con "
+                    "el nombre del grupo."
+                ),
+            )
+            return redirect("my_groups")
+
+        group_name = current_group.name
+
+        was_active_group = (
+            request.session.get("active_group_id")
+            == current_group.id
+        )
+
+        # Gruppenspezifische Tipps ausdrücklich löschen.
+        Prediction.objects.filter(
+            group=current_group,
+        ).delete()
+
+        BonusPrediction.objects.filter(
+            group=current_group,
+        ).delete()
+
+        GroupMembership.objects.filter(
+            group=current_group,
+        ).delete()
+
+        current_group.delete()
+
+    # Falls die aktive Gruppe gelöscht wurde,
+    # eine andere Mitgliedschaft aktivieren.
+    if was_active_group:
+        next_membership = (
+            GroupMembership.objects
+            .filter(user=request.user)
+            .select_related("group")
+            .order_by("id")
+            .first()
+        )
+
+        if next_membership:
+            request.session["active_group_id"] = (
+                next_membership.group_id
+            )
+        else:
+            request.session.pop(
+                "active_group_id",
+                None,
+            )
+
+    messages.success(
+        request,
+        f"El grupo «{group_name}» fue eliminado permanentemente.",
+    )
+
+    return redirect("my_groups")
 
 @login_required
 @require_POST
@@ -1030,71 +3036,380 @@ def set_active_group(request: HttpRequest):
 
     membership = (
         GroupMembership.objects
-        .filter(user=request.user, group_id=group_id)
+        .filter(
+            user=request.user,
+            group_id=group_id,
+        )
         .select_related("group")
         .first()
     )
 
     if not membership:
-        messages.error(request, "Du bist nicht Mitglied dieser Gruppe.")
-        return redirect(request.META.get("HTTP_REFERER", "tippen"))
+        messages.error(
+            request,
+            "No perteneces a este grupo.",
+        )
+        return redirect("dashboard")
 
-    request.session["active_group_id"] = membership.group_id
-    messages.success(request, f"Aktive Gruppe: {membership.group.name}")
-    return redirect(request.META.get("HTTP_REFERER", "tippen"))
+    request.session["active_group_id"] = (
+        membership.group_id
+    )
+
+    messages.success(
+        request,
+        (
+            "Grupo activo: "
+            f"{membership.group.name}"
+        ),
+    )
+
+    return redirect("dashboard")
+
+@login_required
+@require_POST
+def leave_group(request, group_id):
+    with transaction.atomic():
+        membership = get_object_or_404(
+            GroupMembership.objects
+            .select_for_update()
+            .select_related(
+                "group__owner",
+            ),
+            user=request.user,
+            group_id=group_id,
+        )
+
+        group = membership.group
+
+        is_owner = (
+            group.owner_id == request.user.id
+            or (
+                group.owner_id is None
+                and membership.is_creator
+            )
+        )
+
+        if is_owner:
+            messages.error(
+                request,
+                (
+                    "No puedes abandonar un grupo "
+                    "que administras. Primero debes "
+                    "transferir la administración "
+                    "o eliminar el grupo."
+                ),
+            )
+            return redirect("my_groups")
+
+        was_active_group = (
+            request.session.get(
+                "active_group_id"
+            )
+            == group.id
+        )
+
+        group_name = group.name
+
+        # Gruppenspezifische persönliche Daten
+        # vor der Mitgliedschaft löschen.
+        Prediction.objects.filter(
+            user=request.user,
+            group=group,
+        ).delete()
+
+        BonusPrediction.objects.filter(
+            user=request.user,
+            group=group,
+        ).delete()
+
+        membership.delete()
+
+    if was_active_group:
+        next_membership = (
+            GroupMembership.objects
+            .filter(user=request.user)
+            .select_related("group")
+            .order_by("id")
+            .first()
+        )
+
+        if next_membership:
+            request.session[
+                "active_group_id"
+            ] = next_membership.group_id
+
+        else:
+            request.session.pop(
+                "active_group_id",
+                None,
+            )
+
+    messages.success(
+        request,
+        (
+            f"Has abandonado el grupo "
+            f"«{group_name}»."
+        ),
+    )
+
+    return redirect("my_groups")
+
+@login_required
+def delete_account(request):
+    """
+    Löscht das Benutzerkonto dauerhaft.
+
+    Die Löschung ist nicht möglich, solange der Benutzer
+    Eigentümer oder ursprünglicher Ersteller einer Gruppe ist.
+    """
+
+    # Regulär zugeordnete eigene Gruppen sowie ältere Gruppen,
+    # bei denen owner noch leer ist, der Nutzer aber is_creator ist.
+    owned_groups = (
+        Group.objects
+        .filter(
+            Q(owner=request.user)
+            | Q(
+                owner__isnull=True,
+                memberships__user=request.user,
+                memberships__is_creator=True,
+            )
+        )
+        .select_related("tournament")
+        .distinct()
+        .order_by("name")
+    )
+
+    account_can_be_deleted = not owned_groups.exists()
+
+    if request.method == "POST":
+        # Die Berechtigung serverseitig erneut prüfen.
+        if not account_can_be_deleted:
+            messages.error(
+                request,
+                (
+                    "No puedes eliminar tu cuenta mientras "
+                    "administras uno o varios grupos. "
+                    "Primero debes transferir la administración "
+                    "o eliminar esos grupos."
+                ),
+            )
+
+            return redirect("delete_account")
+
+        form = DeleteAccountForm(
+            request.POST,
+            user=request.user,
+        )
+
+        if form.is_valid():
+            user = request.user
+
+
+            with transaction.atomic():
+                # Eigene Tipps löschen.
+                Prediction.objects.filter(
+                    user=user,
+                ).delete()
+
+                # Eigene Bonustipps löschen.
+                BonusPrediction.objects.filter(
+                    user=user,
+                ).delete()
+
+                # Mitgliedschaften löschen.
+                GroupMembership.objects.filter(
+                    user=user,
+                ).delete()
+
+                # Das Löschen des Users entfernt durch die
+                # CASCADE-Beziehungen auch das UserProfile und
+                # die allauth-Kontodaten aus der Datenbank.
+                user.delete()
+
+
+
+            # Sitzung vollständig beenden.
+            logout(request)
+
+            # Die Nachricht erst nach logout erzeugen, damit sie in
+            # der neuen anonymen Sitzung erhalten bleibt.
+            messages.success(
+                request,
+                "Tu cuenta fue eliminada permanentemente.",
+            )
+
+            return redirect("account_login")
+
+    else:
+        form = DeleteAccountForm(
+            user=request.user,
+        )
+
+    active_membership = _require_active_membership(request)
+
+    return render(
+        request,
+        "tipping/delete_account.html",
+        {
+            "group": (
+                active_membership.group
+                if active_membership
+                else None
+            ),
+            "form": form,
+            "owned_groups": owned_groups,
+            "account_can_be_deleted": account_can_be_deleted,
+        },
+    )
+
 
 
 @login_required
 def bonus_tips(request):
     membership = _require_active_membership(request)
+
     if not membership:
         return redirect("join_group")
 
     group = membership.group
     tournament = group.tournament
 
-    # ✅ Locking nur, wenn season_start gesetzt ist
-    season_start = tournament.season_start
-    if season_start and timezone.now() >= season_start:
-        messages.error(request, "Bonustipps sind gesperrt.")
-        return redirect("tippen")
-
-    # ✅ existierende Bonustipps laden und als initial setzen
-    existing = BonusPrediction.objects.filter(
-        user=request.user,
-        group=group,
-        tournament=tournament
+    bonus_lock_time = _get_bonus_lock_time(
+        tournament
     )
 
-    initial = {bp.bonus_type: bp.value for bp in existing}
+    # Frühe Prüfung für die normale Seitennavigation.
+    if (
+        bonus_lock_time
+        and timezone.now() >= bonus_lock_time
+    ):
+        messages.error(
+            request,
+            (
+                "Los pronósticos especiales "
+                "ya están cerrados."
+            ),
+        )
+
+        return redirect(
+            f"{reverse('spieltag')}?tab=bonus"
+        )
+
+    existing_predictions = (
+        BonusPrediction.objects
+        .filter(
+            user=request.user,
+            group=group,
+            tournament=tournament,
+        )
+    )
+
+    initial = {
+        prediction.bonus_type: prediction.value
+        for prediction in existing_predictions
+    }
 
     if request.method == "POST":
         form = BonusPredictionForm(
             request.POST,
-            tournament=tournament   # ✅ WICHTIG
+            tournament=tournament,
         )
 
         if form.is_valid():
-            for field, value in form.cleaned_data.items():
-                BonusPrediction.objects.update_or_create(
-                    user=request.user,
-                    group=group,
-                    tournament=tournament,
-                    bonus_type=field,
-                    defaults={"value": value},
+            with transaction.atomic():
+                # Turnier und erstes Spiel während der
+                # abschließenden Fristprüfung sperren.
+                locked_tournament = (
+                    Tournament.objects
+                    .select_for_update()
+                    .get(pk=tournament.pk)
                 )
 
-            messages.success(request, "Bonustipps gespeichert.")
+                first_match = (
+                    Match.objects
+                    .select_for_update()
+                    .filter(
+                        tournament=locked_tournament
+                    )
+                    .order_by("kickoff")
+                    .first()
+                )
+
+                current_lock_time = (
+                    first_match.kickoff
+                    if first_match
+                    else locked_tournament.season_start
+                )
+
+                # Frist unmittelbar vor dem Schreiben
+                # erneut serverseitig kontrollieren.
+                if (
+                    current_lock_time
+                    and timezone.now()
+                    >= current_lock_time
+                ):
+                    messages.error(
+                        request,
+                        (
+                            "Los pronósticos especiales "
+                            "ya están cerrados."
+                        ),
+                    )
+
+                    return redirect(
+                        (
+                            f"{reverse('spieltag')}"
+                            "?tab=bonus"
+                        )
+                    )
+
+                allowed_bonus_types = {
+                    bonus_type
+                    for bonus_type, _label
+                    in BonusPrediction.BONUS_TYPES
+                }
+
+                for bonus_type in allowed_bonus_types:
+                    value = form.cleaned_data.get(
+                        bonus_type
+                    )
+
+                    if value is None:
+                        continue
+
+                    BonusPrediction.objects.update_or_create(
+                        user=request.user,
+                        group=group,
+                        tournament=locked_tournament,
+                        bonus_type=bonus_type,
+                        defaults={
+                            "value": value,
+                        },
+                    )
+
+            messages.success(
+                request,
+                (
+                    "Los pronósticos especiales "
+                    "se guardaron correctamente."
+                ),
+            )
+
             return redirect("bonus_tips")
 
     else:
         form = BonusPredictionForm(
             initial=initial,
-            tournament=tournament   # ✅ WICHTIG
+            tournament=tournament,
         )
 
-    return render(request, "tipping/bonus.html", {
-        "group": group,
-        "form": form,
-        "season_start": season_start,
-    })
+    return render(
+        request,
+        "tipping/bonus.html",
+        {
+            "group": group,
+            "form": form,
+            "bonus_lock_time": bonus_lock_time,
+        },
+    )

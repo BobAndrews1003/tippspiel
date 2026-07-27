@@ -5,6 +5,7 @@ from __future__ import annotations
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
+from django.core.validators import FileExtensionValidator
 
 from .models import Group, Tournament, Match, BonusPrediction
 
@@ -143,3 +144,59 @@ class BonusPredictionForm(forms.Form):
         if r1 and r2 and r1 == r2:
             self.add_error("relegation2", "Absteiger 2 darf nicht identisch mit Absteiger 1 sein.")
         return cleaned
+    
+class DeleteAccountForm(forms.Form):
+    password = forms.CharField(
+        label="Contraseña actual",
+        strip=False,
+        widget=forms.PasswordInput(
+            attrs={
+                "class": "input",
+                "autocomplete": "current-password",
+                "placeholder": "Introduce tu contraseña",
+            }
+        ),
+    )
+
+    confirmation = forms.CharField(
+        label='Escribe "ELIMINAR" para confirmar',
+        max_length=20,
+        widget=forms.TextInput(
+            attrs={
+                "class": "input",
+                "autocomplete": "off",
+                "placeholder": "ELIMINAR",
+            }
+        ),
+    )
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+
+    def clean_password(self):
+        password = self.cleaned_data["password"]
+
+        if self.user is None:
+            raise forms.ValidationError(
+                "No se pudo comprobar la cuenta."
+            )
+
+        if not self.user.check_password(password):
+            raise forms.ValidationError(
+                "La contraseña no es correcta."
+            )
+
+        return password
+
+    def clean_confirmation(self):
+        confirmation = self.cleaned_data["confirmation"]
+
+        if confirmation.strip().upper() != "ELIMINAR":
+            raise forms.ValidationError(
+                'Debes escribir exactamente "ELIMINAR".'
+            )
+
+        return confirmation
+    
+    
