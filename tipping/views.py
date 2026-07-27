@@ -4,6 +4,11 @@ from collections import Counter, defaultdict
 
 from typing import Optional
 
+from .bonus_scoring import (
+    bonus_points_for_user,
+    get_bonus_lock_time,
+)
+
 from django.core.paginator import Paginator
 from django.contrib import messages
 from django.contrib.auth import get_user_model
@@ -58,58 +63,6 @@ def _prediction_points(
 
     return prediction.points
 
-
-def bonus_points_for_user(tournament, preds: list[BonusPrediction]) -> int:
-    """
-    +5 Punkte pro richtigem Bonustipp.
-
-    Tournament-Felder:
-      autumn_champion, champion, first_coach_sacked, top_scorer, relegated_teams (kommagetrennt)
-
-    BonusPrediction-Typen:
-      herbstmeister, meister, trainer_first, topscorer, relegation1, relegation2
-    """
-    def _norm(s: str) -> str:
-        return (s or "").strip().lower()
-
-    real_herbst = _norm(getattr(tournament, "autumn_champion", ""))
-    real_meister = _norm(getattr(tournament, "champion", ""))
-    real_trainer = _norm(getattr(tournament, "first_coach_sacked", ""))
-    real_topscorer = _norm(getattr(tournament, "top_scorer", ""))
-
-    relegated_raw = getattr(tournament, "relegated_teams", "") or ""
-    relegated_set = {_norm(x) for x in relegated_raw.split(",") if _norm(x)}
-
-    pts = 0
-
-    # ✅ schützt gegen Doppelwertung bei relegation1/relegation2
-    counted_relegations: set[str] = set()
-
-    for bp in preds:
-        btype = bp.bonus_type
-        val = _norm(bp.value)
-
-        if not val:
-            continue
-
-        if btype == "herbstmeister" and real_herbst and val == real_herbst:
-            pts += 5
-
-        elif btype == "meister" and real_meister and val == real_meister:
-            pts += 5
-
-        elif btype == "trainer_first" and real_trainer and val == real_trainer:
-            pts += 5
-
-        elif btype == "topscorer" and real_topscorer and val == real_topscorer:
-            pts += 5
-
-        elif btype in {"relegation1", "relegation2"} and relegated_set and val in relegated_set:
-            if val not in counted_relegations:
-                pts += 5
-                counted_relegations.add(val)
-
-    return pts
 
 
 
@@ -221,23 +174,6 @@ def _prev_next_md(tournament, matchday):
     )
     return prev_md, next_md
 
-def _get_bonus_lock_time(tournament):
-    """
-    Bonustipps werden mit dem Anstoß des ersten Saisonspiels gesperrt
-    und für alle Teilnehmer sichtbar.
-
-    Falls noch keine Spiele existieren, wird optional season_start
-    als Ersatz verwendet.
-    """
-    first_kickoff = (
-        Match.objects
-        .filter(tournament=tournament)
-        .order_by("kickoff")
-        .values_list("kickoff", flat=True)
-        .first()
-    )
-
-    return first_kickoff or tournament.season_start
 
 
 # ---------------------------------------------------------------------
@@ -540,7 +476,7 @@ def dashboard(request):
     # --------------------------------------------------------------
 
     bonus_lock_time = (
-        _get_bonus_lock_time(
+        get_bonus_lock_time(
             tournament
         )
     )
@@ -1315,7 +1251,7 @@ def spieltag(request):
     if tab not in {"matches", "bonus"}:
         tab = "matches"
 
-    bonus_lock_time = _get_bonus_lock_time(
+    bonus_lock_time = get_bonus_lock_time(
         tournament
     )
 
@@ -1825,7 +1761,7 @@ def tabelle(request):
 
     season_start = tournament.season_start
 
-    bonus_lock_time = _get_bonus_lock_time(
+    bonus_lock_time = get_bonus_lock_time(
         tournament
     )
 
@@ -3275,7 +3211,7 @@ def bonus_tips(request):
     group = membership.group
     tournament = group.tournament
 
-    bonus_lock_time = _get_bonus_lock_time(
+    bonus_lock_time = get_bonus_lock_time(
         tournament
     )
 
