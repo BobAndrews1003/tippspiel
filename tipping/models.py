@@ -1051,6 +1051,15 @@ class GroupStanding(models.Model):
                 ],
                 name="standing_group_total_idx",
             ),
+
+            models.Index(
+                fields=[
+                    "group",
+                    "-match_points",
+                    "user",
+                ],
+                name="standing_group_match_idx",
+            ),
         ]
 
     def __str__(self):
