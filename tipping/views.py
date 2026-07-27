@@ -1679,13 +1679,6 @@ def tabelle(request):
     tournament = group.tournament
     now = timezone.now()
 
-    def user_sort_name(user) -> str:
-        return (
-            user.get_username()
-            or user.email
-            or f"user-{user.id}"
-        ).strip().lower()
-
     # --------------------------------------------------------------
     # Bonusfreigabe
     # --------------------------------------------------------------
@@ -1915,46 +1908,6 @@ def tabelle(request):
     )
 
     # --------------------------------------------------------------
-    # Aktive Gruppenmitglieder
-    # --------------------------------------------------------------
-
-    memberships = list(
-        GroupMembership.objects
-        .filter(
-            group=group,
-        )
-        .select_related(
-            "user",
-            "user__tip_profile",
-        )
-        .order_by(
-            "user__username",
-            "user_id",
-        )
-    )
-
-    users = [
-        item.user
-        for item in memberships
-    ]
-
-    users_by_id = {
-        user.id: user
-        for user in users
-    }
-
-    user_ids = list(
-        users_by_id.keys()
-    )
-
-    username_by_id = {
-        user.id: user_sort_name(
-            user
-        )
-        for user in users
-    }
-
-    # --------------------------------------------------------------
     # Spieltage mit vollständigen Ergebnissen
     # --------------------------------------------------------------
 
@@ -1975,43 +1928,108 @@ def tabelle(request):
         .distinct()
     )
 
-    # --------------------------------------------------------------
-    # Vorbereitete Spieltagswerte
-    #
-    # Punkte, historische Ränge und Rangveränderungen
-    # werden direkt aus MatchdayScore gelesen.
-    # --------------------------------------------------------------
-
-    points_by_user_md = {
-        user_id: {}
-        for user_id in user_ids
-    }
-
-    rank_by_user_md = {
-        user_id: {}
-        for user_id in user_ids
-    }
-
-    rankdiff_by_user_md = {
-        user_id: {}
-        for user_id in user_ids
-    }
-
     visible_result_matchdays = sorted(
         shown_matchday_set.intersection(
             result_matchdays
         )
     )
 
+    # --------------------------------------------------------------
+    # Rangfolge und Pagination direkt in der Datenbank
+    #
+    # Vor der Bonusfreigabe wird nach match_points,
+    # danach nach total_points sortiert.
+    # --------------------------------------------------------------
+
+    ranking_points_field = (
+        "total_points"
+        if bonus_reveal
+        else "match_points"
+    )
+
+    standings_queryset = (
+        GroupStanding.objects
+        .filter(
+            group=group,
+        )
+        .select_related(
+            "user",
+            "user__tip_profile",
+        )
+        .annotate(
+            table_sort_name=Lower(
+                Coalesce(
+                    NullIf(
+                        "user__username",
+                        Value(""),
+                    ),
+                    NullIf(
+                        "user__email",
+                        Value(""),
+                    ),
+                    Concat(
+                        Value("user-"),
+                        Cast(
+                            "user_id",
+                            output_field=CharField(),
+                        ),
+                    ),
+                    output_field=CharField(),
+                )
+            )
+        )
+        .order_by(
+            f"-{ranking_points_field}",
+            "table_sort_name",
+            "user_id",
+        )
+    )
+
+    paginator = Paginator(
+        standings_queryset,
+        GROUP_PAGE_SIZE,
+    )
+
+    page_obj = paginator.get_page(
+        request.GET.get("page")
+    )
+
+    # Erst nach der Datenbank-Pagination werden die
+    # Standing-Objekte der aktuellen Seite ausgewertet.
+    page_standings = list(
+        page_obj.object_list
+    )
+
+    page_user_ids = [
+        standing.user_id
+        for standing in page_standings
+    ]
+
+    # --------------------------------------------------------------
+    # Spieltagswerte nur für die sichtbaren Nutzer laden
+    # --------------------------------------------------------------
+
+    points_by_user_md = defaultdict(
+        dict
+    )
+
+    rank_by_user_md = defaultdict(
+        dict
+    )
+
+    rankdiff_by_user_md = defaultdict(
+        dict
+    )
+
     if (
-        user_ids
+        page_user_ids
         and visible_result_matchdays
     ):
         stored_score_rows = (
             MatchdayScore.objects
             .filter(
                 group=group,
-                user_id__in=user_ids,
+                user_id__in=page_user_ids,
                 matchday__in=(
                     visible_result_matchdays
                 ),
@@ -2051,131 +2069,13 @@ def tabelle(request):
             ] = rank_change
 
     # --------------------------------------------------------------
-    # Vorbereitete Gesamt- und Bonuspunkte
-    #
-    # Vor der Bonusfreigabe werden nur match_points
-    # angezeigt und für die Sortierung verwendet.
-    # --------------------------------------------------------------
-
-    stored_standing_rows = (
-        GroupStanding.objects
-        .filter(
-            group=group,
-            user_id__in=user_ids,
-        )
-        .values_list(
-            "user_id",
-            "match_points",
-            "bonus_points",
-            "total_points",
-        )
-    )
-
-    standing_by_user = {
-        user_id: {
-            "match_points": (
-                match_points or 0
-            ),
-            "bonus_points": (
-                bonus_points or 0
-            ),
-            "total_points": (
-                total_points or 0
-            ),
-        }
-        for (
-            user_id,
-            match_points,
-            bonus_points,
-            total_points,
-        ) in stored_standing_rows
-    }
-
-    total_points_all = {}
-    bonus_points_by_user = defaultdict(
-        int
-    )
-
-    for user_id in user_ids:
-        standing = standing_by_user.get(
-            user_id
-        )
-
-        if standing is None:
-            total_points_all[
-                user_id
-            ] = 0
-
-            continue
-
-        if bonus_reveal:
-            total_points_all[
-                user_id
-            ] = standing[
-                "total_points"
-            ]
-
-            bonus_points_by_user[
-                user_id
-            ] = standing[
-                "bonus_points"
-            ]
-
-        else:
-            total_points_all[
-                user_id
-            ] = standing[
-                "match_points"
-            ]
-
-    # --------------------------------------------------------------
-    # Nutzer global sortieren
-    #
-    # Bonuspunkte werden nach ihrer Freigabe in der
-    # Gesamtplatzierung berücksichtigt.
-    # --------------------------------------------------------------
-
-    sorted_user_ids = sorted(
-        user_ids,
-        key=lambda user_id: (
-            -total_points_all.get(
-                user_id,
-                0,
-            ),
-            username_by_id[
-                user_id
-            ],
-            user_id,
-        ),
-    )
-
-    # --------------------------------------------------------------
-    # Teilnehmer paginieren
-    # --------------------------------------------------------------
-
-    paginator = Paginator(
-        sorted_user_ids,
-        GROUP_PAGE_SIZE,
-    )
-
-    page_obj = paginator.get_page(
-        request.GET.get("page")
-    )
-
-    page_user_ids = list(
-        page_obj.object_list
-    )
-
-    # --------------------------------------------------------------
-    # Tabellenzeilen nur für die sichtbare Teilnehmerseite
+    # Tabellenzeilen der aktuellen Teilnehmerseite
     # --------------------------------------------------------------
 
     table_rows = []
 
-    for user_id in page_user_ids:
-        user = users_by_id[
-            user_id
-        ]
+    for standing in page_standings:
+        user_id = standing.user_id
 
         if view == "mdpoints":
             cells = [
@@ -2215,21 +2115,19 @@ def tabelle(request):
 
         table_rows.append(
             {
-                "user": user,
+                "user": standing.user,
                 "cells": cells,
                 "bonus": (
-                    bonus_points_by_user.get(
-                        user_id,
-                        0,
-                    )
+                    standing.bonus_points or 0
                     if bonus_reveal
                     else None
                 ),
                 "total": (
-                    total_points_all.get(
-                        user_id,
-                        0,
+                    getattr(
+                        standing,
+                        ranking_points_field,
                     )
+                    or 0
                 ),
             }
         )
