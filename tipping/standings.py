@@ -3,11 +3,16 @@ from django.db.models import Count, Q, Sum
 from django.utils import timezone
 
 from .models import (
+    BonusPrediction,
     Group,
     GroupMembership,
     GroupStanding,
     MatchdayScore,
     Prediction,
+)
+
+from .bonus_scoring import (
+    bonus_points_for_user,
 )
 
 @transaction.atomic
@@ -159,93 +164,186 @@ def rebuild_matchday_scores(
     return len(score_rows)
 
 @transaction.atomic
-def rebuild_group_standing(
+def rebuild_group_bonus_points(
     group_id: int,
 ) -> int:
     """
-    Berechnet die aktuelle Gesamttabelle einer Gruppe neu.
+    Berechnet die Bonuspunkte aller aktuellen Mitglieder
+    einer Gruppe neu.
 
-    Die Spielpunkte und die Anzahl exakter Tipps werden
-    aus MatchdayScore aggregiert.
-
-    Bereits gespeicherte Bonuspunkte bleiben erhalten,
-    bis eine eigene Bonusauswertung eingeführt wird.
+    Bonuspunkte werden unabhängig vom Freigabezeitpunkt
+    vorberechnet. Die Views entscheiden, ob sie bereits
+    angezeigt und in der sichtbaren Rangfolge berücksichtigt
+    werden dürfen.
 
     Rückgabewert:
-        Anzahl der erzeugten oder aktualisierten
-        GroupStanding-Zeilen.
+        Anzahl der aktualisierten GroupStanding-Zeilen.
     """
 
-    # Prüft gleichzeitig, ob die Gruppe existiert.
-    Group.objects.only(
-        "id",
-    ).get(
-        pk=group_id,
+    group = (
+        Group.objects
+        .select_related("tournament")
+        .get(
+            pk=group_id,
+        )
     )
 
-    user_ids = list(
-        GroupMembership.objects
+    # Stellt sicher, dass jedes aktuelle Mitglied
+    # eine GroupStanding-Zeile besitzt.
+    rebuild_group_standing(
+        group_id=group_id,
+    )
+
+    standings = list(
+        GroupStanding.objects
+        .select_for_update()
         .filter(
             group_id=group_id,
         )
         .order_by("user_id")
+    )
+
+    if not standings:
+        return 0
+
+    user_ids = [
+        standing.user_id
+        for standing in standings
+    ]
+
+    bonus_predictions = (
+        BonusPrediction.objects
+        .filter(
+            group_id=group_id,
+            tournament_id=group.tournament_id,
+            user_id__in=user_ids,
+        )
+        .order_by(
+            "user_id",
+            "bonus_type",
+        )
+    )
+
+    predictions_by_user = {}
+
+    for prediction in bonus_predictions:
+        predictions_by_user.setdefault(
+            prediction.user_id,
+            [],
+        ).append(
+            prediction
+        )
+
+    updated_at = timezone.now()
+
+    for standing in standings:
+        bonus_points = bonus_points_for_user(
+            group.tournament,
+            predictions_by_user.get(
+                standing.user_id,
+                [],
+            ),
+        )
+
+        standing.bonus_points = bonus_points
+
+        standing.total_points = (
+            standing.match_points
+            + bonus_points
+        )
+
+        standing.updated_at = updated_at
+
+    GroupStanding.objects.bulk_update(
+        standings,
+        [
+            "bonus_points",
+            "total_points",
+            "updated_at",
+        ],
+        batch_size=1000,
+    )
+
+    return len(standings)
+
+
+@transaction.atomic
+def rebuild_group_standing(
+    group_id: int,
+) -> int:
+    """
+    Baut den aktuellen Gesamtstand einer Gruppe neu auf.
+
+    Berücksichtigt nur aktuelle Gruppenmitglieder.
+    Vorhandene Bonuspunkte bleiben erhalten.
+    """
+
+    from django.db.models import Sum
+
+    member_ids = list(
+        GroupMembership.objects
+        .filter(
+            group_id=group_id,
+        )
         .values_list(
             "user_id",
             flat=True,
         )
+        .order_by("user_id")
     )
 
-    # Keine Mitglieder bedeutet:
-    # Es darf auch keine Rangliste mehr geben.
-    if not user_ids:
+    if not member_ids:
         GroupStanding.objects.filter(
             group_id=group_id,
         ).delete()
 
         return 0
 
-    # Alte Ranglistenzeilen ausgeschiedener
-    # Mitglieder entfernen.
+    # Entfernt Ranglistenzeilen von Nutzern,
+    # die nicht mehr Mitglied der Gruppe sind.
     GroupStanding.objects.filter(
         group_id=group_id,
     ).exclude(
-        user_id__in=user_ids,
+        user_id__in=member_ids,
     ).delete()
 
-    aggregates = (
+    score_rows = (
         MatchdayScore.objects
         .filter(
             group_id=group_id,
-            user_id__in=user_ids,
+            user_id__in=member_ids,
         )
-        .values(
-            "user_id",
-        )
+        .values("user_id")
         .annotate(
-            match_points=Sum(
-                "points",
-                default=0,
-            ),
+            match_points=Sum("points"),
             exact_predictions=Sum(
-                "exact_predictions",
-                default=0,
+                "exact_predictions"
             ),
         )
     )
 
-    aggregates_by_user = {
-        row["user_id"]: row
-        for row in aggregates
+    scores_by_user = {
+        row["user_id"]: {
+            "match_points": (
+                row["match_points"]
+                or 0
+            ),
+            "exact_predictions": (
+                row["exact_predictions"]
+                or 0
+            ),
+        }
+        for row in score_rows
     }
 
-    # Bonuspunkte werden momentan noch nicht
-    # automatisch berechnet. Bereits vorhandene
-    # Werte dürfen beim Rebuild nicht verloren gehen.
-    existing_bonus_points = dict(
+    # Bonuspunkte werden bewahrt, weil diese Funktion
+    # auch vor rebuild_group_bonus_points() aufgerufen
+    # wird.
+    bonus_by_user = dict(
         GroupStanding.objects
         .filter(
             group_id=group_id,
-            user_id__in=user_ids,
+            user_id__in=member_ids,
         )
         .values_list(
             "user_id",
@@ -254,33 +352,33 @@ def rebuild_group_standing(
     )
 
     updated_at = timezone.now()
-    standing_rows = []
+    standings = []
 
-    for user_id in user_ids:
-        values = aggregates_by_user.get(
+    for user_id in member_ids:
+        score_data = scores_by_user.get(
             user_id,
+            {},
         )
 
-        match_points = (
-            values["match_points"]
-            if values
-            else 0
+        match_points = score_data.get(
+            "match_points",
+            0,
         )
 
-        exact_predictions = (
-            values["exact_predictions"]
-            if values
-            else 0
+        exact_predictions = score_data.get(
+            "exact_predictions",
+            0,
         )
 
         bonus_points = (
-            existing_bonus_points.get(
+            bonus_by_user.get(
                 user_id,
                 0,
             )
+            or 0
         )
 
-        standing_rows.append(
+        standings.append(
             GroupStanding(
                 group_id=group_id,
                 user_id=user_id,
@@ -298,12 +396,9 @@ def rebuild_group_standing(
         )
 
     GroupStanding.objects.bulk_create(
-        standing_rows,
+        standings,
+        batch_size=1000,
         update_conflicts=True,
-        unique_fields=[
-            "group",
-            "user",
-        ],
         update_fields=[
             "match_points",
             "bonus_points",
@@ -311,53 +406,71 @@ def rebuild_group_standing(
             "exact_predictions",
             "updated_at",
         ],
-        batch_size=1000,
+        unique_fields=[
+            "group",
+            "user",
+        ],
     )
 
-    return len(standing_rows)
+    return len(standings)
+
 
 def _competition_ranks(
-    user_ids: list[int],
-    cumulative_points: dict[int, int],
-    username_by_id: dict[int, str],
-) -> dict[int, int]:
+    user_ids,
+    cumulative_points,
+    username_by_id,
+):
     """
-    Erstellt Wettbewerbsränge:
+    Berechnet Wettbewerbsränge anhand der kumulierten
+    Punkte.
 
-    Punkte:
-        10, 8, 8, 5
+    Gleiche Punktzahlen erhalten denselben Rang.
+    Der folgende Rang wird entsprechend übersprungen:
 
-    Ränge:
         1, 2, 2, 4
+
+    Benutzername und Benutzer-ID dienen nur einer
+    stabilen, reproduzierbaren Sortierung bei Gleichstand.
     """
 
     sorted_user_ids = sorted(
         user_ids,
         key=lambda user_id: (
-            -cumulative_points[user_id],
-            username_by_id[user_id],
+            -cumulative_points.get(
+                user_id,
+                0,
+            ),
+            (
+                username_by_id.get(
+                    user_id,
+                    "",
+                )
+                or ""
+            ).strip().lower(),
             user_id,
         ),
     )
 
     ranks = {}
-    current_rank = 0
-    previous_points = None
 
-    for position, user_id in enumerate(
+    previous_points = None
+    current_rank = 0
+
+    for index, user_id in enumerate(
         sorted_user_ids,
         start=1,
     ):
-        user_points = cumulative_points[
-            user_id
-        ]
+        points = cumulative_points.get(
+            user_id,
+            0,
+        )
 
         if (
             previous_points is None
-            or user_points != previous_points
+            or points != previous_points
         ):
-            current_rank = position
-            previous_points = user_points
+            current_rank = index
+            previous_points = points
 
         ranks[user_id] = current_rank
 
@@ -631,3 +744,4 @@ def rebuild_group_timeline(
     )
 
     return len(changed_scores)
+

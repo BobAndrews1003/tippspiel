@@ -7,7 +7,7 @@ from .models import (
 )
 from .scoring import recalculate_points_for_match
 from .standings import (
-    rebuild_group_standing,
+    rebuild_group_bonus_points,
     rebuild_group_timeline,
     rebuild_matchday_scores,
 )
@@ -144,8 +144,8 @@ def process_match_change(
             start_matchday=start_matchday,
         )
 
-        rebuild_group_standing(
-            group_id=group_id,
-        )
+        rebuild_group_bonus_points(
+        group_id=group_id,
+)
 
     return len(group_ids)

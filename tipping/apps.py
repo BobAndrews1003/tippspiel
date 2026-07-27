@@ -9,4 +9,5 @@ class TippingConfig(AppConfig):
     name = "tipping"
 
     def ready(self):
+        from . import bonus_signals  # noqa: F401
         from . import signals  # noqa: F401

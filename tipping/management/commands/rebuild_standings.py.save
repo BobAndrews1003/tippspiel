@@ -10,10 +10,15 @@ from tipping.models import (
     MatchdayScore,
 )
 from tipping.standings import (
-    rebuild_group_bonus_points,
+    rebuild_group_standing,
     rebuild_group_timeline,
     rebuild_matchday_scores,
+
+x
 )
+
+
+R
 
 
 class Command(BaseCommand):
@@ -122,10 +127,10 @@ class Command(BaseCommand):
                     timeline_rows = 0
 
                 standing_rows = (
-                    rebuild_group_bonus_points(
-                    group_id=group.id,
-    )
-)
+                    rebuild_group_standing(
+                        group_id=group.id,
+                    )
+                )
 
             processed_groups += 1
             total_matchday_rows += matchday_rows
