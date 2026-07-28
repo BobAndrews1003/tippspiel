@@ -27,15 +27,23 @@ def remember_previous_match_state(
     Merkt sich vor dem Speichern:
 
     - den bisherigen Spieltag,
-    - ob sich Ergebnis oder relevanter Spieltag geändert haben.
+    - das bisherige Turnier,
+    - den bisherigen Ergebnisstatus,
+    - ob sich ein ranglistenrelevanter Wert geändert hat.
     """
+
+    current_has_result = (
+        instance.home_score is not None
+        and instance.away_score is not None
+    )
 
     if not instance.pk:
         instance._previous_matchday = None
+        instance._previous_tournament_id = None
+        instance._previous_had_result = False
 
         instance._standings_relevant_changed = (
-            instance.home_score is not None
-            and instance.away_score is not None
+            current_has_result
         )
 
         return
@@ -49,21 +57,43 @@ def remember_previous_match_state(
             "home_score",
             "away_score",
             "matchday",
+            "tournament_id",
         )
         .first()
     )
 
     if previous_state is None:
         instance._previous_matchday = None
+        instance._previous_tournament_id = None
+        instance._previous_had_result = False
         instance._standings_relevant_changed = True
         return
 
-    previous_matchday = previous_state[
-        "matchday"
-    ]
+    previous_matchday = (
+        previous_state["matchday"]
+    )
+
+    previous_tournament_id = (
+        previous_state["tournament_id"]
+    )
+
+    previous_had_result = (
+        previous_state["home_score"]
+        is not None
+        and previous_state["away_score"]
+        is not None
+    )
 
     instance._previous_matchday = (
         previous_matchday
+    )
+
+    instance._previous_tournament_id = (
+        previous_tournament_id
+    )
+
+    instance._previous_had_result = (
+        previous_had_result
     )
 
     result_changed = (
@@ -78,16 +108,9 @@ def remember_previous_match_state(
         != instance.matchday
     )
 
-    previous_had_result = (
-        previous_state["home_score"]
-        is not None
-        and previous_state["away_score"]
-        is not None
-    )
-
-    current_has_result = (
-        instance.home_score is not None
-        and instance.away_score is not None
+    tournament_changed = (
+        previous_tournament_id
+        != instance.tournament_id
     )
 
     relevant_matchday_change = (
@@ -98,9 +121,18 @@ def remember_previous_match_state(
         )
     )
 
+    relevant_tournament_change = (
+        tournament_changed
+        and (
+            previous_had_result
+            or current_has_result
+        )
+    )
+
     instance._standings_relevant_changed = (
         result_changed
         or relevant_matchday_change
+        or relevant_tournament_change
     )
 
 
@@ -136,10 +168,28 @@ def process_match_after_relevant_change(
         None,
     )
 
+    previous_tournament_id = getattr(
+        instance,
+        "_previous_tournament_id",
+        None,
+    )
+
+    previous_had_result = getattr(
+        instance,
+        "_previous_had_result",
+        False,
+    )
+
     def run_processing():
         route_match_change(
             match_id=match_id,
             previous_matchday=previous_matchday,
+            previous_tournament_id=(
+                previous_tournament_id
+            ),
+            previous_had_result=(
+                previous_had_result
+            ),
         )
 
     transaction.on_commit(
@@ -158,11 +208,8 @@ def process_after_match_delete(
     **kwargs,
 ):
     """
-    Aktualisiert Spieltagssummen, historische Ränge und
-    Gruppenstände nach dem Löschen eines ausgewerteten Spiels.
-
-    Die zugehörigen Prediction-Zeilen wurden durch die
-    Datenbankkaskade ebenfalls gelöscht.
+    Aktualisiert das Read Model nach dem Löschen
+    eines ausgewerteten Spiels.
     """
 
     tournament_id = instance.tournament_id

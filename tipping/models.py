@@ -434,6 +434,47 @@ class Match(models.Model):
             ),
         ]
 
+    def clean(self) -> None:
+        super().clean()
+
+        if (
+            not self.pk
+            or not self.tournament_id
+        ):
+            return
+
+        previous_tournament_id = (
+            Match.objects
+            .filter(
+                pk=self.pk,
+            )
+            .values_list(
+                "tournament_id",
+                flat=True,
+            )
+            .first()
+        )
+
+        tournament_changed = (
+            previous_tournament_id is not None
+            and previous_tournament_id
+            != self.tournament_id
+        )
+
+        if (
+            tournament_changed
+            and self.predictions.exists()
+        ):
+            raise ValidationError(
+                {
+                    "tournament": (
+                        "Ein Spiel mit vorhandenen "
+                        "Tipps kann nicht in ein anderes "
+                        "Turnier verschoben werden."
+                    ),
+                }
+            )
+
     def save(
         self,
         *args,
@@ -446,6 +487,11 @@ class Match(models.Model):
         self.away_team = (
             self.away_team.strip()
         )
+
+        # Erzwingt die Turnierkonsistenz auch bei
+        # programmatischen Änderungen außerhalb
+        # eines Django-Formulars.
+        self.clean()
 
         return super().save(
             *args,

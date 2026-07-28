@@ -18,16 +18,6 @@ def _has_later_result_matchday(
     tournament_id: int,
     start_matchday: int,
 ) -> bool:
-    """
-    Prüft, ob nach dem frühesten betroffenen Spieltag
-    bereits ein weiterer vollständig ausgewerteter
-    Spieltag existiert.
-
-    In diesem Fall müssen historische kumulierte Ränge
-    neu aufgebaut werden. Diese Arbeit wird in die
-    dauerhafte Warteschlange verschoben.
-    """
-
     return Match.objects.filter(
         tournament_id=tournament_id,
         matchday__gt=start_matchday,
@@ -36,36 +26,23 @@ def _has_later_result_matchday(
     ).exists()
 
 
-def route_match_change(
-    *,
-    match_id: int,
-    previous_matchday: int | None = None,
+def _combine_routes(
+    *routes: str,
 ) -> str:
-    """
-    Leitet eine Ergebnis- oder Spieltagsänderung weiter.
+    if ROUTE_QUEUED in routes:
+        return ROUTE_QUEUED
 
-    - Änderung am neuesten ausgewerteten Spieltag:
-      sofortige synchrone Verarbeitung.
-    - Historische Änderung mit späteren Ergebnissen:
-      dauerhafter Background-Job.
-    """
+    if ROUTE_PROCESSED in routes:
+        return ROUTE_PROCESSED
 
-    match = (
-        Match.objects
-        .filter(
-            pk=match_id,
-        )
-        .only(
-            "id",
-            "tournament_id",
-            "matchday",
-        )
-        .first()
-    )
+    return ROUTE_IGNORED
 
-    if match is None:
-        return ROUTE_IGNORED
 
+def _route_current_match_change(
+    *,
+    match: Match,
+    previous_matchday: int | None,
+) -> str:
     affected_matchdays = {
         matchday
         for matchday in (
@@ -75,12 +52,9 @@ def route_match_change(
         if matchday is not None
     }
 
-    # Auch ein Spiel ohne Spieltag kann Prediction.points
-    # beeinflussen. Deshalb wird der normale Prozessor
-    # weiterhin ausgeführt.
     if not affected_matchdays:
         process_match_change(
-            match_id=match_id,
+            match_id=match.id,
             previous_matchday=previous_matchday,
             rebuild_bonus=False,
         )
@@ -101,20 +75,102 @@ def route_match_change(
                 affected_matchdays
             ),
             match_ids=[
-                match_id,
+                match.id,
             ],
+            group_ids=[],
             rebuild_bonus=False,
         )
 
         return ROUTE_QUEUED
 
     process_match_change(
-        match_id=match_id,
+        match_id=match.id,
         previous_matchday=previous_matchday,
         rebuild_bonus=False,
     )
 
     return ROUTE_PROCESSED
+
+
+def route_match_change(
+    *,
+    match_id: int,
+    previous_matchday: int | None = None,
+    previous_tournament_id: int | None = None,
+    previous_had_result: bool = False,
+) -> str:
+    """
+    Verarbeitet eine Match-Änderung im bisherigen und
+    aktuellen Turnier.
+
+    Ein Turnierwechsel ohne vorhandene Tipps wird wie das
+    Entfernen aus dem alten und das Hinzufügen zum neuen
+    Turnier behandelt.
+    """
+
+    match = (
+        Match.objects
+        .filter(
+            pk=match_id,
+        )
+        .only(
+            "id",
+            "tournament_id",
+            "matchday",
+            "home_score",
+            "away_score",
+        )
+        .first()
+    )
+
+    if match is None:
+        return ROUTE_IGNORED
+
+    tournament_changed = (
+        previous_tournament_id is not None
+        and previous_tournament_id
+        != match.tournament_id
+    )
+
+    if not tournament_changed:
+        return _route_current_match_change(
+            match=match,
+            previous_matchday=previous_matchday,
+        )
+
+    routes = []
+
+    # Im bisherigen Turnier wirkt der Wechsel wie
+    # das Entfernen des früheren Spiels.
+    if previous_had_result:
+        routes.append(
+            route_match_delete(
+                tournament_id=(
+                    previous_tournament_id
+                ),
+                matchday=previous_matchday,
+                had_result=True,
+            )
+        )
+
+    current_has_result = (
+        match.home_score is not None
+        and match.away_score is not None
+    )
+
+    # Im neuen Turnier wirkt der Wechsel wie ein
+    # neu hinzugefügtes ausgewertetes Spiel.
+    if current_has_result:
+        routes.append(
+            _route_current_match_change(
+                match=match,
+                previous_matchday=None,
+            )
+        )
+
+    return _combine_routes(
+        *routes
+    )
 
 
 def route_match_delete(
@@ -123,14 +179,6 @@ def route_match_delete(
     matchday: int | None,
     had_result: bool,
 ) -> str:
-    """
-    Leitet das Löschen eines ausgewerteten Spiels weiter.
-
-    Historische Löschungen werden in die Queue gestellt.
-    Das Löschen eines Spiels am letzten ausgewerteten
-    Spieltag wird sofort verarbeitet.
-    """
-
     if (
         matchday is None
         or not had_result
@@ -147,6 +195,7 @@ def route_match_delete(
                 matchday,
             ],
             match_ids=[],
+            group_ids=[],
             rebuild_bonus=False,
         )
 
