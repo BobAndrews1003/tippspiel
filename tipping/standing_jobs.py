@@ -20,9 +20,7 @@ def _normalize_positive_integers(
 
     for raw_value in values:
         try:
-            value = int(
-                raw_value
-            )
+            value = int(raw_value)
 
         except (
             TypeError,
@@ -39,13 +37,9 @@ def _normalize_positive_integers(
                 "größer oder gleich 1 enthalten."
             )
 
-        normalized.add(
-            value
-        )
+        normalized.add(value)
 
-    return sorted(
-        normalized
-    )
+    return sorted(normalized)
 
 
 @transaction.atomic
@@ -54,15 +48,15 @@ def enqueue_standing_rebuild(
     tournament_id: int,
     affected_matchdays,
     match_ids=None,
+    group_ids=None,
     rebuild_bonus: bool = False,
 ) -> StandingRebuildJob:
     """
-    Legt einen neuen Auftrag an oder führt ihn mit bereits
-    ausstehenden Aufträgen desselben Turniers zusammen.
+    Erstellt oder erweitert einen ausstehenden Job.
 
-    Laufende Aufträge werden nicht verändert. Eine während
-    ihrer Verarbeitung eintreffende Änderung erzeugt deshalb
-    einen neuen ausstehenden Auftrag.
+    group_ids=[] bedeutet alle Gruppen des Turniers.
+    Sobald einer der zusammengeführten Jobs alle Gruppen
+    betrifft, bleibt der Gesamtauftrag turnierweit.
     """
 
     normalized_matchdays = (
@@ -82,6 +76,13 @@ def enqueue_standing_rebuild(
         _normalize_positive_integers(
             match_ids or [],
             field_name="match_ids",
+        )
+    )
+
+    normalized_group_ids = (
+        _normalize_positive_integers(
+            group_ids or [],
+            field_name="group_ids",
         )
     )
 
@@ -107,6 +108,7 @@ def enqueue_standing_rebuild(
                 normalized_matchdays
             ),
             match_ids=normalized_match_ids,
+            group_ids=normalized_group_ids,
             rebuild_bonus=rebuild_bonus,
         )
 
@@ -120,20 +122,33 @@ def enqueue_standing_rebuild(
         normalized_match_ids
     )
 
-    merged_rebuild_bonus = (
-        rebuild_bonus
+    merged_group_ids = set(
+        normalized_group_ids
     )
+
+    all_groups = not normalized_group_ids
+    merged_rebuild_bonus = rebuild_bonus
 
     for pending_job in pending_jobs:
         merged_matchdays.update(
-            pending_job.affected_matchdays
-            or []
+            pending_job.affected_matchdays or []
         )
 
         merged_match_ids.update(
-            pending_job.match_ids
-            or []
+            pending_job.match_ids or []
         )
+
+        pending_group_ids = (
+            pending_job.group_ids or []
+        )
+
+        if not pending_group_ids:
+            all_groups = True
+
+        else:
+            merged_group_ids.update(
+                pending_group_ids
+            )
 
         merged_rebuild_bonus = (
             merged_rebuild_bonus
@@ -141,13 +156,22 @@ def enqueue_standing_rebuild(
         )
 
     target_job.affected_matchdays = sorted(
-        int(matchday)
-        for matchday in merged_matchdays
+        int(value)
+        for value in merged_matchdays
     )
 
     target_job.match_ids = sorted(
-        int(match_id)
-        for match_id in merged_match_ids
+        int(value)
+        for value in merged_match_ids
+    )
+
+    target_job.group_ids = (
+        []
+        if all_groups
+        else sorted(
+            int(value)
+            for value in merged_group_ids
+        )
     )
 
     target_job.rebuild_bonus = (
@@ -158,13 +182,12 @@ def enqueue_standing_rebuild(
         update_fields=[
             "affected_matchdays",
             "match_ids",
+            "group_ids",
             "rebuild_bonus",
             "updated_at",
         ]
     )
 
-    # Eventuell vorhandene doppelte Pending-Jobs werden
-    # in den ältesten Auftrag integriert.
     duplicate_ids = [
         pending_job.id
         for pending_job in pending_jobs[1:]
@@ -178,22 +201,11 @@ def enqueue_standing_rebuild(
     return target_job
 
 
-
-
 @transaction.atomic
 def recover_stale_standing_rebuild_jobs(
     *,
     stale_minutes: int,
 ) -> int:
-    """
-    Gibt Jobs erneut frei, deren Worker vermutlich
-    während der Verarbeitung beendet wurde.
-
-    Die eigentliche Rebuild-Verarbeitung läuft atomar.
-    Deshalb kann ein nach einem Absturz verbliebener
-    running-Job gefahrlos erneut ausgeführt werden.
-    """
-
     if stale_minutes < 1:
         raise ValueError(
             "stale_minutes muss mindestens 1 sein."
@@ -232,15 +244,9 @@ def recover_stale_standing_rebuild_jobs(
         )
     )
 
+
 @transaction.atomic
 def claim_next_standing_rebuild_job() -> int | None:
-    """
-    Reserviert den ältesten ausstehenden Auftrag.
-
-    Die eigentliche lange Neuberechnung findet anschließend
-    außerhalb dieser kurzen Claim-Transaktion statt.
-    """
-
     job = (
         StandingRebuildJob.objects
         .select_for_update()
@@ -286,11 +292,6 @@ def execute_standing_rebuild_job(
     *,
     job_id: int,
 ) -> int:
-    """
-    Führt einen zuvor reservierten Auftrag aus und speichert
-    Erfolg oder Fehler dauerhaft im Job-Datensatz.
-    """
-
     job = StandingRebuildJob.objects.get(
         pk=job_id,
     )
@@ -307,13 +308,12 @@ def execute_standing_rebuild_job(
     try:
         processed_groups = (
             process_queued_tournament_rebuild(
-                tournament_id=(
-                    job.tournament_id
-                ),
+                tournament_id=job.tournament_id,
                 affected_matchdays=(
                     job.affected_matchdays
                 ),
                 match_ids=job.match_ids,
+                group_ids=job.group_ids,
                 rebuild_bonus=(
                     job.rebuild_bonus
                 ),

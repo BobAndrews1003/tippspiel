@@ -12,6 +12,7 @@ from .scoring import points_for_prediction
 from .standing_refresh import (
     rebuild_group_standing_with_bonus_fallback,
 )
+from .standing_jobs import enqueue_standing_rebuild
 from .standings import (
     rebuild_group_timeline,
     rebuild_matchday_scores,
@@ -55,8 +56,8 @@ def _rebuild_affected_groups(
     affected_by_group: dict[int, set[int]],
 ) -> int:
     """
-    Aktualisiert Spieltagssummen, historische Ränge
-    und Gesamtstände der betroffenen Gruppen.
+    Aktualisiert betroffene Gruppen sofort oder legt bei
+    historischen Änderungen einen gruppenspezifischen Job an.
     """
 
     processed_groups = 0
@@ -71,20 +72,54 @@ def _rebuild_affected_groups(
         if not matchdays:
             continue
 
-        group_exists = (
+        group = (
             Group.objects
             .filter(
                 pk=group_id,
                 memberships__isnull=False,
             )
-            .exists()
+            .only(
+                "id",
+                "tournament_id",
+            )
+            .distinct()
+            .first()
         )
 
-        if not group_exists:
+        if group is None:
             MatchdayScore.objects.filter(
                 group_id=group_id,
             ).delete()
 
+            continue
+
+        start_matchday = min(matchdays)
+
+        has_later_results = (
+            Match.objects.filter(
+                tournament_id=(
+                    group.tournament_id
+                ),
+                matchday__gt=start_matchday,
+                home_score__isnull=False,
+                away_score__isnull=False,
+            ).exists()
+        )
+
+        if has_later_results:
+            enqueue_standing_rebuild(
+                tournament_id=(
+                    group.tournament_id
+                ),
+                affected_matchdays=matchdays,
+                match_ids=[],
+                group_ids=[
+                    group_id,
+                ],
+                rebuild_bonus=False,
+            )
+
+            processed_groups += 1
             continue
 
         for matchday in sorted(matchdays):
@@ -95,13 +130,9 @@ def _rebuild_affected_groups(
 
         rebuild_group_timeline(
             group_id=group_id,
-            start_matchday=min(matchdays),
+            start_matchday=start_matchday,
         )
 
-        # Normale Tippänderungen berechnen Bonustipps
-        # nicht erneut. Bei fehlenden Standing-Zeilen
-        # erfolgt jedoch automatisch ein vollständiger
-        # Bonus-Rebuild.
         rebuild_group_standing_with_bonus_fallback(
             group_id=group_id,
         )

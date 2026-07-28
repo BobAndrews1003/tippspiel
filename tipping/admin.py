@@ -209,6 +209,7 @@ class StandingRebuildJobAdmin(
         "tournament",
         "affected_matchdays",
         "match_ids",
+        "group_ids",
         "rebuild_bonus",
         "status",
         "attempts",

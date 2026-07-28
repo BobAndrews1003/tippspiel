@@ -1113,6 +1113,13 @@ class StandingRebuildJob(models.Model):
         default=list,
     )
 
+    # Leere Liste bedeutet: alle Gruppen des Turniers.
+    # Andernfalls werden nur die angegebenen Gruppen
+    # aktualisiert.
+    group_ids = models.JSONField(
+        default=list,
+    )
+
     rebuild_bonus = models.BooleanField(
         default=False,
     )
