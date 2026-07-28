@@ -6,11 +6,11 @@ from django.db.models.signals import (
 )
 from django.dispatch import receiver
 
-from .models import Match
-from .result_processing import (
-    process_match_change,
-    process_match_delete,
+from .match_rebuild_routing import (
+    route_match_change,
+    route_match_delete,
 )
+from .models import Match
 
 
 @receiver(
@@ -137,10 +137,9 @@ def process_match_after_relevant_change(
     )
 
     def run_processing():
-        process_match_change(
+        route_match_change(
             match_id=match_id,
             previous_matchday=previous_matchday,
-            rebuild_bonus=False,
         )
 
     transaction.on_commit(
@@ -181,7 +180,7 @@ def process_after_match_delete(
         return
 
     def run_processing():
-        process_match_delete(
+        route_match_delete(
             tournament_id=tournament_id,
             matchday=matchday,
             had_result=had_result,

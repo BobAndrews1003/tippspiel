@@ -1,6 +1,8 @@
 from datetime import timedelta
+from io import StringIO
 
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.test import TestCase
 from django.utils import timezone
 
@@ -11,6 +13,7 @@ from tipping.models import (
     Match,
     MatchdayScore,
     Prediction,
+    StandingRebuildJob,
     Tournament,
 )
 from tipping.result_processing import (
@@ -207,10 +210,49 @@ class MatchDeleteProcessingTests(TestCase):
             8,
         )
 
+        # Das Löschen eines historischen Spiels wird nicht
+        # mehr im Web-Request vollständig verarbeitet.
         with self.captureOnCommitCallbacks(
             execute=True,
         ):
             first_match.delete()
+
+        job = StandingRebuildJob.objects.get()
+
+        self.assertEqual(
+            job.status,
+            StandingRebuildJob.Status.PENDING,
+        )
+
+        self.assertEqual(
+            job.affected_matchdays,
+            [
+                1,
+            ],
+        )
+
+        # Vor dem Worker ist das Read Model bewusst noch
+        # auf dem zuletzt vollständig verarbeiteten Stand.
+        score_day_2.refresh_from_db()
+
+        self.assertEqual(
+            score_day_2.cumulative_points,
+            8,
+        )
+
+        call_command(
+            "process_standing_jobs",
+            limit=10,
+            stdout=StringIO(),
+            stderr=StringIO(),
+        )
+
+        job.refresh_from_db()
+
+        self.assertEqual(
+            job.status,
+            StandingRebuildJob.Status.COMPLETED,
+        )
 
         score_day_2.refresh_from_db()
 
