@@ -67,12 +67,30 @@ class Command(BaseCommand):
             ),
         )
 
+        parser.add_argument(
+            "--changed-matchday",
+            type=int,
+            default=None,
+            help=(
+                "Spieltag, dessen Ergebnis für den "
+                "inkrementellen Benchmark geändert wird. "
+                "Standard: letzter Spieltag."
+            ),
+        )
+
     def handle(self, *args, **options):
         user_count = options["users"]
         group_count = options["groups"]
         matchday_count = options[
             "matchdays"
         ]
+
+        changed_matchday = (
+            options["changed_matchday"]
+            if options["changed_matchday"]
+            is not None
+            else matchday_count
+        )
 
         for name, value in (
             ("users", user_count),
@@ -86,6 +104,12 @@ class Command(BaseCommand):
                 raise CommandError(
                     f"--{name} muss mindestens 1 sein."
                 )
+
+        if changed_matchday > matchday_count:
+            raise CommandError(
+                "--changed-matchday darf nicht größer "
+                "als --matchdays sein."
+            )
 
         prefix = (
             "benchmark-"
@@ -396,7 +420,9 @@ class Command(BaseCommand):
             # Normale Ergebnisänderung messen
             # --------------------------------------------------
 
-            changed_match = matches[-1]
+            changed_match = matches[
+                changed_matchday - 1
+            ]
 
             Match.objects.filter(
                 pk=changed_match.pk,
@@ -470,6 +496,13 @@ class Command(BaseCommand):
                     "Vollständiger Rebuild: "
                     f"{full_rebuild_seconds:.3f} "
                     "Sekunden"
+                )
+            )
+
+            self.stdout.write(
+                (
+                    "Geänderter Spieltag: "
+                    f"{changed_matchday}"
                 )
             )
 
