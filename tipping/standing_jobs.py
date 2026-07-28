@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import timedelta
+
 from django.db import transaction
 from django.utils import timezone
 
@@ -175,6 +177,60 @@ def enqueue_standing_rebuild(
 
     return target_job
 
+
+
+
+@transaction.atomic
+def recover_stale_standing_rebuild_jobs(
+    *,
+    stale_minutes: int,
+) -> int:
+    """
+    Gibt Jobs erneut frei, deren Worker vermutlich
+    während der Verarbeitung beendet wurde.
+
+    Die eigentliche Rebuild-Verarbeitung läuft atomar.
+    Deshalb kann ein nach einem Absturz verbliebener
+    running-Job gefahrlos erneut ausgeführt werden.
+    """
+
+    if stale_minutes < 1:
+        raise ValueError(
+            "stale_minutes muss mindestens 1 sein."
+        )
+
+    now = timezone.now()
+
+    stale_before = (
+        now
+        - timedelta(
+            minutes=stale_minutes,
+        )
+    )
+
+    return (
+        StandingRebuildJob.objects
+        .filter(
+            status=(
+                StandingRebuildJob.Status.RUNNING
+            ),
+            started_at__isnull=False,
+            started_at__lt=stale_before,
+        )
+        .update(
+            status=(
+                StandingRebuildJob.Status.PENDING
+            ),
+            started_at=None,
+            finished_at=None,
+            processed_groups=0,
+            last_error=(
+                "Nach möglichem Worker-Abbruch "
+                "automatisch erneut freigegeben."
+            ),
+            updated_at=now,
+        )
+    )
 
 @transaction.atomic
 def claim_next_standing_rebuild_job() -> int | None:
