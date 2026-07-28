@@ -220,3 +220,101 @@ def process_match_delete(
         },
         rebuild_bonus=False,
     )
+
+
+@transaction.atomic
+def process_queued_tournament_rebuild(
+    *,
+    tournament_id: int,
+    affected_matchdays: list[int],
+    match_ids: list[int] | None = None,
+    rebuild_bonus: bool = False,
+) -> int:
+    """
+    Verarbeitet einen dauerhaften Ranglistenauftrag.
+
+    Vorhandene Spiele in match_ids werden zunächst neu
+    ausgewertet. Anschließend werden die betroffenen
+    Spieltagssummen, Timelines und Gesamtstände aller
+    Gruppen des Turniers aktualisiert.
+
+    Gelöschte Spiele dürfen weiterhin in einem älteren
+    Auftrag referenziert sein und werden dann ignoriert.
+    """
+
+    normalized_matchdays = set()
+
+    for raw_matchday in affected_matchdays:
+        try:
+            matchday = int(
+                raw_matchday
+            )
+
+        except (
+            TypeError,
+            ValueError,
+        ) as exc:
+            raise ValueError(
+                "Alle betroffenen Spieltage müssen "
+                "ganze Zahlen sein."
+            ) from exc
+
+        if matchday < 1:
+            raise ValueError(
+                "Betroffene Spieltage müssen "
+                "mindestens 1 sein."
+            )
+
+        normalized_matchdays.add(
+            matchday
+        )
+
+    if not normalized_matchdays:
+        return 0
+
+    normalized_match_ids = set()
+
+    for raw_match_id in (
+        match_ids or []
+    ):
+        try:
+            match_id = int(
+                raw_match_id
+            )
+
+        except (
+            TypeError,
+            ValueError,
+        ) as exc:
+            raise ValueError(
+                "Alle Match-IDs müssen "
+                "ganze Zahlen sein."
+            ) from exc
+
+        if match_id > 0:
+            normalized_match_ids.add(
+                match_id
+            )
+
+    matches = list(
+        Match.objects
+        .select_for_update()
+        .filter(
+            tournament_id=tournament_id,
+            pk__in=normalized_match_ids,
+        )
+        .order_by("id")
+    )
+
+    for match in matches:
+        recalculate_points_for_match(
+            match
+        )
+
+    return _rebuild_affected_matchdays(
+        tournament_id=tournament_id,
+        affected_matchdays=(
+            normalized_matchdays
+        ),
+        rebuild_bonus=rebuild_bonus,
+    )

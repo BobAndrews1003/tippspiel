@@ -1068,3 +1068,118 @@ class GroupStanding(models.Model):
             f"{self.user_id} · "
             f"{self.total_points} Punkte"
         )
+
+class StandingRebuildJob(models.Model):
+    """
+    Dauerhafter Auftrag zur Neuberechnung der vorberechneten
+    Ranglistendaten eines Turniers.
+
+    Mehrere noch nicht gestartete Aufträge desselben Turniers
+    können zusammengeführt werden.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = (
+            "pending",
+            "Ausstehend",
+        )
+        RUNNING = (
+            "running",
+            "Wird verarbeitet",
+        )
+        COMPLETED = (
+            "completed",
+            "Abgeschlossen",
+        )
+        FAILED = (
+            "failed",
+            "Fehlgeschlagen",
+        )
+
+    tournament = models.ForeignKey(
+        Tournament,
+        on_delete=models.CASCADE,
+        related_name="standing_rebuild_jobs",
+    )
+
+    # Spieltage, deren MatchdayScore neu aufgebaut werden muss.
+    affected_matchdays = models.JSONField(
+        default=list,
+    )
+
+    # Noch vorhandene Spiele, deren Prediction.points vor dem
+    # Tabellen-Rebuild neu berechnet werden müssen.
+    match_ids = models.JSONField(
+        default=list,
+    )
+
+    rebuild_bonus = models.BooleanField(
+        default=False,
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+
+    attempts = models.PositiveIntegerField(
+        default=0,
+    )
+
+    processed_groups = models.PositiveIntegerField(
+        default=0,
+    )
+
+    last_error = models.TextField(
+        blank=True,
+        default="",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    started_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    finished_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=[
+                    "status",
+                    "created_at",
+                ],
+                name="job_status_created_idx",
+            ),
+            models.Index(
+                fields=[
+                    "tournament",
+                    "status",
+                ],
+                name="job_tournament_status_idx",
+            ),
+        ]
+
+        ordering = [
+            "created_at",
+            "id",
+        ]
+
+    def __str__(self):
+        return (
+            f"Job {self.id} · "
+            f"Turnier {self.tournament_id} · "
+            f"{self.status}"
+        )
