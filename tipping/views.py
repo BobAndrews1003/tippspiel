@@ -44,6 +44,7 @@ from .models import (
     GroupStanding,
     Match,
     MatchdayScore,
+    MAX_GOALS,
     Prediction,
     Tournament,
 )
