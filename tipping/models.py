@@ -434,6 +434,47 @@ class Match(models.Model):
             ),
         ]
 
+    def clean(self) -> None:
+        super().clean()
+
+        if (
+            not self.pk
+            or not self.tournament_id
+        ):
+            return
+
+        previous_tournament_id = (
+            Match.objects
+            .filter(
+                pk=self.pk,
+            )
+            .values_list(
+                "tournament_id",
+                flat=True,
+            )
+            .first()
+        )
+
+        tournament_changed = (
+            previous_tournament_id is not None
+            and previous_tournament_id
+            != self.tournament_id
+        )
+
+        if (
+            tournament_changed
+            and self.predictions.exists()
+        ):
+            raise ValidationError(
+                {
+                    "tournament": (
+                        "Ein Spiel mit vorhandenen "
+                        "Tipps kann nicht in ein anderes "
+                        "Turnier verschoben werden."
+                    ),
+                }
+            )
+
     def save(
         self,
         *args,
@@ -446,6 +487,11 @@ class Match(models.Model):
         self.away_team = (
             self.away_team.strip()
         )
+
+        # Erzwingt die Turnierkonsistenz auch bei
+        # programmatischen Änderungen außerhalb
+        # eines Django-Formulars.
+        self.clean()
 
         return super().save(
             *args,
@@ -915,4 +961,278 @@ class BonusPrediction(models.Model):
             f"{self.user} – "
             f"{self.bonus_type}: "
             f"{self.value}"
+        )
+        
+        
+class MatchdayScore(models.Model):
+    group = models.ForeignKey(
+        Group,
+        on_delete=models.CASCADE,
+        related_name="matchday_scores",
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="tip_matchday_scores",
+    )
+
+    matchday = models.PositiveSmallIntegerField()
+
+    points = models.PositiveIntegerField(
+        default=0,
+    )
+
+    exact_predictions = models.PositiveIntegerField(
+        default=0,
+    )
+
+    cumulative_points = models.PositiveIntegerField(
+        default=0,
+    )
+
+    rank = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+    )
+
+    rank_change = models.SmallIntegerField(
+        null=True,
+        blank=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "group",
+                    "user",
+                    "matchday",
+                ],
+                name="uniq_group_user_matchday",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "group",
+                    "matchday",
+                    "rank",
+                ],
+                name="score_group_md_rank_idx",
+            ),
+            models.Index(
+                fields=[
+                    "group",
+                    "user",
+                    "matchday",
+                ],
+                name="score_group_user_md_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.group_id} · "
+            f"{self.user_id} · "
+            f"Spieltag {self.matchday}"
+        )
+
+
+class GroupStanding(models.Model):
+    group = models.ForeignKey(
+        Group,
+        on_delete=models.CASCADE,
+        related_name="standings",
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="tip_group_standings",
+    )
+
+    match_points = models.PositiveIntegerField(
+        default=0,
+    )
+
+    bonus_points = models.PositiveIntegerField(
+        default=0,
+    )
+
+    total_points = models.PositiveIntegerField(
+        default=0,
+    )
+
+    exact_predictions = models.PositiveIntegerField(
+        default=0,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "group",
+                    "user",
+                ],
+                name="uniq_group_user_standing",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "group",
+                    "-total_points",
+                    "user",
+                ],
+                name="standing_group_total_idx",
+            ),
+
+            models.Index(
+                fields=[
+                    "group",
+                    "-match_points",
+                    "user",
+                ],
+                name="standing_group_match_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.group_id} · "
+            f"{self.user_id} · "
+            f"{self.total_points} Punkte"
+        )
+
+class StandingRebuildJob(models.Model):
+    """
+    Dauerhafter Auftrag zur Neuberechnung der vorberechneten
+    Ranglistendaten eines Turniers.
+
+    Mehrere noch nicht gestartete Aufträge desselben Turniers
+    können zusammengeführt werden.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = (
+            "pending",
+            "Ausstehend",
+        )
+        RUNNING = (
+            "running",
+            "Wird verarbeitet",
+        )
+        COMPLETED = (
+            "completed",
+            "Abgeschlossen",
+        )
+        FAILED = (
+            "failed",
+            "Fehlgeschlagen",
+        )
+
+    tournament = models.ForeignKey(
+        Tournament,
+        on_delete=models.CASCADE,
+        related_name="standing_rebuild_jobs",
+    )
+
+    # Spieltage, deren MatchdayScore neu aufgebaut werden muss.
+    affected_matchdays = models.JSONField(
+        default=list,
+    )
+
+    # Noch vorhandene Spiele, deren Prediction.points vor dem
+    # Tabellen-Rebuild neu berechnet werden müssen.
+    match_ids = models.JSONField(
+        default=list,
+    )
+
+    # Leere Liste bedeutet: alle Gruppen des Turniers.
+    # Andernfalls werden nur die angegebenen Gruppen
+    # aktualisiert.
+    group_ids = models.JSONField(
+        default=list,
+    )
+
+    rebuild_bonus = models.BooleanField(
+        default=False,
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+
+    attempts = models.PositiveIntegerField(
+        default=0,
+    )
+
+    processed_groups = models.PositiveIntegerField(
+        default=0,
+    )
+
+    last_error = models.TextField(
+        blank=True,
+        default="",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    started_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    finished_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=[
+                    "status",
+                    "created_at",
+                ],
+                name="job_status_created_idx",
+            ),
+            models.Index(
+                fields=[
+                    "tournament",
+                    "status",
+                ],
+                name="job_tournament_status_idx",
+            ),
+        ]
+
+        ordering = [
+            "created_at",
+            "id",
+        ]
+
+    def __str__(self):
+        return (
+            f"Job {self.id} · "
+            f"Turnier {self.tournament_id} · "
+            f"{self.status}"
         )

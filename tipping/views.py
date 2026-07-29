@@ -4,15 +4,20 @@ from collections import Counter, defaultdict
 
 from typing import Optional
 
+from .bonus_scoring import (
+    get_bonus_lock_time,
+)
+
 from django.core.paginator import Paginator
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth import logout
-from django.db.models import Q
+from django.db.models import Case, IntegerField, OuterRef, Subquery, When
+from django.db.models import CharField, Q, Value
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
-from django.db.models import Sum
 from django.db.models import Count
+from django.db.models.functions import Cast, Coalesce, Concat, Lower, NullIf
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -25,7 +30,16 @@ from .forms import (
     DeleteAccountForm,
     GroupCreateForm,
 )
-from .models import Group, Tournament, Match, Prediction, BonusPrediction, GroupMembership
+from .models import (
+    BonusPrediction,
+    Group,
+    GroupMembership,
+    GroupStanding,
+    Match,
+    MatchdayScore,
+    Prediction,
+    Tournament,
+)
 
 from .scoring import points_for_prediction
 
@@ -58,58 +72,6 @@ def _prediction_points(
 
     return prediction.points
 
-
-def bonus_points_for_user(tournament, preds: list[BonusPrediction]) -> int:
-    """
-    +5 Punkte pro richtigem Bonustipp.
-
-    Tournament-Felder:
-      autumn_champion, champion, first_coach_sacked, top_scorer, relegated_teams (kommagetrennt)
-
-    BonusPrediction-Typen:
-      herbstmeister, meister, trainer_first, topscorer, relegation1, relegation2
-    """
-    def _norm(s: str) -> str:
-        return (s or "").strip().lower()
-
-    real_herbst = _norm(getattr(tournament, "autumn_champion", ""))
-    real_meister = _norm(getattr(tournament, "champion", ""))
-    real_trainer = _norm(getattr(tournament, "first_coach_sacked", ""))
-    real_topscorer = _norm(getattr(tournament, "top_scorer", ""))
-
-    relegated_raw = getattr(tournament, "relegated_teams", "") or ""
-    relegated_set = {_norm(x) for x in relegated_raw.split(",") if _norm(x)}
-
-    pts = 0
-
-    # ✅ schützt gegen Doppelwertung bei relegation1/relegation2
-    counted_relegations: set[str] = set()
-
-    for bp in preds:
-        btype = bp.bonus_type
-        val = _norm(bp.value)
-
-        if not val:
-            continue
-
-        if btype == "herbstmeister" and real_herbst and val == real_herbst:
-            pts += 5
-
-        elif btype == "meister" and real_meister and val == real_meister:
-            pts += 5
-
-        elif btype == "trainer_first" and real_trainer and val == real_trainer:
-            pts += 5
-
-        elif btype == "topscorer" and real_topscorer and val == real_topscorer:
-            pts += 5
-
-        elif btype in {"relegation1", "relegation2"} and relegated_set and val in relegated_set:
-            if val not in counted_relegations:
-                pts += 5
-                counted_relegations.add(val)
-
-    return pts
 
 
 
@@ -221,23 +183,6 @@ def _prev_next_md(tournament, matchday):
     )
     return prev_md, next_md
 
-def _get_bonus_lock_time(tournament):
-    """
-    Bonustipps werden mit dem Anstoß des ersten Saisonspiels gesperrt
-    und für alle Teilnehmer sichtbar.
-
-    Falls noch keine Spiele existieren, wird optional season_start
-    als Ersatz verwendet.
-    """
-    first_kickoff = (
-        Match.objects
-        .filter(tournament=tournament)
-        .order_by("kickoff")
-        .values_list("kickoff", flat=True)
-        .first()
-    )
-
-    return first_kickoff or tournament.season_start
 
 
 # ---------------------------------------------------------------------
@@ -257,47 +202,18 @@ def dashboard(request):
     now = timezone.now()
 
     # --------------------------------------------------------------
-    # Hilfsfunktion für eine stabile alphabetische Sortierung
+    # Teilnehmerzahl der aktiven Gruppe
+    #
+    # Es werden nicht mehr alle Mitgliedschaften und Nutzer
+    # für das Dashboard geladen.
     # --------------------------------------------------------------
 
-    def user_sort_name(user) -> str:
-        return (
-            user.get_username()
-            or user.email
-            or f"user-{user.id}"
-        ).strip().lower()
-
-    # --------------------------------------------------------------
-    # Teilnehmer der aktiven Gruppe
-    # --------------------------------------------------------------
-
-    memberships = list(
+    participant_count = (
         GroupMembership.objects
         .filter(
             group=group,
         )
-        .select_related(
-            "user",
-            "user__tip_profile",
-        )
-        .order_by(
-            "user__username",
-            "user_id",
-        )
-    )
-
-    users = [
-        item.user
-        for item in memberships
-    ]
-
-    user_ids = [
-        user.id
-        for user in users
-    ]
-
-    participant_count = len(
-        users
+        .count()
     )
 
     # --------------------------------------------------------------
@@ -441,108 +357,14 @@ def dashboard(request):
     )
 
     # --------------------------------------------------------------
-    # Gesamtpunkte aller aktiven Gruppenmitglieder
+    # Vorbereitete Gesamt- und Spieltagspunkte
     #
-    # Die Datenbank summiert Prediction.points direkt.
-    # Es werden keine einzelnen Tipps in Python nachberechnet.
+    # Die Ranglistenwerte werden nicht mehr bei jedem
+    # Seitenaufruf aus allen Tipps neu berechnet.
     # --------------------------------------------------------------
 
-    total_points_by_user = {
-        user_id: 0
-        for user_id in user_ids
-    }
-
-    stored_total_rows = (
-        Prediction.objects
-        .filter(
-            group=group,
-            user_id__in=user_ids,
-            match__tournament=tournament,
-            match__home_score__isnull=False,
-            match__away_score__isnull=False,
-            points__isnull=False,
-        )
-        .values(
-            "user_id",
-        )
-        .annotate(
-            total=Sum("points"),
-        )
-    )
-
-    for row in stored_total_rows:
-        user_id = row["user_id"]
-
-        if user_id in total_points_by_user:
-            total_points_by_user[
-                user_id
-            ] = row["total"] or 0
-
-    # --------------------------------------------------------------
-    # Eigene Punkte gruppiert nach Spieltag
-    # --------------------------------------------------------------
-
-    user_matchday_points = defaultdict(
-        int
-    )
-
-    own_matchday_rows = (
-        Prediction.objects
-        .filter(
-            group=group,
-            user=request.user,
-            match__tournament=tournament,
-            match__matchday__isnull=False,
-            match__home_score__isnull=False,
-            match__away_score__isnull=False,
-            points__isnull=False,
-        )
-        .values(
-            "match__matchday",
-        )
-        .annotate(
-            total=Sum("points"),
-        )
-        .order_by(
-            "match__matchday",
-        )
-    )
-
-    for row in own_matchday_rows:
-        matchday = row[
-            "match__matchday"
-        ]
-
-        if matchday is not None:
-            user_matchday_points[
-                matchday
-            ] = row["total"] or 0
-
-    # --------------------------------------------------------------
-    # Anzahl exakter Ergebnisse des aktuellen Nutzers
-    # --------------------------------------------------------------
-
-    exact_predictions = (
-        Prediction.objects
-        .filter(
-            group=group,
-            user=request.user,
-            match__tournament=tournament,
-            match__home_score__isnull=False,
-            match__away_score__isnull=False,
-            points=4,
-        )
-        .count()
-    )
-
-    # --------------------------------------------------------------
-    # Bonuspunkte
-    # --------------------------------------------------------------
-
-    bonus_lock_time = (
-        _get_bonus_lock_time(
-            tournament
-        )
+    bonus_lock_time = get_bonus_lock_time(
+        tournament
     )
 
     bonus_reveal = bool(
@@ -550,49 +372,78 @@ def dashboard(request):
         and now >= bonus_lock_time
     )
 
-    bonus_points_by_user = defaultdict(
+    # Vor der Bonusfreigabe zählt ausschließlich
+    # match_points, danach total_points.
+    ranking_points_field = (
+        "total_points"
+        if bonus_reveal
+        else "match_points"
+    )
+
+    # Für die persönlichen Dashboardwerte wird nur noch
+    # die Standing-Zeile des angemeldeten Nutzers geladen.
+    current_user_standing = (
+        GroupStanding.objects
+        .filter(
+            group=group,
+            user=request.user,
+        )
+        .select_related(
+            "user",
+            "user__tip_profile",
+        )
+        .first()
+    )
+
+    user_total_points = (
+        getattr(
+            current_user_standing,
+            ranking_points_field,
+        )
+        or 0
+        if current_user_standing
+        else 0
+    )
+
+    # --------------------------------------------------------------
+    # Eigene Punkte nach Spieltag
+    # --------------------------------------------------------------
+
+    user_matchday_points = defaultdict(
         int
     )
 
-    if bonus_reveal:
-        bonus_predictions = list(
-            BonusPrediction.objects
+    if result_matchdays:
+        own_matchday_rows = (
+            MatchdayScore.objects
             .filter(
                 group=group,
-                tournament=tournament,
-                user_id__in=user_ids,
+                user=request.user,
+                matchday__in=result_matchdays,
+            )
+            .values_list(
+                "matchday",
+                "points",
+            )
+            .order_by(
+                "matchday",
             )
         )
 
-        bonus_predictions_by_user = (
-            defaultdict(list)
-        )
+        for matchday, points in own_matchday_rows:
+            user_matchday_points[
+                matchday
+            ] = points or 0
 
-        for bonus_prediction in bonus_predictions:
-            bonus_predictions_by_user[
-                bonus_prediction.user_id
-            ].append(
-                bonus_prediction
-            )
+    # --------------------------------------------------------------
+    # Anzahl exakter Ergebnisse des aktuellen Nutzers
+    # --------------------------------------------------------------
 
-        for user in users:
-            bonus_points = (
-                bonus_points_for_user(
-                    tournament,
-                    bonus_predictions_by_user.get(
-                        user.id,
-                        [],
-                    ),
-                )
-            )
-
-            bonus_points_by_user[
-                user.id
-            ] = bonus_points
-
-            total_points_by_user[
-                user.id
-            ] += bonus_points
+    exact_predictions = (
+        current_user_standing.exact_predictions
+        if current_user_standing
+        else 0
+    )
 
     # --------------------------------------------------------------
     # Persönliche Leistungsentwicklung
@@ -687,128 +538,144 @@ def dashboard(request):
         )
 
     # --------------------------------------------------------------
-    # Gesamtrangliste
-    # --------------------------------------------------------------
-
-    sorted_users = sorted(
-        users,
-        key=lambda user: (
-            -total_points_by_user.get(
-                user.id,
-                0,
-            ),
-            user_sort_name(
-                user
-            ),
-            user.id,
-        ),
-    )
-
-    leaderboard_rows = []
-
-    current_position = 0
-    previous_total = None
-
-    for index, user in enumerate(
-        sorted_users,
-        start=1,
-    ):
-        user_total = (
-            total_points_by_user.get(
-                user.id,
-                0,
-            )
-        )
-
-        # Gleiche Punktzahl bedeutet gleiche Position.
-        # Der nächste Platz wird dabei übersprungen:
-        # 1, 1, 3 statt 1, 1, 2.
-        if (
-            previous_total is None
-            or user_total != previous_total
-        ):
-            current_position = index
-            previous_total = user_total
-
-        leaderboard_rows.append(
-            {
-                "user": user,
-                "position": current_position,
-                "total": user_total,
-                "bonus": (
-                    bonus_points_by_user.get(
-                        user.id,
-                        0,
-                    )
-                ),
-                "is_current_user": (
-                    user.id
-                    == request.user.id
-                ),
-            }
-        )
-
-    current_user_row = next(
-        (
-            row
-            for row in leaderboard_rows
-            if (
-                row["user"].id
-                == request.user.id
-            )
-        ),
-        None,
-    )
-
-    user_total_points = (
-        current_user_row["total"]
-        if current_user_row
-        else 0
-    )
-
-    user_position = (
-        current_user_row["position"]
-        if (
-            current_user_row
-            and standings_started
-        )
-        else None
-    )
-
-    # --------------------------------------------------------------
-    # Kleine Rangliste:
-    # Top 3 und zusätzlich der aktuelle Benutzer
+    # Kleine Rangliste direkt aus der Datenbank
+    #
+    # Es werden nur die drei führenden Teilnehmer sowie
+    # gegebenenfalls der aktuelle Nutzer geladen.
     # --------------------------------------------------------------
 
     mini_table_rows = []
+    user_position = None
 
     if standings_started:
-        mini_table_rows = [
-            dict(row)
-            for row in leaderboard_rows[:3]
-        ]
+        leaderboard_queryset = (
+            GroupStanding.objects
+            .filter(
+                group=group,
+            )
+            .select_related(
+                "user",
+                "user__tip_profile",
+            )
+            .annotate(
+                dashboard_sort_name=Lower(
+                    Coalesce(
+                        NullIf(
+                            "user__username",
+                            Value(""),
+                        ),
+                        NullIf(
+                            "user__email",
+                            Value(""),
+                        ),
+                        Concat(
+                            Value("user-"),
+                            Cast(
+                                "user_id",
+                                output_field=CharField(),
+                            ),
+                        ),
+                        output_field=CharField(),
+                    )
+                )
+            )
+            .order_by(
+                f"-{ranking_points_field}",
+                "dashboard_sort_name",
+                "user_id",
+            )
+        )
 
-        top_user_ids = {
-            row["user"].id
-            for row in mini_table_rows
-        }
+        top_standings = list(
+            leaderboard_queryset[:3]
+        )
 
-        if (
-            current_user_row
-            and request.user.id
-            not in top_user_ids
+        previous_total = None
+        current_position = 0
+
+        for index, standing in enumerate(
+            top_standings,
+            start=1,
         ):
-            extra_row = dict(
-                current_user_row
+            visible_total = (
+                getattr(
+                    standing,
+                    ranking_points_field,
+                )
+                or 0
             )
 
-            extra_row[
-                "is_extra"
-            ] = True
+            # Wettbewerbsrang:
+            # 1, 1, 3 statt 1, 1, 2.
+            if (
+                previous_total is None
+                or visible_total != previous_total
+            ):
+                current_position = index
+                previous_total = visible_total
 
             mini_table_rows.append(
-                extra_row
+                {
+                    "user": standing.user,
+                    "position": current_position,
+                    "total": visible_total,
+                    "bonus": (
+                        standing.bonus_points or 0
+                        if bonus_reveal
+                        else 0
+                    ),
+                    "is_current_user": (
+                        standing.user_id
+                        == request.user.id
+                    ),
+                }
             )
+
+        if current_user_standing:
+            # Rang = Anzahl der Nutzer mit mehr Punkten + 1.
+            # Dadurch bleibt das Wettbewerbssystem erhalten.
+            user_position = (
+                GroupStanding.objects
+                .filter(
+                    group=group,
+                    **{
+                        (
+                            f"{ranking_points_field}"
+                            "__gt"
+                        ): user_total_points,
+                    },
+                )
+                .count()
+                + 1
+            )
+
+            top_user_ids = {
+                row["user"].id
+                for row in mini_table_rows
+            }
+
+            if (
+                request.user.id
+                not in top_user_ids
+            ):
+                mini_table_rows.append(
+                    {
+                        "user": (
+                            current_user_standing.user
+                        ),
+                        "position": user_position,
+                        "total": user_total_points,
+                        "bonus": (
+                            current_user_standing
+                            .bonus_points
+                            or 0
+                            if bonus_reveal
+                            else 0
+                        ),
+                        "is_current_user": True,
+                        "is_extra": True,
+                    }
+                )
 
     # --------------------------------------------------------------
     # Letzter ausgewerteter Spieltag
@@ -1290,13 +1157,6 @@ def spieltag(request):
     tournament = group.tournament
     now = timezone.now()
 
-    def user_sort_name(user) -> str:
-        return (
-            user.get_username()
-            or user.email
-            or f"user-{user.id}"
-        ).strip().lower()
-
     # -------------------------------------------------------------
     # Spieltage und ausgewählter Bereich
     # -------------------------------------------------------------
@@ -1315,7 +1175,7 @@ def spieltag(request):
     if tab not in {"matches", "bonus"}:
         tab = "matches"
 
-    bonus_lock_time = _get_bonus_lock_time(
+    bonus_lock_time = get_bonus_lock_time(
         tournament
     )
 
@@ -1323,33 +1183,6 @@ def spieltag(request):
         bonus_lock_time
         and now >= bonus_lock_time
     )
-
-    # -------------------------------------------------------------
-    # Aktive Gruppenmitglieder
-    # -------------------------------------------------------------
-
-    memberships = list(
-        GroupMembership.objects
-        .filter(group=group)
-        .select_related(
-            "user",
-            "user__tip_profile",
-        )
-        .order_by(
-            "user__username",
-            "user_id",
-        )
-    )
-
-    users = [
-        item.user
-        for item in memberships
-    ]
-
-    user_ids = [
-        user.id
-        for user in users
-    ]
 
     # -------------------------------------------------------------
     # Aktiven Spieltag bestimmen
@@ -1402,17 +1235,224 @@ def spieltag(request):
     }
 
     # -------------------------------------------------------------
-    # Bonustipps
+    # Mitglieder sortieren und direkt in der Datenbank paginieren
     #
-    # Sie werden nur geladen, wenn der Bonus-Tab geöffnet ist.
-    # Vor der Freigabe wird nur der eigene Bonustipp geladen.
+    # Grundlage bleibt GroupMembership. Dadurch bleiben auch
+    # Mitglieder sichtbar, falls eine vorberechnete Score-Zeile
+    # ausnahmsweise noch nicht existiert.
     # -------------------------------------------------------------
 
-    bonus_by_user = defaultdict(list)
+    member_queryset = (
+        GroupMembership.objects
+        .filter(
+            group=group,
+        )
+        .select_related(
+            "user",
+            "user__tip_profile",
+        )
+        .annotate(
+            page_sort_name=Lower(
+                Coalesce(
+                    NullIf(
+                        "user__username",
+                        Value(""),
+                    ),
+                    NullIf(
+                        "user__email",
+                        Value(""),
+                    ),
+                    Concat(
+                        Value("user-"),
+                        Cast(
+                            "user_id",
+                            output_field=CharField(),
+                        ),
+                    ),
+                    output_field=CharField(),
+                )
+            )
+        )
+    )
+
+    if tab == "matches":
+        if matchday is not None:
+            selected_score_subquery = (
+                MatchdayScore.objects
+                .filter(
+                    group=group,
+                    user_id=OuterRef(
+                        "user_id"
+                    ),
+                    matchday=matchday,
+                )
+                .values(
+                    "points"
+                )[:1]
+            )
+
+            member_queryset = (
+                member_queryset
+                .annotate(
+                    page_points=Coalesce(
+                        Subquery(
+                            selected_score_subquery,
+                            output_field=(
+                                IntegerField()
+                            ),
+                        ),
+                        Value(0),
+                        output_field=(
+                            IntegerField()
+                        ),
+                    )
+                )
+                .order_by(
+                    "-page_points",
+                    "page_sort_name",
+                    "user_id",
+                )
+            )
+
+        else:
+            member_queryset = (
+                member_queryset
+                .annotate(
+                    page_points=Value(
+                        0,
+                        output_field=(
+                            IntegerField()
+                        ),
+                    )
+                )
+                .order_by(
+                    "page_sort_name",
+                    "user_id",
+                )
+            )
+
+    elif bonus_reveal:
+        bonus_points_subquery = (
+            GroupStanding.objects
+            .filter(
+                group=group,
+                user_id=OuterRef(
+                    "user_id"
+                ),
+            )
+            .values(
+                "bonus_points"
+            )[:1]
+        )
+
+        member_queryset = (
+            member_queryset
+            .annotate(
+                page_bonus_points=Coalesce(
+                    Subquery(
+                        bonus_points_subquery,
+                        output_field=(
+                            IntegerField()
+                        ),
+                    ),
+                    Value(0),
+                    output_field=(
+                        IntegerField()
+                    ),
+                )
+            )
+            .order_by(
+                "-page_bonus_points",
+                "page_sort_name",
+                "user_id",
+            )
+        )
+
+    else:
+        # Vor der Bonusfreigabe bleibt der aktuelle Nutzer
+        # an erster Stelle. Die übrigen Nutzer werden stabil
+        # alphabetisch sortiert.
+        member_queryset = (
+            member_queryset
+            .annotate(
+                current_user_priority=Case(
+                    When(
+                        user_id=request.user.id,
+                        then=Value(0),
+                    ),
+                    default=Value(1),
+                    output_field=(
+                        IntegerField()
+                    ),
+                )
+            )
+            .order_by(
+                "current_user_priority",
+                "page_sort_name",
+                "user_id",
+            )
+        )
+
+    paginator = Paginator(
+        member_queryset,
+        GROUP_PAGE_SIZE,
+    )
+
+    page_obj = paginator.get_page(
+        request.GET.get("page")
+    )
+
+    page_memberships = list(
+        page_obj.object_list
+    )
+
+    page_users = [
+        page_membership.user
+        for page_membership
+        in page_memberships
+    ]
+
+    page_user_ids = [
+        page_membership.user_id
+        for page_membership
+        in page_memberships
+    ]
+
+    # -------------------------------------------------------------
+    # Spieltagspunkte nur für die sichtbare Seite
+    # -------------------------------------------------------------
+
+    total_points_by_user = {}
+
+    if tab == "matches":
+        total_points_by_user = {
+            page_membership.user_id: (
+                getattr(
+                    page_membership,
+                    "page_points",
+                    0,
+                )
+                or 0
+            )
+            for page_membership
+            in page_memberships
+        }
+
+    # -------------------------------------------------------------
+    # Bonustipps nur für die sichtbare Seite
+    #
+    # Der eigene Tipp wird zusätzlich geladen, damit my_bonus
+    # auch bei einem manuellen Aufruf einer späteren Seite
+    # weiterhin verfügbar bleibt.
+    # -------------------------------------------------------------
+
+    bonus_by_user = defaultdict(
+        list
+    )
 
     bonus_points_map = {
         user_id: 0
-        for user_id in user_ids
+        for user_id in page_user_ids
     }
 
     my_bonus = []
@@ -1428,20 +1468,44 @@ def spieltag(request):
 
         if bonus_reveal:
             bonus_queryset = (
-                bonus_queryset.filter(
-                    user_id__in=user_ids,
+                bonus_queryset
+                .filter(
+                    Q(
+                        user_id__in=page_user_ids,
+                    )
+                    | Q(
+                        user=request.user,
+                    )
                 )
             )
 
+            bonus_points_map = {
+                page_membership.user_id: (
+                    getattr(
+                        page_membership,
+                        "page_bonus_points",
+                        0,
+                    )
+                    or 0
+                )
+                for page_membership
+                in page_memberships
+            }
+
         else:
             bonus_queryset = (
-                bonus_queryset.filter(
+                bonus_queryset
+                .filter(
                     user=request.user,
                 )
             )
 
         all_bonus = list(
-            bonus_queryset
+            bonus_queryset.order_by(
+                "user_id",
+                "bonus_type",
+                "id",
+            )
         )
 
         for bonus_prediction in all_bonus:
@@ -1455,129 +1519,6 @@ def spieltag(request):
             request.user.id,
             [],
         )
-
-        if bonus_reveal:
-            for user in users:
-                bonus_points_map[
-                    user.id
-                ] = bonus_points_for_user(
-                    tournament,
-                    bonus_by_user.get(
-                        user.id,
-                        [],
-                    ),
-                )
-
-    # -------------------------------------------------------------
-    # Punkte des ausgewählten Spieltags
-    #
-    # Die Datenbank summiert die bereits gespeicherten Punkte.
-    # Es findet keine Berechnung einzelner Tipps mehr statt.
-    # -------------------------------------------------------------
-
-    total_points_by_user = {
-        user_id: 0
-        for user_id in user_ids
-    }
-
-    if (
-        tab == "matches"
-        and match_ids
-    ):
-        stored_point_rows = (
-            Prediction.objects
-            .filter(
-                group=group,
-                user_id__in=user_ids,
-                match_id__in=match_ids,
-                match__home_score__isnull=False,
-                match__away_score__isnull=False,
-                points__isnull=False,
-            )
-            .values("user_id")
-            .annotate(
-                total=Sum("points"),
-            )
-        )
-
-        for row in stored_point_rows:
-            user_id = row["user_id"]
-
-            if user_id in total_points_by_user:
-                total_points_by_user[
-                    user_id
-                ] = row["total"] or 0
-
-    # -------------------------------------------------------------
-    # Globale Sortierung vor der Seiteneinteilung
-    # -------------------------------------------------------------
-
-    if tab == "bonus":
-        if bonus_reveal:
-            sorted_users = sorted(
-                users,
-                key=lambda user: (
-                    -bonus_points_map.get(
-                        user.id,
-                        0,
-                    ),
-                    user_sort_name(user),
-                    user.id,
-                ),
-            )
-
-        else:
-            # Vor der Freigabe wird der aktuelle Nutzer
-            # an erster Stelle angezeigt.
-            sorted_users = sorted(
-                users,
-                key=lambda user: (
-                    (
-                        0
-                        if user.id == request.user.id
-                        else 1
-                    ),
-                    user_sort_name(user),
-                    user.id,
-                ),
-            )
-
-    else:
-        # Im normalen Spieltag-Tab wird ausschließlich
-        # nach den Punkten dieses Spieltags sortiert.
-        sorted_users = sorted(
-            users,
-            key=lambda user: (
-                -total_points_by_user.get(
-                    user.id,
-                    0,
-                ),
-                user_sort_name(user),
-                user.id,
-            ),
-        )
-
-    # -------------------------------------------------------------
-    # Seiteneinteilung
-    # -------------------------------------------------------------
-
-    paginator = Paginator(
-        sorted_users,
-        GROUP_PAGE_SIZE,
-    )
-
-    page_obj = paginator.get_page(
-        request.GET.get("page")
-    )
-
-    page_users = list(
-        page_obj.object_list
-    )
-
-    page_user_ids = [
-        user.id
-        for user in page_users
-    ]
 
     # -------------------------------------------------------------
     # Nur Tipps der aktuell sichtbaren Teilnehmer laden
@@ -1812,20 +1753,13 @@ def tabelle(request):
     tournament = group.tournament
     now = timezone.now()
 
-    def user_sort_name(user) -> str:
-        return (
-            user.get_username()
-            or user.email
-            or f"user-{user.id}"
-        ).strip().lower()
-
     # --------------------------------------------------------------
     # Bonusfreigabe
     # --------------------------------------------------------------
 
     season_start = tournament.season_start
 
-    bonus_lock_time = _get_bonus_lock_time(
+    bonus_lock_time = get_bonus_lock_time(
         tournament
     )
 
@@ -2048,46 +1982,6 @@ def tabelle(request):
     )
 
     # --------------------------------------------------------------
-    # Aktive Gruppenmitglieder
-    # --------------------------------------------------------------
-
-    memberships = list(
-        GroupMembership.objects
-        .filter(
-            group=group,
-        )
-        .select_related(
-            "user",
-            "user__tip_profile",
-        )
-        .order_by(
-            "user__username",
-            "user_id",
-        )
-    )
-
-    users = [
-        item.user
-        for item in memberships
-    ]
-
-    users_by_id = {
-        user.id: user
-        for user in users
-    }
-
-    user_ids = list(
-        users_by_id.keys()
-    )
-
-    username_by_id = {
-        user.id: user_sort_name(
-            user
-        )
-        for user in users
-    }
-
-    # --------------------------------------------------------------
     # Spieltage mit vollständigen Ergebnissen
     # --------------------------------------------------------------
 
@@ -2108,274 +2002,65 @@ def tabelle(request):
         .distinct()
     )
 
+    visible_result_matchdays = sorted(
+        shown_matchday_set.intersection(
+            result_matchdays
+        )
+    )
+
     # --------------------------------------------------------------
-    # Gespeicherte Punkte nach Nutzer und Spieltag aggregieren
+    # Rangfolge und Pagination direkt in der Datenbank
     #
-    # Die Datenbank summiert Prediction.points.
-    # Einzelne Tipps werden hier nicht mehr neu berechnet.
+    # Vor der Bonusfreigabe wird nach match_points,
+    # danach nach total_points sortiert.
     # --------------------------------------------------------------
 
-    points_by_user_md = {
-        user_id: defaultdict(int)
-        for user_id in user_ids
-    }
+    ranking_points_field = (
+        "total_points"
+        if bonus_reveal
+        else "match_points"
+    )
 
-    stored_point_rows = (
-        Prediction.objects
+    standings_queryset = (
+        GroupStanding.objects
         .filter(
             group=group,
-            user_id__in=user_ids,
-            match__tournament=tournament,
-            match__matchday__isnull=False,
-            match__home_score__isnull=False,
-            match__away_score__isnull=False,
-            points__isnull=False,
         )
-        .values(
-            "user_id",
-            "match__matchday",
+        .select_related(
+            "user",
+            "user__tip_profile",
         )
         .annotate(
-            total=Sum("points"),
-        )
-    )
-
-    for row in stored_point_rows:
-        user_id = row["user_id"]
-        matchday = row[
-            "match__matchday"
-        ]
-
-        if (
-            user_id in points_by_user_md
-            and matchday is not None
-        ):
-            points_by_user_md[
-                user_id
-            ][
-                matchday
-            ] = row["total"] or 0
-
-    # --------------------------------------------------------------
-    # Gesamtpunkte aus normalen Tipps
-    # --------------------------------------------------------------
-
-    total_points_all = {
-        user_id: sum(
-            points_by_user_md[
-                user_id
-            ].values()
-        )
-        for user_id in user_ids
-    }
-
-    # --------------------------------------------------------------
-    # Bonuspunkte
-    # --------------------------------------------------------------
-
-    bonus_points_by_user = defaultdict(
-        int
-    )
-
-    if bonus_reveal:
-        all_bonus = list(
-            BonusPrediction.objects
-            .filter(
-                group=group,
-                tournament=tournament,
-                user_id__in=user_ids,
-            )
-        )
-
-        bonus_by_user = defaultdict(
-            list
-        )
-
-        for bonus_prediction in all_bonus:
-            bonus_by_user[
-                bonus_prediction.user_id
-            ].append(
-                bonus_prediction
-            )
-
-        for user in users:
-            bonus_points = (
-                bonus_points_for_user(
-                    tournament,
-                    bonus_by_user.get(
-                        user.id,
-                        [],
+            table_sort_name=Lower(
+                Coalesce(
+                    NullIf(
+                        "user__username",
+                        Value(""),
                     ),
+                    NullIf(
+                        "user__email",
+                        Value(""),
+                    ),
+                    Concat(
+                        Value("user-"),
+                        Cast(
+                            "user_id",
+                            output_field=CharField(),
+                        ),
+                    ),
+                    output_field=CharField(),
                 )
             )
-
-            bonus_points_by_user[
-                user.id
-            ] = bonus_points
-
-            total_points_all[
-                user.id
-            ] += bonus_points
-
-    # --------------------------------------------------------------
-    # Rangpositionen und Rangveränderungen
-    #
-    # Die kumulativen Werte müssen weiterhin für alle Nutzer
-    # berechnet werden. Gespeichert werden aber nur die Werte
-    # der aktuell sichtbaren Spieltagsspalten.
-    # --------------------------------------------------------------
-
-    rank_by_user_md = {
-        user_id: {}
-        for user_id in user_ids
-    }
-
-    rankdiff_by_user_md = {
-        user_id: {}
-        for user_id in user_ids
-    }
-
-    cumulative_points = {
-        user_id: 0
-        for user_id in user_ids
-    }
-
-    previous_rank = {
-        user_id: None
-        for user_id in user_ids
-    }
-
-    for matchday in matchdays:
-        if matchday not in result_matchdays:
-            if matchday in shown_matchday_set:
-                for user_id in user_ids:
-                    rank_by_user_md[
-                        user_id
-                    ][
-                        matchday
-                    ] = None
-
-                    rankdiff_by_user_md[
-                        user_id
-                    ][
-                        matchday
-                    ] = None
-
-            continue
-
-        # Punkte des aktuellen Spieltags zu den
-        # kumulierten Punkten addieren.
-        for user_id in user_ids:
-            cumulative_points[
-                user_id
-            ] += points_by_user_md[
-                user_id
-            ].get(
-                matchday,
-                0,
-            )
-
-        sorted_ids_for_matchday = sorted(
-            user_ids,
-            key=lambda user_id: (
-                -cumulative_points[
-                    user_id
-                ],
-                username_by_id[
-                    user_id
-                ],
-                user_id,
-            ),
         )
-
-        current_ranks = {}
-
-        current_rank = 0
-        previous_points = None
-
-        for position, user_id in enumerate(
-            sorted_ids_for_matchday,
-            start=1,
-        ):
-            user_points = cumulative_points[
-                user_id
-            ]
-
-            if (
-                previous_points is None
-                or user_points
-                != previous_points
-            ):
-                current_rank = position
-                previous_points = user_points
-
-            current_ranks[
-                user_id
-            ] = current_rank
-
-        for user_id in user_ids:
-            old_rank = previous_rank[
-                user_id
-            ]
-
-            new_rank = current_ranks[
-                user_id
-            ]
-
-            if matchday in shown_matchday_set:
-                rank_by_user_md[
-                    user_id
-                ][
-                    matchday
-                ] = new_rank
-
-                if old_rank is None:
-                    rankdiff_by_user_md[
-                        user_id
-                    ][
-                        matchday
-                    ] = None
-
-                else:
-                    rankdiff_by_user_md[
-                        user_id
-                    ][
-                        matchday
-                    ] = (
-                        old_rank - new_rank
-                    )
-
-            previous_rank[
-                user_id
-            ] = new_rank
-
-    # --------------------------------------------------------------
-    # Nutzer global sortieren
-    #
-    # Bonuspunkte werden nach ihrer Freigabe in der
-    # Gesamtplatzierung berücksichtigt.
-    # --------------------------------------------------------------
-
-    sorted_user_ids = sorted(
-        user_ids,
-        key=lambda user_id: (
-            -total_points_all.get(
-                user_id,
-                0,
-            ),
-            username_by_id[
-                user_id
-            ],
-            user_id,
-        ),
+        .order_by(
+            f"-{ranking_points_field}",
+            "table_sort_name",
+            "user_id",
+        )
     )
 
-    # --------------------------------------------------------------
-    # Teilnehmer paginieren
-    # --------------------------------------------------------------
-
     paginator = Paginator(
-        sorted_user_ids,
+        standings_queryset,
         GROUP_PAGE_SIZE,
     )
 
@@ -2383,20 +2068,88 @@ def tabelle(request):
         request.GET.get("page")
     )
 
-    page_user_ids = list(
+    # Erst nach der Datenbank-Pagination werden die
+    # Standing-Objekte der aktuellen Seite ausgewertet.
+    page_standings = list(
         page_obj.object_list
     )
 
+    page_user_ids = [
+        standing.user_id
+        for standing in page_standings
+    ]
+
     # --------------------------------------------------------------
-    # Tabellenzeilen nur für die sichtbare Teilnehmerseite
+    # Spieltagswerte nur für die sichtbaren Nutzer laden
+    # --------------------------------------------------------------
+
+    points_by_user_md = defaultdict(
+        dict
+    )
+
+    rank_by_user_md = defaultdict(
+        dict
+    )
+
+    rankdiff_by_user_md = defaultdict(
+        dict
+    )
+
+    if (
+        page_user_ids
+        and visible_result_matchdays
+    ):
+        stored_score_rows = (
+            MatchdayScore.objects
+            .filter(
+                group=group,
+                user_id__in=page_user_ids,
+                matchday__in=(
+                    visible_result_matchdays
+                ),
+            )
+            .values_list(
+                "user_id",
+                "matchday",
+                "points",
+                "rank",
+                "rank_change",
+            )
+        )
+
+        for (
+            user_id,
+            matchday,
+            points,
+            rank,
+            rank_change,
+        ) in stored_score_rows:
+            points_by_user_md[
+                user_id
+            ][
+                matchday
+            ] = points or 0
+
+            rank_by_user_md[
+                user_id
+            ][
+                matchday
+            ] = rank
+
+            rankdiff_by_user_md[
+                user_id
+            ][
+                matchday
+            ] = rank_change
+
+    # --------------------------------------------------------------
+    # Tabellenzeilen der aktuellen Teilnehmerseite
     # --------------------------------------------------------------
 
     table_rows = []
 
-    for user_id in page_user_ids:
-        user = users_by_id[
-            user_id
-        ]
+    for standing in page_standings:
+        user_id = standing.user_id
 
         if view == "mdpoints":
             cells = [
@@ -2436,21 +2189,19 @@ def tabelle(request):
 
         table_rows.append(
             {
-                "user": user,
+                "user": standing.user,
                 "cells": cells,
                 "bonus": (
-                    bonus_points_by_user.get(
-                        user_id,
-                        0,
-                    )
+                    standing.bonus_points or 0
                     if bonus_reveal
                     else None
                 ),
                 "total": (
-                    total_points_all.get(
-                        user_id,
-                        0,
+                    getattr(
+                        standing,
+                        ranking_points_field,
                     )
+                    or 0
                 ),
             }
         )
@@ -3275,7 +3026,7 @@ def bonus_tips(request):
     group = membership.group
     tournament = group.tournament
 
-    bonus_lock_time = _get_bonus_lock_time(
+    bonus_lock_time = get_bonus_lock_time(
         tournament
     )
 
