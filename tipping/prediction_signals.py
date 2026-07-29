@@ -11,6 +11,9 @@ from .prediction_processing import (
     process_prediction_change,
     process_prediction_delete,
 )
+from .signal_control import (
+    read_model_delete_signals_suppressed,
+)
 
 
 @receiver(
@@ -151,6 +154,9 @@ def process_after_prediction_delete(
     Aktualisiert nach dem direkten Löschen eines Tipps
     die betroffene Gruppe.
     """
+
+    if read_model_delete_signals_suppressed():
+        return
 
     origin = kwargs.get("origin")
 

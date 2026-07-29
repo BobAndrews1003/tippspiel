@@ -30,6 +30,13 @@ from .forms import (
     DeleteAccountForm,
     GroupCreateForm,
 )
+from .membership_processing import (
+    rebuild_group_after_membership_change,
+)
+from .signal_control import (
+    suppress_read_model_delete_signals,
+)
+
 from .models import (
     BonusPrediction,
     Group,
@@ -2679,7 +2686,7 @@ def transfer_group_ownership(
     return redirect("my_groups")
 
 @login_required
-@require_POST
+@require_http_methods(["GET", "POST"])
 def delete_group(request, group_id):
     confirmation = (
         request.POST
@@ -2737,19 +2744,10 @@ def delete_group(request, group_id):
             == current_group.id
         )
 
-        # Gruppenspezifische Tipps ausdrücklich löschen.
-        Prediction.objects.filter(
-            group=current_group,
-        ).delete()
-
-        BonusPrediction.objects.filter(
-            group=current_group,
-        ).delete()
-
-        GroupMembership.objects.filter(
-            group=current_group,
-        ).delete()
-
+        # Sämtliche abhängigen Daten werden über die
+        # CASCADE-Beziehungen gelöscht. Die Signale
+        # erkennen den Ursprung Group und starten keine
+        # unnötigen Read-Model-Neuberechnungen.
         current_group.delete()
 
     # Falls die aktive Gruppe gelöscht wurde,
@@ -2861,17 +2859,20 @@ def leave_group(request, group_id):
 
         group_name = group.name
 
-        # Gruppenspezifische persönliche Daten
-        # vor der Mitgliedschaft löschen.
-        Prediction.objects.filter(
-            user=request.user,
-            group=group,
-        ).delete()
+        # Einzelne Tipp- und Bonus-Rebuilds wären bei
+        # dieser Sammellöschung redundant. Das direkte
+        # Löschen der Mitgliedschaft startet anschließend
+        # genau einen vollständigen Gruppen-Rebuild.
+        with suppress_read_model_delete_signals():
+            Prediction.objects.filter(
+                user=request.user,
+                group=group,
+            ).delete()
 
-        BonusPrediction.objects.filter(
-            user=request.user,
-            group=group,
-        ).delete()
+            BonusPrediction.objects.filter(
+                user=request.user,
+                group=group,
+            ).delete()
 
         membership.delete()
 
@@ -2906,6 +2907,7 @@ def leave_group(request, group_id):
     return redirect("my_groups")
 
 @login_required
+@require_http_methods(["GET", "POST"])
 def delete_account(request):
     """
     Löscht das Benutzerkonto dauerhaft.
@@ -2956,32 +2958,41 @@ def delete_account(request):
         if form.is_valid():
             user = request.user
 
+            affected_group_ids = tuple(
+                GroupMembership.objects
+                .filter(
+                    user=user,
+                )
+                .values_list(
+                    "group_id",
+                    flat=True,
+                )
+                .distinct()
+                .order_by(
+                    "group_id",
+                )
+            )
 
             with transaction.atomic():
-                # Eigene Tipps löschen.
-                Prediction.objects.filter(
-                    user=user,
-                ).delete()
-
-                # Eigene Bonustipps löschen.
-                BonusPrediction.objects.filter(
-                    user=user,
-                ).delete()
-
-                # Mitgliedschaften löschen.
-                GroupMembership.objects.filter(
-                    user=user,
-                ).delete()
-
-                # Das Löschen des Users entfernt durch die
-                # CASCADE-Beziehungen auch das UserProfile und
-                # die allauth-Kontodaten aus der Datenbank.
+                # Persönliche Daten werden über die
+                # CASCADE-Beziehungen gelöscht. Die
+                # Löschsignale erkennen den Ursprung User
+                # und starten keine Einzel-Rebuilds.
                 user.delete()
 
+                def rebuild_affected_groups():
+                    for group_id in affected_group_ids:
+                        rebuild_group_after_membership_change(
+                            group_id=group_id,
+                        )
 
+                # Nach erfolgreichem Commit jede noch
+                # vorhandene Gruppe genau einmal aktualisieren.
+                transaction.on_commit(
+                    rebuild_affected_groups
+                )
 
-            # Sitzung vollständig beenden.
-            logout(request)
+            # Sitzung vollständig beenden.            logout(request)
 
             # Die Nachricht erst nach logout erzeugen, damit sie in
             # der neuen anonymen Sitzung erhalten bleibt.
@@ -3017,6 +3028,7 @@ def delete_account(request):
 
 
 @login_required
+@require_http_methods(["GET", "POST"])
 def bonus_tips(request):
     membership = _require_active_membership(request)
 

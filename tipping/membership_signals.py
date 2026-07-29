@@ -10,6 +10,9 @@ from .membership_processing import (
     rebuild_group_after_membership_change,
 )
 from .models import GroupMembership
+from .signal_control import (
+    read_model_delete_signals_suppressed,
+)
 
 
 @receiver(
@@ -89,6 +92,37 @@ def rebuild_after_membership_save(
     )
 
 
+def _is_direct_membership_delete(
+    origin,
+) -> bool:
+    """
+    Direkte Löschungen einer Mitgliedschaft werden
+    verarbeitet.
+
+    Kaskaden durch das Löschen eines Users oder einer
+    Gruppe besitzen einen anderen Ursprung und benötigen
+    einen eigenen konsolidierten Verarbeitungspfad.
+    """
+
+    if origin is None:
+        return True
+
+    if isinstance(
+        origin,
+        GroupMembership,
+    ):
+        return True
+
+    return (
+        getattr(
+            origin,
+            "model",
+            None,
+        )
+        is GroupMembership
+    )
+
+
 @receiver(
     post_delete,
     sender=GroupMembership,
@@ -106,6 +140,16 @@ def rebuild_after_membership_delete(
     Mitglieds und berechnet die Ränge der verbleibenden
     Mitglieder neu.
     """
+
+    if read_model_delete_signals_suppressed():
+        return
+
+    origin = kwargs.get("origin")
+
+    if not _is_direct_membership_delete(
+        origin
+    ):
+        return
 
     group_id = instance.group_id
 

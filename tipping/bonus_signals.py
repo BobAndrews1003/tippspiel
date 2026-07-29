@@ -14,6 +14,9 @@ from .models import (
     BonusPrediction,
     Tournament,
 )
+from .signal_control import (
+    read_model_delete_signals_suppressed,
+)
 
 
 BONUS_RESULT_FIELDS = {
@@ -51,6 +54,36 @@ def rebuild_bonus_after_prediction_save(
     )
 
 
+def _is_direct_bonus_prediction_delete(
+    origin,
+) -> bool:
+    """
+    Direkte BonusPrediction-Löschungen werden verarbeitet.
+
+    Kaskaden beim Löschen eines Users oder einer Gruppe
+    werden durch die übergeordneten Verarbeitungspfade
+    behandelt.
+    """
+
+    if origin is None:
+        return True
+
+    if isinstance(
+        origin,
+        BonusPrediction,
+    ):
+        return True
+
+    return (
+        getattr(
+            origin,
+            "model",
+            None,
+        )
+        is BonusPrediction
+    )
+
+
 @receiver(
     post_delete,
     sender=BonusPrediction,
@@ -62,9 +95,22 @@ def rebuild_bonus_after_prediction_delete(
     **kwargs,
 ):
     """
-    Aktualisiert die betreffende Gruppe nach dem Löschen
-    eines Bonustipps.
+    Aktualisiert die betreffende Gruppe nach dem direkten
+    Löschen eines einzelnen Bonustipps.
+
+    Kontrollierte Sammellöschungen sowie Kaskaden durch
+    User oder Group lösen keinen separaten Bonus-Rebuild aus.
     """
+
+    if read_model_delete_signals_suppressed():
+        return
+
+    origin = kwargs.get("origin")
+
+    if not _is_direct_bonus_prediction_delete(
+        origin
+    ):
+        return
 
     group_id = instance.group_id
 
