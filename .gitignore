@@ -31,5 +31,7 @@ media/
 
 # Lokale Sicherung im Projektordner
 tippspiel_backup_2026/
-
-media/
+*.backup-*
+db.sqlite3.before-*
+security_audit.txt
+*-security-source.tar.gz
