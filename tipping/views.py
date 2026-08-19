@@ -2698,8 +2698,7 @@ def delete_group(request, group_id):
     with transaction.atomic():
         current_group = get_object_or_404(
             Group.objects
-            .select_for_update()
-            .select_related("owner"),
+            .select_for_update(),
             id=group_id,
         )
 
@@ -2819,17 +2818,19 @@ def set_active_group(request: HttpRequest):
 @require_POST
 def leave_group(request, group_id):
     with transaction.atomic():
-        membership = get_object_or_404(
-            GroupMembership.objects
-            .select_for_update()
-            .select_related(
-                "group__owner",
-            ),
-            user=request.user,
-            group_id=group_id,
+        # Gruppe und Mitgliedschaft separat sperren.
+        # So enthält SELECT FOR UPDATE keinen Join auf
+        # den optionalen Eigentümer der Gruppe.
+        group = get_object_or_404(
+            Group.objects.select_for_update(),
+            pk=group_id,
         )
 
-        group = membership.group
+        membership = get_object_or_404(
+            GroupMembership.objects.select_for_update(),
+            user=request.user,
+            group=group,
+        )
 
         is_owner = (
             group.owner_id == request.user.id

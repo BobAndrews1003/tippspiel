@@ -2,6 +2,13 @@
 
 set -eu
 
+APP_PROJECT_DIR="$(
+    CDPATH= cd -- "$(dirname -- "$0")/.." \
+        && pwd
+)"
+
+cd "$APP_PROJECT_DIR"
+
 WAIT_SECONDS="${MIGRATION_WAIT_SECONDS:-5}"
 MAX_ATTEMPTS="${MIGRATION_WAIT_ATTEMPTS:-60}"
 

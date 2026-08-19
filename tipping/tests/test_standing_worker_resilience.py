@@ -5,7 +5,7 @@ from unittest.mock import patch
 from django.core.management import (
     call_command,
 )
-from django.test import TestCase
+from django.test import TransactionTestCase
 from django.utils import timezone
 
 from tipping.models import (
@@ -18,7 +18,7 @@ from tipping.standing_jobs import (
 
 
 class StandingWorkerResilienceTests(
-    TestCase
+    TransactionTestCase
 ):
     def setUp(self):
         self.tournament = (
