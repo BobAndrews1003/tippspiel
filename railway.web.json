@@ -1,0 +1,13 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "deploy": {
+    "preDeployCommand": [
+      "python manage.py check --deploy --fail-level ERROR",
+      "python manage.py migrate --noinput"
+    ],
+    "startCommand": "bin/start_web.sh",
+    "healthcheckPath": "/health/",
+    "healthcheckTimeout": 300,
+    "restartPolicyType": "ALWAYS"
+  }
+}

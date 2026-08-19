@@ -1,0 +1,7 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "deploy": {
+    "startCommand": "bin/start_standing_worker.sh",
+    "restartPolicyType": "ALWAYS"
+  }
+}
