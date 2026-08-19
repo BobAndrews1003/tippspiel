@@ -6,7 +6,7 @@
 {% endblock %}
 
 {% block content %}
-  <div class="container">
+  <div class="container puntero-table-page">
 
     <!-- =====================================================
          HEADER
@@ -242,7 +242,7 @@
 
               <tr
                 class="
-                  {% if row.user.id == me_id %}
+                  {% if forloop.first %}{% if not page_obj or page_obj.number == 1 %}table-row--leader {% endif %}{% endif %}{% if row.user.id == me_id %}
                     me
                   {% endif %}
                 "

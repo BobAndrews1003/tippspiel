@@ -4016,3 +4016,3456 @@ body.app-message-is-open{
     order: -1;
   }
 }
+
+/* =========================================================
+   PUNTERO – BRAND LAYER
+   ========================================================= */
+
+/* =========================================================
+   PUNTERO V2 – VISIBLES BRANDING
+   ========================================================= */
+
+:root{
+  --brand:#438cff;
+  --brand2:#7257e8;
+
+  --leader:#f4c85a;
+  --leader-soft:rgba(244,200,90,.11);
+  --leader-border:rgba(244,200,90,.42);
+
+  --success:#3ddc97;
+  --warning:#f3b64c;
+  --danger:#ff7d7d;
+}
+
+
+/* ---------------------------------------------------------
+   Grundstimmung
+   Blau klar im Vordergrund, Violett nur sekundär.
+   --------------------------------------------------------- */
+
+body{
+  background:
+    radial-gradient(
+      1100px 560px at 18% -5%,
+      rgba(67,140,255,.23),
+      transparent 65%
+    ),
+    radial-gradient(
+      850px 480px at 94% 5%,
+      rgba(114,87,232,.08),
+      transparent 65%
+    ),
+    var(--bg);
+}
+
+
+/* ---------------------------------------------------------
+   Marke
+   --------------------------------------------------------- */
+
+.nav-title,
+.auth-logo{
+  letter-spacing:.3px;
+}
+
+.auth-logo{
+  color:#ffffff;
+}
+
+.auth-logo:hover{
+  color:#79adff;
+}
+
+
+/* ---------------------------------------------------------
+   Sekundäre Buttons
+   Kein Blau-Violett-Verlauf mehr.
+   --------------------------------------------------------- */
+
+.btn{
+  border-color:rgba(67,140,255,.32);
+  background:rgba(67,140,255,.12);
+}
+
+.btn:hover{
+  border-color:rgba(67,140,255,.62);
+  background:rgba(67,140,255,.20);
+}
+
+
+/* ---------------------------------------------------------
+   Primäre Aktionen
+   Der Gradient bekommt jetzt eine klare Funktion.
+   --------------------------------------------------------- */
+
+.btn.primary,
+.dashboard-primary-button,
+.auth-content button[type="submit"]{
+  border-color:rgba(101,162,255,.72);
+
+  background:
+    linear-gradient(
+      105deg,
+      #326fc7 0%,
+      #477fe0 48%,
+      #5941b0 100%
+    );
+
+  box-shadow:
+    0 8px 24px rgba(22,67,155,.25);
+}
+
+.btn.primary:hover,
+.dashboard-primary-button:hover,
+.auth-content button[type="submit"]:hover{
+  border-color:rgba(125,178,255,.90);
+  filter:brightness(1.08);
+}
+
+
+/* ---------------------------------------------------------
+   Navigation
+   Aktiver Bereich = klares Puntero-Blau.
+   --------------------------------------------------------- */
+
+.nav-link.active{
+  border-color:rgba(67,140,255,.65);
+  background:rgba(67,140,255,.17);
+}
+
+.nav-link:hover{
+  border-color:rgba(67,140,255,.48);
+  background:rgba(67,140,255,.08);
+}
+
+.nav-iconbtn[aria-expanded="true"]{
+  border-color:rgba(67,140,255,.72);
+  box-shadow:0 0 0 3px rgba(67,140,255,.13);
+}
+
+.tab-modern.active{
+  border-color:rgba(67,140,255,.62);
+  background:rgba(67,140,255,.18);
+}
+
+
+/* ---------------------------------------------------------
+   Avatare
+   --------------------------------------------------------- */
+
+.nav-avatar,
+.dashboard-welcome-avatar,
+.stats-avatar{
+  border-color:rgba(67,140,255,.55);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(67,140,255,.50),
+      rgba(114,87,232,.28)
+    );
+}
+
+
+/* ---------------------------------------------------------
+   Kleine Dashboard-Überschriften
+   --------------------------------------------------------- */
+
+.dashboard-eyebrow,
+.stats-eyebrow,
+.stats-card-eyebrow{
+  color:#79adff;
+}
+
+
+/* ---------------------------------------------------------
+   PRÓXIMA FECHA
+   Dezente Spielfeld-Geometrie.
+   Keine Layoutänderung.
+   --------------------------------------------------------- */
+
+.dashboard-action-card{
+  position:relative;
+  overflow:hidden;
+
+  border-color:rgba(67,140,255,.27);
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(67,140,255,.065),
+      transparent 45%
+    ),
+    rgba(17,26,46,.92);
+}
+
+.dashboard-action-card::after{
+  content:"";
+
+  position:absolute;
+  width:220px;
+  height:132px;
+  right:-32px;
+  top:35px;
+
+  border:1px solid rgba(120,174,255,.10);
+  border-radius:8px;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent 49.6%,
+      rgba(120,174,255,.10) 49.6%,
+      rgba(120,174,255,.10) 50.4%,
+      transparent 50.4%
+    ),
+    radial-gradient(
+      circle at 50% 50%,
+      transparent 0 25px,
+      rgba(120,174,255,.10) 26px,
+      rgba(120,174,255,.10) 27px,
+      transparent 28px
+    );
+
+  transform:rotate(-5deg);
+  pointer-events:none;
+}
+
+.dashboard-action-card > *{
+  position:relative;
+  z-index:1;
+}
+
+
+/* ---------------------------------------------------------
+   Offene Tipps
+   Gold = Aufmerksamkeit / Wettbewerb.
+   --------------------------------------------------------- */
+
+.dashboard-status--warning{
+  color:#ffd86e;
+  border-color:var(--leader-border);
+  background:var(--leader-soft);
+
+  box-shadow:
+    0 0 16px rgba(244,200,90,.07);
+}
+
+.dashboard-status--success{
+  color:#79eab6;
+  border-color:rgba(61,220,151,.32);
+  background:rgba(61,220,151,.09);
+}
+
+
+/* ---------------------------------------------------------
+   KPI-Karten
+   Struktur bleibt gleich.
+   --------------------------------------------------------- */
+
+.dashboard-kpi{
+  border-color:rgba(255,255,255,.11);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255,255,255,.025),
+      transparent 65%
+    ),
+    rgba(17,26,46,.92);
+}
+
+
+/* ---------------------------------------------------------
+   Rangliste
+   Platz 1 = Puntero-Gold.
+   --------------------------------------------------------- */
+
+.dashboard-ranking-row:first-child{
+  border-color:var(--leader-border);
+
+  background:
+    linear-gradient(
+      90deg,
+      rgba(244,200,90,.12),
+      rgba(244,200,90,.025) 45%,
+      rgba(255,255,255,.02)
+    );
+}
+
+.dashboard-ranking-row:first-child
+.dashboard-ranking-position{
+  color:var(--leader);
+}
+
+.dashboard-ranking-row:first-child
+.dashboard-ranking-avatar{
+  border-color:rgba(244,200,90,.52);
+  background:rgba(244,200,90,.10);
+}
+
+.dashboard-ranking-row:first-child
+.dashboard-ranking-points{
+  color:#ffdc7b;
+  font-weight:900;
+}
+
+.dashboard-ranking-row--me{
+  box-shadow:
+    inset 3px 0 0 rgba(67,140,255,.78);
+}
+
+
+/* ---------------------------------------------------------
+   Performance
+   --------------------------------------------------------- */
+
+.dashboard-performance-fill{
+  background:
+    linear-gradient(
+      90deg,
+      #438cff,
+      #7657e8
+    );
+
+  box-shadow:
+    0 0 18px rgba(67,140,255,.22);
+}
+
+
+/* ---------------------------------------------------------
+   Tabellen
+   --------------------------------------------------------- */
+
+tr.me td{
+  background:rgba(67,140,255,.095);
+}
+
+tr.me td.sticky-left,
+tr.me td.sticky-right{
+  background:rgba(67,140,255,.16);
+}
+
+
+/* ---------------------------------------------------------
+   Formulare
+   --------------------------------------------------------- */
+
+input:focus,
+select:focus,
+textarea:focus,
+.field input:focus,
+.field select:focus,
+.field textarea:focus{
+  border-color:rgba(67,140,255,.72);
+}
+
+
+/* =========================================================
+   PUNTERO – PRONOSTICAR
+   ========================================================= */
+
+
+/* ---------------------------------------------------------
+   Kopf der Tippseite
+   --------------------------------------------------------- */
+
+.tip-entry-header{
+  position:relative;
+  overflow:hidden;
+
+  border-color:rgba(67,140,255,.24);
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(67,140,255,.055),
+      transparent 48%
+    ),
+    rgba(17,26,46,.92);
+}
+
+
+/*
+   Sehr dezente Spielfeldmarkierung.
+   Bewusst schwächer als auf dem Dashboard.
+*/
+
+.tip-entry-header::after{
+  content:"";
+
+  position:absolute;
+  right:-45px;
+  top:-33px;
+
+  width:205px;
+  height:125px;
+
+  border:
+    1px solid rgba(120,174,255,.075);
+  border-radius:7px;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent 49.6%,
+      rgba(120,174,255,.075) 49.6%,
+      rgba(120,174,255,.075) 50.4%,
+      transparent 50.4%
+    ),
+    radial-gradient(
+      circle at 50% 50%,
+      transparent 0 23px,
+      rgba(120,174,255,.075) 24px,
+      rgba(120,174,255,.075) 25px,
+      transparent 26px
+    );
+
+  transform:rotate(-6deg);
+  pointer-events:none;
+}
+
+.tip-entry-header > *{
+  position:relative;
+  z-index:1;
+}
+
+.tip-entry-eyebrow{
+  color:#79adff;
+}
+
+
+/* ---------------------------------------------------------
+   Spielkarten
+   --------------------------------------------------------- */
+
+.tip-match-card{
+  position:relative;
+
+  border-color:rgba(255,255,255,.105);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(67,140,255,.018),
+      transparent 50%
+    ),
+    rgba(17,26,46,.92);
+
+  transition:
+    border-color .16s ease,
+    background .16s ease,
+    transform .16s ease;
+}
+
+
+/*
+   Offene Begegnungen bekommen links einen
+   sehr kleinen Puntero-Akzent.
+*/
+
+.tip-match-card:not(.tip-match-card--locked)::before{
+  content:"";
+
+  position:absolute;
+  top:15px;
+  bottom:15px;
+  left:-1px;
+
+  width:3px;
+
+  border-radius:0 3px 3px 0;
+
+  background:
+    linear-gradient(
+      180deg,
+      #438cff,
+      rgba(67,140,255,.28)
+    );
+}
+
+
+/*
+   Auf Desktop hilft ein minimaler Hover-Effekt,
+   einzelne Begegnungen schneller zu erfassen.
+*/
+
+@media (hover:hover){
+
+  .tip-match-card:not(.tip-match-card--locked):hover{
+    border-color:rgba(67,140,255,.28);
+
+    background:
+      linear-gradient(
+        145deg,
+        rgba(67,140,255,.045),
+        transparent 52%
+      ),
+      rgba(17,26,46,.94);
+  }
+
+}
+
+
+/* ---------------------------------------------------------
+   Gesperrte Begegnungen
+   --------------------------------------------------------- */
+
+.tip-match-card--locked{
+  opacity:.70;
+
+  border-color:rgba(255,255,255,.07);
+
+  background:
+    rgba(17,26,46,.72);
+}
+
+.tip-match-card--locked
+.tip-match-team{
+  color:rgba(232,238,252,.76);
+}
+
+
+/* ---------------------------------------------------------
+   Spielstatus
+   Grün bleibt ausschließlich Statusfarbe.
+   --------------------------------------------------------- */
+
+.tip-match-status--open{
+  color:#79eab6;
+
+  border-color:rgba(61,220,151,.35);
+
+  background:
+    rgba(61,220,151,.095);
+
+  box-shadow:
+    0 0 12px rgba(61,220,151,.04);
+}
+
+.tip-match-status--locked{
+  color:rgba(169,182,214,.72);
+
+  border-color:rgba(255,255,255,.09);
+
+  background:
+    rgba(255,255,255,.025);
+}
+
+
+/* ---------------------------------------------------------
+   Mannschaften
+   --------------------------------------------------------- */
+
+.tip-match-team{
+  font-weight:850;
+}
+
+
+/*
+   Mittelpunkt der Begegnung.
+   Kein Fußball-Icon – nur ein kleiner sportlicher Marker.
+*/
+
+.tip-match-versus{
+  min-width:28px;
+  height:28px;
+
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+
+  padding:0 6px;
+
+  border:
+    1px solid rgba(67,140,255,.17);
+
+  border-radius:999px;
+
+  background:
+    rgba(67,140,255,.055);
+
+  color:rgba(169,182,214,.88);
+
+  font-size:12px;
+}
+
+
+/* ---------------------------------------------------------
+   Tippbereich
+   --------------------------------------------------------- */
+
+.tip-score-label{
+  color:#79adff;
+}
+
+
+/*
+   Ergebnisfelder sind die zentrale Interaktion
+   auf dieser Seite und dürfen deshalb deutlicher sein.
+*/
+
+.tip-score-input{
+  border:
+    1px solid rgba(67,140,255,.25);
+
+  background:
+    rgba(7,15,29,.56);
+
+  color:#ffffff;
+
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.025);
+
+  transition:
+    border-color .15s ease,
+    background .15s ease,
+    box-shadow .15s ease,
+    transform .12s ease;
+}
+
+.tip-score-input:hover:not(:disabled){
+  border-color:
+    rgba(67,140,255,.48);
+
+  background:
+    rgba(67,140,255,.065);
+}
+
+.tip-score-input:focus{
+  border-color:#5798ff;
+
+  background:
+    rgba(67,140,255,.085);
+
+  box-shadow:
+    0 0 0 3px rgba(67,140,255,.14),
+    0 8px 20px rgba(0,0,0,.16);
+
+  outline:none;
+}
+
+.tip-score-input:disabled{
+  border-color:rgba(255,255,255,.075);
+
+  background:
+    rgba(255,255,255,.025);
+
+  color:rgba(232,238,252,.64);
+}
+
+
+/* Ergebnis-Trenner */
+
+.tip-score-separator{
+  color:#79adff;
+}
+
+
+/* ---------------------------------------------------------
+   Sticky Speichern
+   Etwas stärkere Abgrenzung vom scrollenden Inhalt.
+   --------------------------------------------------------- */
+
+.tip-save-area{
+  background:
+    linear-gradient(
+      180deg,
+      transparent 0%,
+      rgba(11,18,32,.90) 26%,
+      var(--bg) 48%
+    );
+}
+
+.tip-save-button{
+  box-shadow:
+    0 10px 28px rgba(22,67,155,.24);
+}
+
+
+/* ---------------------------------------------------------
+   Mobile Feinschliff
+   --------------------------------------------------------- */
+
+@media(max-width:700px){
+
+  .tip-entry-header::after{
+    width:155px;
+    height:96px;
+
+    right:-55px;
+    top:-23px;
+  }
+
+  .tip-match-card:not(.tip-match-card--locked)::before{
+    top:12px;
+    bottom:12px;
+  }
+
+  .tip-score-area{
+    border-top-color:
+      rgba(67,140,255,.12);
+  }
+
+}
+
+
+/* =========================================================
+   PUNTERO – TABLA POR FECHA + TABLA GENERAL
+   ========================================================= */
+
+
+/* ---------------------------------------------------------
+   Seitenkopf
+   --------------------------------------------------------- */
+
+.puntero-table-page .header-card{
+  position:relative;
+  overflow:hidden;
+
+  border-color:rgba(67,140,255,.24);
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(67,140,255,.06),
+      transparent 48%
+    ),
+    rgba(17,26,46,.92);
+}
+
+
+/*
+   Dezente sportliche Linien im Kopf.
+   Bewusst kein großes Fußballmotiv.
+*/
+
+.puntero-table-page .header-card::after{
+  content:"";
+
+  position:absolute;
+  right:-42px;
+  top:-52px;
+
+  width:190px;
+  height:120px;
+
+  border:
+    1px solid rgba(120,174,255,.07);
+
+  border-radius:8px;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent 49.5%,
+      rgba(120,174,255,.07) 49.5%,
+      rgba(120,174,255,.07) 50.5%,
+      transparent 50.5%
+    ),
+    radial-gradient(
+      circle at 50% 50%,
+      transparent 0 23px,
+      rgba(120,174,255,.07) 24px,
+      rgba(120,174,255,.07) 25px,
+      transparent 26px
+    );
+
+  transform:rotate(-7deg);
+
+  pointer-events:none;
+}
+
+.puntero-table-page .header-card > *{
+  position:relative;
+  z-index:1;
+}
+
+
+/* ---------------------------------------------------------
+   Erklärung der Tabellenansicht
+   --------------------------------------------------------- */
+
+.puntero-table-page
+.table-view-description{
+  border-color:rgba(67,140,255,.16);
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(67,140,255,.045),
+      rgba(255,255,255,.025)
+    );
+}
+
+.puntero-table-page
+.table-view-description-icon{
+  border-color:rgba(67,140,255,.42);
+
+  background:
+    rgba(67,140,255,.14);
+
+  color:#8fbdff;
+}
+
+
+/* ---------------------------------------------------------
+   Tabellenrahmen
+   --------------------------------------------------------- */
+
+.puntero-table-page
+.table-card{
+  border-color:rgba(67,140,255,.15);
+}
+
+.puntero-table-page
+.tablewrap-modern{
+  border-color:rgba(67,140,255,.16);
+
+  box-shadow:
+    0 12px 30px rgba(0,0,0,.16);
+}
+
+
+/* ---------------------------------------------------------
+   Tabellenkopf
+   --------------------------------------------------------- */
+
+.puntero-table-page
+thead th{
+  background:
+    linear-gradient(
+      180deg,
+      rgba(67,140,255,.075),
+      rgba(255,255,255,.045)
+    );
+
+  border-bottom-color:
+    rgba(67,140,255,.15);
+}
+
+
+/* Mannschaft / Begegnung */
+
+.puntero-table-page
+.match-head{
+  color:#f3f7ff;
+}
+
+
+/* Datum oder Ergebnis */
+
+.puntero-table-page
+.match-sub{
+  color:#91a8cf;
+}
+
+
+/* ---------------------------------------------------------
+   Spieltagsüberschriften
+   --------------------------------------------------------- */
+
+.puntero-table-page
+.table-matchday-heading-label{
+  color:#79adff;
+}
+
+.puntero-table-page
+.table-matchday-heading-date{
+  color:#f3f7ff;
+}
+
+
+/* Aktueller Spieltag */
+
+.puntero-table-page
+.table-matchday-heading--current{
+  background:
+    rgba(67,140,255,.13);
+
+  box-shadow:
+    inset 0 3px 0 #438cff;
+}
+
+.puntero-table-page
+.table-current-matchday-label{
+  border-color:
+    rgba(67,140,255,.42);
+
+  background:
+    rgba(67,140,255,.14);
+
+  color:#94c0ff;
+}
+
+
+/* ---------------------------------------------------------
+   Normale Rangposition
+   --------------------------------------------------------- */
+
+.puntero-table-page
+.table-rank-value{
+  border-color:rgba(67,140,255,.17);
+
+  background:
+    rgba(67,140,255,.055);
+}
+
+
+/* ---------------------------------------------------------
+   TABELLENFÜHRER
+   Gold = Führung / Wettbewerb.
+   --------------------------------------------------------- */
+
+.puntero-table-page
+tr.table-row--leader td{
+  background:
+    linear-gradient(
+      90deg,
+      rgba(244,200,90,.105),
+      rgba(244,200,90,.035)
+    );
+
+  border-bottom-color:
+    rgba(244,200,90,.16);
+}
+
+
+/*
+   Sticky-Zellen brauchen einen eigenen Hintergrund,
+   da sie sonst ihre ursprüngliche Navy-Fläche behalten.
+*/
+
+.puntero-table-page
+tr.table-row--leader
+td.sticky-left,
+
+.puntero-table-page
+tr.table-row--leader
+td.sticky-right{
+  background:
+    linear-gradient(
+      90deg,
+      #29263a,
+      #1d2234
+    );
+}
+
+
+/* Platz */
+
+.puntero-table-page
+tr.table-row--leader
+.table-rank-value,
+
+.puntero-table-page
+tr.table-row--leader
+.sticky-left.pos{
+  color:var(--leader);
+
+  font-weight:900;
+}
+
+
+/* Punkte */
+
+.puntero-table-page
+tr.table-row--leader
+.table-points-value,
+
+.puntero-table-page
+tr.table-row--leader
+.sticky-right.total{
+  color:#ffdc7b;
+
+  font-weight:900;
+}
+
+
+/* Avatar des Führenden */
+
+.puntero-table-page
+tr.table-row--leader
+.table-user-avatar{
+  border-color:
+    rgba(244,200,90,.48);
+
+  background:
+    rgba(244,200,90,.10);
+}
+
+
+/*
+   Führender + eigener Nutzer:
+   Gold zeigt Führung,
+   Blau zeigt weiterhin "ich".
+*/
+
+.puntero-table-page
+tr.table-row--leader.me
+td.sticky-left.pos{
+  box-shadow:
+    inset 3px 0 0 #438cff;
+}
+
+
+/* Hover darf Gold nicht überdecken */
+
+.puntero-table-page
+tr.table-row--leader:hover td{
+  background:
+    linear-gradient(
+      90deg,
+      rgba(244,200,90,.14),
+      rgba(244,200,90,.045)
+    );
+}
+
+.puntero-table-page
+tr.table-row--leader:hover
+td.sticky-left,
+
+.puntero-table-page
+tr.table-row--leader:hover
+td.sticky-right{
+  background:
+    linear-gradient(
+      90deg,
+      #2d293a,
+      #202536
+    );
+}
+
+
+/* ---------------------------------------------------------
+   Eigener Nutzer
+   Puntero-Blau bleibt die persönliche Markierung.
+   --------------------------------------------------------- */
+
+.puntero-table-page
+tr.me:not(.table-row--leader) td{
+  background:
+    rgba(67,140,255,.095);
+}
+
+.puntero-table-page
+tr.me:not(.table-row--leader)
+td.sticky-left,
+
+.puntero-table-page
+tr.me:not(.table-row--leader)
+td.sticky-right{
+  background:
+    rgba(31,48,78,.98);
+}
+
+
+/* ---------------------------------------------------------
+   Profilbilder in Tabellen
+   --------------------------------------------------------- */
+
+.puntero-table-page
+.table-user-avatar{
+  border-color:
+    rgba(67,140,255,.38);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(67,140,255,.42),
+      rgba(114,87,232,.22)
+    );
+}
+
+
+/* ---------------------------------------------------------
+   Punkte
+   --------------------------------------------------------- */
+
+.puntero-table-page
+.table-points-value{
+  color:#dce9ff;
+}
+
+
+/* ---------------------------------------------------------
+   Rangveränderungen
+   Statusfarben bleiben bewusst erhalten.
+   --------------------------------------------------------- */
+
+.puntero-table-page
+.rank-change-up{
+  color:#79eab6;
+
+  border-color:
+    rgba(61,220,151,.32);
+
+  background:
+    rgba(61,220,151,.095);
+}
+
+.puntero-table-page
+.rank-change-down{
+  color:#ff9a9a;
+
+  border-color:
+    rgba(255,107,107,.30);
+
+  background:
+    rgba(255,107,107,.09);
+}
+
+.puntero-table-page
+.rank-change-same{
+  color:#a9b6d6;
+
+  background:
+    rgba(255,255,255,.03);
+}
+
+
+/* ---------------------------------------------------------
+   Verdeckte Tipps
+   Bewusst deutlich im Hintergrund.
+   --------------------------------------------------------- */
+
+.puntero-table-page
+.hidden-tip{
+  color:rgba(169,182,214,.58);
+}
+
+
+/* ---------------------------------------------------------
+   Bonus-Hinweise
+   --------------------------------------------------------- */
+
+.puntero-table-page
+.table-bonus-note{
+  color:#91a8cf;
+}
+
+
+/* ---------------------------------------------------------
+   Mobile
+   --------------------------------------------------------- */
+
+@media(max-width:600px){
+
+  .puntero-table-page
+  .header-card::after{
+    width:145px;
+    height:92px;
+
+    right:-52px;
+    top:-34px;
+  }
+
+  .puntero-table-page
+  .tablewrap-modern{
+    box-shadow:
+      0 8px 22px rgba(0,0,0,.14);
+  }
+
+}
+
+/* =========================================================
+   PUNTERO – PRONÓSTICOS ESPECIALES
+   ========================================================= */
+
+
+/* ---------------------------------------------------------
+   Seitenkopf
+   --------------------------------------------------------- */
+
+.puntero-bonus-page .bonus-hero-card{
+  position:relative;
+  overflow:hidden;
+
+  border-color:rgba(67,140,255,.24);
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(67,140,255,.06),
+      transparent 48%
+    ),
+    rgba(17,26,46,.92);
+}
+
+
+/* Dezente Spielfeld-Geometrie */
+
+.puntero-bonus-page
+.bonus-hero-card::after{
+  content:"";
+
+  position:absolute;
+  right:-45px;
+  top:-45px;
+
+  width:195px;
+  height:120px;
+
+  border:
+    1px solid rgba(120,174,255,.075);
+
+  border-radius:8px;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent 49.6%,
+      rgba(120,174,255,.075) 49.6%,
+      rgba(120,174,255,.075) 50.4%,
+      transparent 50.4%
+    ),
+    radial-gradient(
+      circle at 50% 50%,
+      transparent 0 23px,
+      rgba(120,174,255,.075) 24px,
+      rgba(120,174,255,.075) 25px,
+      transparent 26px
+    );
+
+  transform:rotate(-6deg);
+  pointer-events:none;
+}
+
+.puntero-bonus-page
+.bonus-hero-card > *{
+  position:relative;
+  z-index:1;
+}
+
+
+/* ---------------------------------------------------------
+   Formularbereich
+   --------------------------------------------------------- */
+
+.puntero-bonus-page
+.bonus-form-card{
+  border-color:
+    rgba(67,140,255,.14);
+
+  background:
+    rgba(17,26,46,.92);
+}
+
+
+/*
+   Jeder Spezialtipp wird visuell als eigener
+   kleiner Tippblock behandelt.
+*/
+
+.puntero-bonus-page
+.bonus-form-card .field{
+  padding:14px 15px;
+
+  border:
+    1px solid rgba(255,255,255,.09);
+
+  border-radius:14px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(67,140,255,.025),
+      transparent 60%
+    ),
+    rgba(255,255,255,.018);
+
+  transition:
+    border-color .15s ease,
+    background .15s ease;
+}
+
+
+/* ---------------------------------------------------------
+   Labels
+   --------------------------------------------------------- */
+
+.puntero-bonus-page
+.bonus-form-card .field label{
+  margin-bottom:8px;
+
+  color:#79adff;
+
+  font-weight:800;
+}
+
+
+/* ---------------------------------------------------------
+   Eingabefelder / Auswahlfelder
+   --------------------------------------------------------- */
+
+.puntero-bonus-page
+.bonus-form-card input,
+
+.puntero-bonus-page
+.bonus-form-card select,
+
+.puntero-bonus-page
+.bonus-form-card textarea{
+  border-color:
+    rgba(67,140,255,.22);
+
+  background:
+    rgba(7,15,29,.48);
+
+  transition:
+    border-color .15s ease,
+    background .15s ease,
+    box-shadow .15s ease;
+}
+
+
+.puntero-bonus-page
+.bonus-form-card input:hover,
+
+.puntero-bonus-page
+.bonus-form-card select:hover,
+
+.puntero-bonus-page
+.bonus-form-card textarea:hover{
+  border-color:
+    rgba(67,140,255,.44);
+}
+
+
+.puntero-bonus-page
+.bonus-form-card input:focus,
+
+.puntero-bonus-page
+.bonus-form-card select:focus,
+
+.puntero-bonus-page
+.bonus-form-card textarea:focus{
+  border-color:#5798ff;
+
+  background:
+    rgba(67,140,255,.075);
+
+  box-shadow:
+    0 0 0 3px rgba(67,140,255,.13);
+
+  outline:none;
+}
+
+
+/* ---------------------------------------------------------
+   Feld mit Fokus zusätzlich hervorheben
+   --------------------------------------------------------- */
+
+.puntero-bonus-page
+.bonus-form-card .field:focus-within{
+  border-color:
+    rgba(67,140,255,.30);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(67,140,255,.05),
+      transparent 65%
+    ),
+    rgba(255,255,255,.02);
+}
+
+
+/* ---------------------------------------------------------
+   Fehler
+   --------------------------------------------------------- */
+
+.puntero-bonus-page
+.form-error{
+  color:#ff9a9a;
+}
+
+
+/* ---------------------------------------------------------
+   Speichern
+   Globale Puntero-Primärfarbe wird bereits verwendet.
+   --------------------------------------------------------- */
+
+.puntero-bonus-page
+.actions{
+  margin-top:4px;
+
+  padding-top:12px;
+}
+
+
+/* ---------------------------------------------------------
+   Mobile
+   --------------------------------------------------------- */
+
+@media(max-width:600px){
+
+  .puntero-bonus-page
+  .bonus-hero-card::after{
+    width:145px;
+    height:90px;
+
+    right:-50px;
+    top:-31px;
+  }
+
+  .puntero-bonus-page
+  .bonus-form-card .field{
+    padding:13px;
+  }
+
+  .puntero-bonus-page
+  .actions{
+    display:block;
+  }
+
+  .puntero-bonus-page
+  .actions .btn{
+    width:100%;
+  }
+
+}
+
+/* =========================================================
+   PUNTERO – ESTADÍSTICAS
+   ========================================================= */
+
+
+/* ---------------------------------------------------------
+   Hero / Spielerprofil
+   --------------------------------------------------------- */
+
+.stats-page .stats-hero{
+  position:relative;
+  overflow:hidden;
+
+  border-color:rgba(67,140,255,.24);
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(67,140,255,.075),
+      transparent 50%
+    ),
+    rgba(17,26,46,.94);
+}
+
+
+/* Dezente Spielfeld-Geometrie */
+
+.stats-page .stats-hero::after{
+  content:"";
+
+  position:absolute;
+  right:-40px;
+  top:-42px;
+
+  width:210px;
+  height:130px;
+
+  border:
+    1px solid rgba(120,174,255,.075);
+
+  border-radius:8px;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent 49.6%,
+      rgba(120,174,255,.075) 49.6%,
+      rgba(120,174,255,.075) 50.4%,
+      transparent 50.4%
+    ),
+    radial-gradient(
+      circle at 50% 50%,
+      transparent 0 24px,
+      rgba(120,174,255,.075) 25px,
+      rgba(120,174,255,.075) 26px,
+      transparent 27px
+    );
+
+  transform:rotate(-6deg);
+  pointer-events:none;
+}
+
+.stats-page .stats-hero > *{
+  position:relative;
+  z-index:1;
+}
+
+
+/* ---------------------------------------------------------
+   Avatar
+   --------------------------------------------------------- */
+
+.stats-page .stats-avatar{
+  border-color:rgba(67,140,255,.52);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(67,140,255,.46),
+      rgba(114,87,232,.25)
+    );
+
+  box-shadow:
+    0 0 0 4px rgba(67,140,255,.055);
+}
+
+
+/* ---------------------------------------------------------
+   Kleine Überschriften
+   --------------------------------------------------------- */
+
+.stats-page .stats-eyebrow,
+.stats-page .stats-card-eyebrow{
+  color:#79adff;
+}
+
+
+/* ---------------------------------------------------------
+   KPI-Bereich
+   Persönliche Kennzahlen = Puntero-Blau.
+   --------------------------------------------------------- */
+
+.stats-page .stats-kpi{
+  border-color:rgba(67,140,255,.14);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(67,140,255,.045),
+      transparent 62%
+    ),
+    rgba(17,26,46,.90);
+
+  transition:
+    border-color .16s ease,
+    transform .16s ease,
+    background .16s ease;
+}
+
+@media (hover:hover){
+
+  .stats-page .stats-kpi:hover{
+    border-color:rgba(67,140,255,.28);
+
+    background:
+      linear-gradient(
+        145deg,
+        rgba(67,140,255,.07),
+        transparent 65%
+      ),
+      rgba(17,26,46,.94);
+
+    transform:translateY(-1px);
+  }
+
+}
+
+.stats-page .stats-kpi-label{
+  color:#9bb7df;
+}
+
+.stats-page .stats-kpi-value{
+  color:#f4f8ff;
+}
+
+
+/*
+   Das meist getippte Ergebnis darf optisch
+   wie ein Score erscheinen, aber nicht gold.
+*/
+
+.stats-page .stats-kpi-value--score{
+  color:#8fbdff;
+
+  text-shadow:
+    0 0 18px rgba(67,140,255,.13);
+}
+
+.stats-page .stats-kpi-note{
+  color:#91a8cf;
+}
+
+
+/* ---------------------------------------------------------
+   Statistik-Karten
+   --------------------------------------------------------- */
+
+.stats-page .stats-card{
+  border-color:rgba(67,140,255,.13);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(67,140,255,.025),
+      transparent 55%
+    ),
+    rgba(17,26,46,.91);
+}
+
+.stats-page .stats-card-header{
+  border-bottom-color:rgba(67,140,255,.10);
+}
+
+.stats-page .stats-card h2{
+  color:#f3f7ff;
+}
+
+.stats-page .stats-card-note{
+  color:#91a8cf;
+}
+
+
+/* ---------------------------------------------------------
+   Charts
+   --------------------------------------------------------- */
+
+.stats-page .stats-chart{
+  border-color:rgba(67,140,255,.10);
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(67,140,255,.035),
+      rgba(255,255,255,.012)
+    );
+}
+
+
+/*
+   Falls Balken/Füllungen ihre Farbe aus
+   dem übergeordneten Element übernehmen,
+   geben wir ihnen die Puntero-Farbe mit.
+*/
+
+.stats-page .stats-chart{
+  --stats-primary:#438cff;
+  --stats-secondary:#7257e8;
+}
+
+
+/* ---------------------------------------------------------
+   Liste der meist getippten Ergebnisse
+   --------------------------------------------------------- */
+
+.stats-page .stats-score-item{
+  border-color:rgba(255,255,255,.085);
+
+  background:
+    rgba(255,255,255,.018);
+
+  transition:
+    border-color .15s ease,
+    background .15s ease;
+}
+
+@media (hover:hover){
+
+  .stats-page .stats-score-item:hover{
+    border-color:rgba(67,140,255,.24);
+
+    background:
+      rgba(67,140,255,.045);
+  }
+
+}
+
+.stats-page .stats-score-position{
+  color:#79adff;
+
+  border-color:rgba(67,140,255,.22);
+
+  background:rgba(67,140,255,.075);
+}
+
+.stats-page .stats-score-result{
+  color:#f3f7ff;
+}
+
+.stats-page .stats-score-count{
+  color:#9fb1d3;
+}
+
+
+/* ---------------------------------------------------------
+   Liga / persönliche Tabelle
+   --------------------------------------------------------- */
+
+.stats-page .stats-league-card{
+  border-color:rgba(67,140,255,.17);
+}
+
+.stats-page .stats-table-wrap{
+  border-color:rgba(67,140,255,.12);
+}
+
+.stats-page .stats-table th{
+  color:#9bb7df;
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(67,140,255,.065),
+      rgba(255,255,255,.025)
+    );
+
+  border-bottom-color:rgba(67,140,255,.13);
+}
+
+.stats-page .stats-table td{
+  border-bottom-color:rgba(255,255,255,.065);
+}
+
+@media (hover:hover){
+
+  .stats-page .stats-table tbody tr:hover td{
+    background:rgba(67,140,255,.045);
+  }
+
+}
+
+
+/* Position */
+
+.stats-page .stats-position{
+  color:#8fbdff;
+
+  border-color:rgba(67,140,255,.20);
+
+  background:rgba(67,140,255,.07);
+}
+
+
+/* Punkte */
+
+.stats-page .stats-points{
+  color:#e4eeff;
+
+  font-weight:900;
+}
+
+
+/* Mannschaft */
+
+.stats-page .stats-team-name{
+  color:#f1f5ff;
+}
+
+
+/* ---------------------------------------------------------
+   Tabellenlegende
+   --------------------------------------------------------- */
+
+.stats-page .stats-table-legend{
+  color:#91a8cf;
+
+  border-top-color:rgba(67,140,255,.09);
+}
+
+
+/* ---------------------------------------------------------
+   Empty States
+   --------------------------------------------------------- */
+
+.stats-page .stats-empty,
+.stats-page .stats-inline-empty{
+  border-color:rgba(67,140,255,.13);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(67,140,255,.035),
+      transparent 65%
+    ),
+    rgba(17,26,46,.88);
+}
+
+.stats-page .stats-empty-icon{
+  color:#79adff;
+
+  border-color:rgba(67,140,255,.22);
+
+  background:rgba(67,140,255,.07);
+}
+
+
+/* ---------------------------------------------------------
+   Mobile
+   --------------------------------------------------------- */
+
+@media(max-width:600px){
+
+  .stats-page .stats-hero::after{
+    width:150px;
+    height:94px;
+
+    right:-50px;
+    top:-30px;
+  }
+
+  .stats-page .stats-kpi{
+    background:
+      linear-gradient(
+        145deg,
+        rgba(67,140,255,.04),
+        transparent 68%
+      ),
+      rgba(17,26,46,.91);
+  }
+
+}
+
+/* =========================================================
+   PUNTERO – MIS GRUPOS
+   ========================================================= */
+
+
+/* ---------------------------------------------------------
+   Seitenkopf
+   --------------------------------------------------------- */
+
+.groups-page-header{
+  position:relative;
+  overflow:hidden;
+
+  border-color:rgba(67,140,255,.24);
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(67,140,255,.065),
+      transparent 48%
+    ),
+    rgba(17,26,46,.93);
+}
+
+
+/* Dezente Spielfeld-Geometrie */
+
+.groups-page-header::after{
+  content:"";
+
+  position:absolute;
+  right:-44px;
+  top:-46px;
+
+  width:200px;
+  height:122px;
+
+  border:
+    1px solid rgba(120,174,255,.07);
+
+  border-radius:8px;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent 49.6%,
+      rgba(120,174,255,.07) 49.6%,
+      rgba(120,174,255,.07) 50.4%,
+      transparent 50.4%
+    ),
+    radial-gradient(
+      circle at 50% 50%,
+      transparent 0 23px,
+      rgba(120,174,255,.07) 24px,
+      rgba(120,174,255,.07) 25px,
+      transparent 26px
+    );
+
+  transform:rotate(-6deg);
+  pointer-events:none;
+}
+
+.groups-page-header > *{
+  position:relative;
+  z-index:1;
+}
+
+
+/* ---------------------------------------------------------
+   Gruppenraster
+   --------------------------------------------------------- */
+
+.group-management-grid{
+  gap:16px;
+}
+
+
+/* ---------------------------------------------------------
+   Normale Gruppenkarte
+   --------------------------------------------------------- */
+
+.group-management-card{
+  position:relative;
+  overflow:hidden;
+
+  border-color:
+    rgba(255,255,255,.10);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(67,140,255,.022),
+      transparent 58%
+    ),
+    rgba(17,26,46,.92);
+
+  transition:
+    border-color .16s ease,
+    background .16s ease,
+    transform .16s ease;
+}
+
+@media (hover:hover){
+
+  .group-management-card:hover{
+    border-color:
+      rgba(67,140,255,.23);
+
+    background:
+      linear-gradient(
+        145deg,
+        rgba(67,140,255,.045),
+        transparent 62%
+      ),
+      rgba(17,26,46,.95);
+  }
+
+}
+
+
+/* ---------------------------------------------------------
+   Aktive Gruppe
+   Blau = aktuelle Auswahl.
+   --------------------------------------------------------- */
+
+.active-group-card{
+  border-color:
+    rgba(67,140,255,.48);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(67,140,255,.105),
+      rgba(67,140,255,.025) 52%,
+      rgba(17,26,46,.94)
+    );
+
+  box-shadow:
+    inset 3px 0 0 #438cff,
+    0 12px 28px rgba(0,0,0,.14);
+}
+
+
+/*
+   Kleiner Lichtakzent oben rechts.
+*/
+
+.active-group-card::after{
+  content:"";
+
+  position:absolute;
+  width:130px;
+  height:130px;
+
+  right:-60px;
+  top:-70px;
+
+  border-radius:50%;
+
+  background:
+    radial-gradient(
+      circle,
+      rgba(67,140,255,.13),
+      transparent 68%
+    );
+
+  pointer-events:none;
+}
+
+
+/* ---------------------------------------------------------
+   Gruppenname / Wettbewerb
+   --------------------------------------------------------- */
+
+.group-card-label{
+  color:#79adff;
+}
+
+.group-management-head h2{
+  color:#f4f8ff;
+}
+
+
+/* ---------------------------------------------------------
+   Badges
+   --------------------------------------------------------- */
+
+.group-card-badges{
+  position:relative;
+  z-index:1;
+}
+
+.group-card-badges > *{
+  border-color:
+    rgba(67,140,255,.20);
+
+  background:
+    rgba(67,140,255,.065);
+
+  color:#a7caff;
+}
+
+
+/* Aktive Gruppe etwas stärker */
+
+.active-group-card
+.group-card-badges > *{
+  border-color:
+    rgba(67,140,255,.34);
+
+  background:
+    rgba(67,140,255,.12);
+
+  color:#b9d6ff;
+}
+
+
+/* ---------------------------------------------------------
+   Detailbereich
+   --------------------------------------------------------- */
+
+.group-details-list{
+  border-color:
+    rgba(255,255,255,.075);
+}
+
+.group-detail-row{
+  border-bottom-color:
+    rgba(255,255,255,.065);
+}
+
+.group-detail-row:last-child{
+  border-bottom-color:transparent;
+}
+
+
+/* ---------------------------------------------------------
+   Einladungscode
+   Ein Code ist eine Aktion/Information, kein Wettbewerb.
+   Deshalb blau statt gold.
+   --------------------------------------------------------- */
+
+.group-code-row code{
+  border-color:
+    rgba(67,140,255,.24);
+
+  background:
+    rgba(67,140,255,.075);
+
+  color:#b7d4ff;
+
+  letter-spacing:.055em;
+}
+
+
+/* Copy-Button innerhalb der Code-Zeile */
+
+.group-code-row .btn{
+  border-color:
+    rgba(67,140,255,.25);
+
+  background:
+    rgba(67,140,255,.09);
+}
+
+.group-code-row .btn:hover{
+  border-color:
+    rgba(67,140,255,.48);
+
+  background:
+    rgba(67,140,255,.16);
+}
+
+
+/* ---------------------------------------------------------
+   Hinweis "Este es tu grupo activo"
+   --------------------------------------------------------- */
+
+.group-active-note{
+  color:#8fbdff;
+}
+
+
+/* ---------------------------------------------------------
+   Admin-Werkzeuge
+   --------------------------------------------------------- */
+
+.group-owner-tools{
+  border-color:
+    rgba(67,140,255,.13);
+
+  background:
+    rgba(255,255,255,.014);
+}
+
+.group-owner-tools summary{
+  color:#a8c9f7;
+
+  transition:
+    background .15s ease,
+    color .15s ease;
+}
+
+.group-owner-tools summary:hover{
+  background:
+    rgba(67,140,255,.055);
+
+  color:#d7e7ff;
+}
+
+.group-owner-tools[open] summary{
+  border-bottom-color:
+    rgba(67,140,255,.10);
+
+  background:
+    rgba(67,140,255,.045);
+}
+
+
+/* ---------------------------------------------------------
+   Admin-Inhalt
+   --------------------------------------------------------- */
+
+.group-owner-tools-content{
+  background:
+    linear-gradient(
+      180deg,
+      rgba(67,140,255,.018),
+      transparent
+    );
+}
+
+.group-admin-block{
+  border-color:
+    rgba(255,255,255,.075);
+
+  background:
+    rgba(255,255,255,.012);
+}
+
+.group-admin-block h3{
+  color:#eef5ff;
+}
+
+
+/* ---------------------------------------------------------
+   Transfer der Administration
+   Normale administrative Aktion = Blau.
+   --------------------------------------------------------- */
+
+.group-transfer-form select{
+  border-color:
+    rgba(67,140,255,.22);
+
+  background:
+    rgba(7,15,29,.50);
+}
+
+.group-transfer-form select:hover{
+  border-color:
+    rgba(67,140,255,.42);
+}
+
+.group-transfer-form select:focus{
+  border-color:#5798ff;
+
+  box-shadow:
+    0 0 0 3px rgba(67,140,255,.13);
+
+  outline:none;
+}
+
+
+/* ---------------------------------------------------------
+   Danger Zone
+   Rot bleibt ausschließlich destruktiven Aktionen
+   vorbehalten.
+   --------------------------------------------------------- */
+
+.group-danger-zone{
+  border-color:
+    rgba(255,125,125,.20);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255,125,125,.055),
+      transparent 65%
+    ),
+    rgba(255,125,125,.018);
+}
+
+.group-danger-zone h3{
+  color:#ff9b9b;
+}
+
+.group-danger-zone p{
+  color:#c5afba;
+}
+
+
+/* Texteingabe für Löschbestätigung */
+
+.group-delete-form input{
+  border-color:
+    rgba(255,125,125,.20);
+
+  background:
+    rgba(7,15,29,.50);
+}
+
+.group-delete-form input:focus{
+  border-color:
+    rgba(255,125,125,.62);
+
+  box-shadow:
+    0 0 0 3px rgba(255,125,125,.10);
+
+  outline:none;
+}
+
+
+/* ---------------------------------------------------------
+   Destruktive Buttons
+   --------------------------------------------------------- */
+
+.btn.danger-outline{
+  border-color:
+    rgba(255,125,125,.34);
+
+  background:
+    rgba(255,125,125,.055);
+
+  color:#ffabab;
+}
+
+.btn.danger-outline:hover:not(:disabled){
+  border-color:
+    rgba(255,125,125,.58);
+
+  background:
+    rgba(255,125,125,.11);
+
+  color:#ffd0d0;
+}
+
+
+.btn.danger{
+  border-color:
+    rgba(255,125,125,.60);
+
+  background:
+    linear-gradient(
+      105deg,
+      #a33f4a,
+      #7f3441
+    );
+
+  color:#fff;
+
+  box-shadow:
+    0 8px 22px rgba(126,41,53,.20);
+}
+
+.btn.danger:hover{
+  filter:brightness(1.08);
+}
+
+
+/* ---------------------------------------------------------
+   Leerer Zustand
+   --------------------------------------------------------- */
+
+.groups-empty-state{
+  border-color:
+    rgba(67,140,255,.16);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(67,140,255,.045),
+      transparent 62%
+    ),
+    rgba(17,26,46,.90);
+}
+
+
+/* ---------------------------------------------------------
+   Mobile
+   --------------------------------------------------------- */
+
+@media(max-width:600px){
+
+  .groups-page-header::after{
+    width:145px;
+    height:90px;
+
+    right:-50px;
+    top:-31px;
+  }
+
+  .active-group-card{
+    box-shadow:
+      inset 3px 0 0 #438cff;
+  }
+
+}
+
+/* =========================================================
+   PUNTERO – UNIRSE + CREAR GRUPO
+   ========================================================= */
+
+
+/* ---------------------------------------------------------
+   Gemeinsame Hauptkarte
+   --------------------------------------------------------- */
+
+.group-form-shell{
+  position:relative;
+  overflow:hidden;
+
+  border-color:
+    rgba(67,140,255,.24);
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(67,140,255,.065),
+      transparent 50%
+    ),
+    rgba(17,26,46,.93);
+}
+
+
+/* Dezente Spielfeldstruktur */
+
+.group-form-shell::after{
+  content:"";
+
+  position:absolute;
+  right:-48px;
+  top:-42px;
+
+  width:190px;
+  height:118px;
+
+  border:
+    1px solid rgba(120,174,255,.07);
+
+  border-radius:8px;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent 49.6%,
+      rgba(120,174,255,.07) 49.6%,
+      rgba(120,174,255,.07) 50.4%,
+      transparent 50.4%
+    ),
+    radial-gradient(
+      circle at 50% 50%,
+      transparent 0 22px,
+      rgba(120,174,255,.07) 23px,
+      rgba(120,174,255,.07) 24px,
+      transparent 25px
+    );
+
+  transform:rotate(-6deg);
+
+  pointer-events:none;
+}
+
+
+/*
+   Inhalte liegen über der Dekoration.
+*/
+
+.group-form-shell > *{
+  position:relative;
+  z-index:1;
+}
+
+
+/* ---------------------------------------------------------
+   Überschriften
+   --------------------------------------------------------- */
+
+.join-group-page h2,
+.create-group-page h2{
+  color:#f4f8ff;
+}
+
+.join-group-page h3{
+  color:#e9f2ff;
+}
+
+
+/* ---------------------------------------------------------
+   Formularlabels
+   --------------------------------------------------------- */
+
+.join-group-page .field label,
+.create-group-page .field label{
+  color:#79adff;
+
+  font-weight:800;
+}
+
+
+/* ---------------------------------------------------------
+   Eingabefelder
+   --------------------------------------------------------- */
+
+.join-group-page .field input,
+.join-group-page .field select,
+.join-group-page .field textarea,
+
+.create-group-page .field input,
+.create-group-page .field select,
+.create-group-page .field textarea{
+  border-color:
+    rgba(67,140,255,.23);
+
+  background:
+    rgba(7,15,29,.52);
+
+  color:#f4f8ff;
+
+  transition:
+    border-color .15s ease,
+    background .15s ease,
+    box-shadow .15s ease;
+}
+
+
+/* Hover */
+
+.join-group-page .field input:hover,
+.join-group-page .field select:hover,
+.join-group-page .field textarea:hover,
+
+.create-group-page .field input:hover,
+.create-group-page .field select:hover,
+.create-group-page .field textarea:hover{
+  border-color:
+    rgba(67,140,255,.44);
+}
+
+
+/* Fokus */
+
+.join-group-page .field input:focus,
+.join-group-page .field select:focus,
+.join-group-page .field textarea:focus,
+
+.create-group-page .field input:focus,
+.create-group-page .field select:focus,
+.create-group-page .field textarea:focus{
+  border-color:#5798ff;
+
+  background:
+    rgba(67,140,255,.075);
+
+  box-shadow:
+    0 0 0 3px rgba(67,140,255,.13);
+
+  outline:none;
+}
+
+
+/* Das gesamte Feld reagiert subtil auf Fokus */
+
+.join-group-page .field:focus-within,
+.create-group-page .field:focus-within{
+  color:#fff;
+}
+
+
+/* ---------------------------------------------------------
+   Join-Code
+   Der Code ist die zentrale Interaktion dieser Seite.
+   --------------------------------------------------------- */
+
+.join-group-page .input{
+  min-height:48px;
+
+  font-weight:800;
+
+  letter-spacing:.055em;
+}
+
+
+/* ---------------------------------------------------------
+   Fehlermeldungen / Hinweise
+   --------------------------------------------------------- */
+
+.join-group-page .alert,
+.create-group-page .alert{
+  border-color:
+    rgba(255,125,125,.20);
+
+  background:
+    rgba(255,125,125,.055);
+}
+
+
+/* ---------------------------------------------------------
+   "Noch keine Gruppe?"
+   Als klar abgegrenzte sekundäre Möglichkeit.
+   --------------------------------------------------------- */
+
+.join-group-page
+.join-group-card > h3{
+  margin-top:24px !important;
+
+  padding-top:20px;
+
+  border-top:
+    1px solid rgba(67,140,255,.11);
+}
+
+
+/* ---------------------------------------------------------
+   Bereits vorhandene Gruppen
+   --------------------------------------------------------- */
+
+.join-existing-group-card{
+  border-color:
+    rgba(67,140,255,.12);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(67,140,255,.035),
+      transparent 65%
+    ),
+    rgba(17,26,46,.88);
+
+  transition:
+    border-color .15s ease,
+    background .15s ease;
+}
+
+
+@media (hover:hover){
+
+  .join-existing-group-card:hover{
+    border-color:
+      rgba(67,140,255,.25);
+
+    background:
+      linear-gradient(
+        145deg,
+        rgba(67,140,255,.06),
+        transparent 65%
+      ),
+      rgba(17,26,46,.92);
+  }
+
+}
+
+
+/* Gruppenname */
+
+.join-existing-group-card strong{
+  color:#f3f7ff;
+}
+
+
+/* ---------------------------------------------------------
+   Kleine Buttons vorhandener Gruppen
+   --------------------------------------------------------- */
+
+.join-existing-group-card .btn.small{
+  border-color:
+    rgba(67,140,255,.25);
+
+  background:
+    rgba(67,140,255,.08);
+}
+
+.join-existing-group-card .btn.small:hover{
+  border-color:
+    rgba(67,140,255,.46);
+
+  background:
+    rgba(67,140,255,.15);
+}
+
+
+/* ---------------------------------------------------------
+   CREATE GROUP
+   Formularfelder wirken als kompakte Bereiche.
+   --------------------------------------------------------- */
+
+.create-group-page
+.form-grid .field{
+  padding:13px 14px;
+
+  border:
+    1px solid rgba(255,255,255,.075);
+
+  border-radius:14px;
+
+  background:
+    rgba(255,255,255,.015);
+
+  transition:
+    border-color .15s ease,
+    background .15s ease;
+}
+
+
+.create-group-page
+.form-grid .field:focus-within{
+  border-color:
+    rgba(67,140,255,.25);
+
+  background:
+    rgba(67,140,255,.035);
+}
+
+
+/* ---------------------------------------------------------
+   Hauptaktionen
+   Bereits globaler Puntero-Gradient.
+   Hier nur Breite / Gewicht.
+   --------------------------------------------------------- */
+
+.create-group-page
+.actions .btn.primary{
+  min-width:150px;
+}
+
+
+/* ---------------------------------------------------------
+   Hinweis nach Erstellung
+   --------------------------------------------------------- */
+
+.create-group-page
+.group-form-shell > .muted.small:last-child{
+  padding-top:13px;
+
+  border-top:
+    1px solid rgba(67,140,255,.10);
+
+  color:#91a8cf;
+}
+
+
+/* ---------------------------------------------------------
+   Mobile
+   --------------------------------------------------------- */
+
+@media(max-width:600px){
+
+  .group-form-shell::after{
+    width:140px;
+    height:88px;
+
+    right:-50px;
+    top:-30px;
+  }
+
+  .create-group-page
+  .actions{
+    display:block;
+  }
+
+  .create-group-page
+  .actions .btn{
+    width:100%;
+  }
+
+}
+
+/* =========================================================
+   PUNTERO – AUTH
+   Login · Registro · Recuperación de contraseña
+   ========================================================= */
+
+
+/* ---------------------------------------------------------
+   Gesamter Auth-Hintergrund
+   --------------------------------------------------------- */
+
+body.auth-body{
+  min-height:100vh;
+
+  background:
+    radial-gradient(
+      900px 520px at 12% -5%,
+      rgba(67,140,255,.24),
+      transparent 65%
+    ),
+    radial-gradient(
+      760px 500px at 100% 12%,
+      rgba(114,87,232,.11),
+      transparent 66%
+    ),
+    radial-gradient(
+      600px 420px at 50% 110%,
+      rgba(67,140,255,.055),
+      transparent 70%
+    ),
+    #0b1220;
+}
+
+
+/*
+   Sehr dezente geometrische Struktur im Hintergrund.
+   Kein grüner Fußballplatz, keine Bälle.
+*/
+
+body.auth-body::before{
+  content:"";
+
+  position:fixed;
+  inset:0;
+
+  pointer-events:none;
+
+  opacity:.17;
+
+  background-image:
+    linear-gradient(
+      rgba(120,174,255,.035) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      rgba(120,174,255,.035) 1px,
+      transparent 1px
+    );
+
+  background-size:
+    54px 54px;
+}
+
+
+/* ---------------------------------------------------------
+   Kartenposition
+   --------------------------------------------------------- */
+
+.auth-shell,
+.auth-wrap{
+  position:relative;
+  z-index:1;
+}
+
+
+/* ---------------------------------------------------------
+   Auth-Karte
+   --------------------------------------------------------- */
+
+.auth-shell .auth-card,
+.auth-wrap .auth-card{
+  position:relative;
+  overflow:hidden;
+
+  border:
+    1px solid rgba(67,140,255,.22);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(67,140,255,.055),
+      transparent 36%
+    ),
+    rgba(15,24,43,.95);
+
+  box-shadow:
+    0 26px 70px rgba(0,0,0,.34),
+    0 0 0 1px rgba(255,255,255,.015);
+}
+
+
+/*
+   Puntero-Linie oben.
+   Branding statt dekorativer Goldfarbe.
+*/
+
+.auth-shell .auth-card::before,
+.auth-wrap .auth-card::before{
+  content:"";
+
+  position:absolute;
+  top:0;
+  left:0;
+  right:0;
+
+  height:3px;
+
+  background:
+    linear-gradient(
+      90deg,
+      #438cff 0%,
+      #438cff 45%,
+      #7257e8 100%
+    );
+}
+
+
+/*
+   Dezente Spielfeldgeometrie in der Karte.
+*/
+
+.auth-shell .auth-card::after,
+.auth-wrap .auth-card::after{
+  content:"";
+
+  position:absolute;
+
+  width:180px;
+  height:110px;
+
+  right:-62px;
+  top:38px;
+
+  border:
+    1px solid rgba(120,174,255,.055);
+
+  border-radius:8px;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent 49.6%,
+      rgba(120,174,255,.055) 49.6%,
+      rgba(120,174,255,.055) 50.4%,
+      transparent 50.4%
+    ),
+    radial-gradient(
+      circle at 50% 50%,
+      transparent 0 21px,
+      rgba(120,174,255,.055) 22px,
+      rgba(120,174,255,.055) 23px,
+      transparent 24px
+    );
+
+  transform:rotate(-7deg);
+
+  pointer-events:none;
+}
+
+
+/* Inhalte über der Dekoration */
+
+.auth-shell .auth-card > *,
+.auth-wrap .auth-card > *{
+  position:relative;
+  z-index:1;
+}
+
+
+/* ---------------------------------------------------------
+   Markenbereich
+   --------------------------------------------------------- */
+
+.auth-header{
+  padding-bottom:18px;
+
+  margin-bottom:20px;
+
+  border-bottom:
+    1px solid rgba(67,140,255,.10);
+}
+
+
+.auth-logo{
+  display:inline-block;
+
+  color:#f7faff;
+
+  font-weight:950;
+
+  letter-spacing:-.035em;
+
+  text-decoration:none;
+
+  text-shadow:
+    0 0 24px rgba(67,140,255,.16);
+
+  transition:
+    color .15s ease,
+    text-shadow .15s ease;
+}
+
+
+.auth-logo:hover{
+  color:#8fbdff;
+
+  text-shadow:
+    0 0 28px rgba(67,140,255,.26);
+}
+
+
+.auth-subtitle{
+  max-width:390px;
+
+  margin-top:7px;
+
+  color:#91a8cf;
+
+  line-height:1.5;
+}
+
+
+/* ---------------------------------------------------------
+   Seitenüberschrift
+   --------------------------------------------------------- */
+
+.auth-content h1,
+.auth-content h2,
+.auth-wrap .auth-card > h1,
+.auth-wrap .auth-card > h2{
+  color:#f4f8ff;
+
+  letter-spacing:-.025em;
+}
+
+
+/* ---------------------------------------------------------
+   Formularlabels
+   --------------------------------------------------------- */
+
+.auth-content label,
+.auth-wrap .field label{
+  color:#a9c9f6;
+
+  font-weight:800;
+}
+
+
+/* ---------------------------------------------------------
+   Eingabefelder Allauth
+   --------------------------------------------------------- */
+
+.auth-content
+input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+
+.auth-content select,
+.auth-content textarea,
+
+.auth-wrap .field input,
+.auth-wrap .field select,
+.auth-wrap .field textarea{
+  border:
+    1px solid rgba(67,140,255,.22);
+
+  background:
+    rgba(6,14,27,.60);
+
+  color:#f5f8ff;
+
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.02);
+
+  transition:
+    border-color .15s ease,
+    background .15s ease,
+    box-shadow .15s ease;
+}
+
+
+/* Hover */
+
+.auth-content
+input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):hover,
+
+.auth-content select:hover,
+.auth-content textarea:hover,
+
+.auth-wrap .field input:hover,
+.auth-wrap .field select:hover,
+.auth-wrap .field textarea:hover{
+  border-color:
+    rgba(67,140,255,.42);
+}
+
+
+/* Fokus */
+
+.auth-content
+input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):focus,
+
+.auth-content select:focus,
+.auth-content textarea:focus,
+
+.auth-wrap .field input:focus,
+.auth-wrap .field select:focus,
+.auth-wrap .field textarea:focus{
+  border-color:#5798ff;
+
+  background:
+    rgba(67,140,255,.075);
+
+  box-shadow:
+    0 0 0 3px rgba(67,140,255,.13),
+    0 10px 24px rgba(0,0,0,.12);
+
+  outline:none;
+}
+
+
+/* ---------------------------------------------------------
+   Placeholder
+   --------------------------------------------------------- */
+
+.auth-content input::placeholder,
+.auth-content textarea::placeholder,
+.auth-wrap input::placeholder{
+  color:
+    rgba(169,182,214,.52);
+}
+
+
+/* ---------------------------------------------------------
+   Primäraktion
+   --------------------------------------------------------- */
+
+.auth-content button[type="submit"],
+.auth-wrap .btn.primary{
+  border:
+    1px solid rgba(101,162,255,.70);
+
+  background:
+    linear-gradient(
+      105deg,
+      #326fc7 0%,
+      #477fe0 48%,
+      #5941b0 100%
+    );
+
+  color:#fff;
+
+  font-weight:850;
+
+  box-shadow:
+    0 10px 27px rgba(22,67,155,.25);
+
+  transition:
+    transform .15s ease,
+    filter .15s ease,
+    border-color .15s ease,
+    box-shadow .15s ease;
+}
+
+
+@media (hover:hover){
+
+  .auth-content button[type="submit"]:hover,
+  .auth-wrap .btn.primary:hover{
+    border-color:
+      rgba(125,178,255,.90);
+
+    filter:brightness(1.08);
+
+    transform:translateY(-1px);
+
+    box-shadow:
+      0 13px 32px rgba(22,67,155,.31);
+  }
+
+}
+
+
+/* ---------------------------------------------------------
+   Sekundäre Links
+   --------------------------------------------------------- */
+
+.auth-content a:not(.auth-logo),
+.auth-wrap .links a{
+  color:#8fbdff;
+
+  text-decoration-color:
+    rgba(143,189,255,.30);
+
+  text-underline-offset:3px;
+}
+
+
+.auth-content a:not(.auth-logo):hover,
+.auth-wrap .links a:hover{
+  color:#bad6ff;
+
+  text-decoration-color:
+    rgba(186,214,255,.65);
+}
+
+
+/* ---------------------------------------------------------
+   Login / Signup Links am Ende
+   --------------------------------------------------------- */
+
+.auth-wrap .links{
+  margin-top:20px;
+
+  padding-top:16px;
+
+  border-top:
+    1px solid rgba(67,140,255,.09);
+}
+
+
+/* ---------------------------------------------------------
+   Fehlermeldungen
+   --------------------------------------------------------- */
+
+.auth-content .errorlist,
+.auth-wrap .form-error{
+  color:#ffabab;
+}
+
+
+.auth-content .auth-message.error,
+.auth-wrap .alert{
+  border-color:
+    rgba(255,125,125,.23);
+
+  background:
+    rgba(255,125,125,.065);
+
+  color:#ffc0c0;
+}
+
+
+/* ---------------------------------------------------------
+   Erfolgsmeldungen
+   --------------------------------------------------------- */
+
+.auth-message.success{
+  border-color:
+    rgba(61,220,151,.27);
+
+  background:
+    rgba(61,220,151,.075);
+
+  color:#8ceabd;
+}
+
+
+/* ---------------------------------------------------------
+   Hilfe bei Passwortregeln
+   --------------------------------------------------------- */
+
+.auth-content .helptext,
+.auth-content .helptext ul{
+  color:#8fa3c8;
+}
+
+
+/* ---------------------------------------------------------
+   Checkboxen
+   --------------------------------------------------------- */
+
+.auth-content input[type="checkbox"],
+.auth-content input[type="radio"]{
+  accent-color:#438cff;
+}
+
+
+/* ---------------------------------------------------------
+   Mobile
+   --------------------------------------------------------- */
+
+@media(max-width:600px){
+
+  body.auth-body{
+    background:
+      radial-gradient(
+        620px 360px at 20% -5%,
+        rgba(67,140,255,.19),
+        transparent 65%
+      ),
+      #0b1220;
+  }
+
+
+  .auth-shell .auth-card::after,
+  .auth-wrap .auth-card::after{
+    width:135px;
+    height:82px;
+
+    right:-58px;
+    top:34px;
+  }
+
+
+  .auth-header{
+    padding-bottom:15px;
+    margin-bottom:18px;
+  }
+
+}
+
+/* =========================================================
+   PUNTERO – ERROR PAGES
+   ========================================================= */
+
+.error-body{
+  min-height:100vh;
+  margin:0;
+
+  background:
+    radial-gradient(
+      900px 520px at 12% -5%,
+      rgba(67,140,255,.23),
+      transparent 65%
+    ),
+    radial-gradient(
+      760px 480px at 100% 10%,
+      rgba(114,87,232,.10),
+      transparent 66%
+    ),
+    #0b1220;
+
+  color:#e8eefc;
+}
+
+
+.error-main{
+  min-height:100vh;
+
+  display:grid;
+  place-items:center;
+
+  padding:32px 20px;
+}
+
+
+.error-card{
+  position:relative;
+  overflow:hidden;
+
+  width:min(100%, 620px);
+
+  padding:42px 40px;
+
+  border:
+    1px solid rgba(67,140,255,.22);
+
+  border-radius:22px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(67,140,255,.055),
+      transparent 38%
+    ),
+    rgba(15,24,43,.96);
+
+  box-shadow:
+    0 28px 75px rgba(0,0,0,.35);
+}
+
+
+/* Markenlinie */
+
+.error-card::before{
+  content:"";
+
+  position:absolute;
+  top:0;
+  left:0;
+  right:0;
+
+  height:3px;
+
+  background:
+    linear-gradient(
+      90deg,
+      #438cff,
+      #438cff 45%,
+      #7257e8
+    );
+}
+
+
+/* Dezente Spielfeldgeometrie */
+
+.error-card::after{
+  content:"";
+
+  position:absolute;
+
+  width:220px;
+  height:135px;
+
+  right:-78px;
+  top:60px;
+
+  border:
+    1px solid rgba(120,174,255,.06);
+
+  border-radius:8px;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent 49.6%,
+      rgba(120,174,255,.06) 49.6%,
+      rgba(120,174,255,.06) 50.4%,
+      transparent 50.4%
+    ),
+    radial-gradient(
+      circle at 50% 50%,
+      transparent 0 25px,
+      rgba(120,174,255,.06) 26px,
+      rgba(120,174,255,.06) 27px,
+      transparent 28px
+    );
+
+  transform:rotate(-7deg);
+
+  pointer-events:none;
+}
+
+
+.error-card > *{
+  position:relative;
+  z-index:1;
+}
+
+
+.error-brand{
+  display:inline-block;
+
+  margin-bottom:34px;
+
+  color:#f7faff;
+
+  font-size:22px;
+  font-weight:950;
+
+  letter-spacing:-.035em;
+
+  text-decoration:none;
+}
+
+
+.error-brand:hover{
+  color:#8fbdff;
+}
+
+
+.error-code{
+  margin-bottom:3px;
+
+  font-size:clamp(72px, 15vw, 112px);
+  line-height:.90;
+
+  font-weight:950;
+
+  letter-spacing:-.065em;
+
+  background:
+    linear-gradient(
+      105deg,
+      #69a5ff,
+      #7257e8
+    );
+
+  -webkit-background-clip:text;
+  background-clip:text;
+
+  color:transparent;
+}
+
+
+.error-eyebrow{
+  margin-top:18px;
+
+  color:#79adff;
+
+  font-size:12px;
+  font-weight:850;
+
+  letter-spacing:.12em;
+
+  text-transform:uppercase;
+}
+
+
+.error-card h1{
+  max-width:500px;
+
+  margin:
+    8px 0 10px;
+
+  color:#f5f8ff;
+
+  font-size:
+    clamp(27px, 5vw, 38px);
+
+  line-height:1.12;
+
+  letter-spacing:-.035em;
+}
+
+
+.error-message{
+  max-width:490px;
+
+  margin:0;
+
+  color:#9eafd0;
+
+  font-size:16px;
+
+  line-height:1.65;
+}
+
+
+.error-actions{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+
+  margin-top:28px;
+}
+
+
+@media(max-width:600px){
+
+  .error-main{
+    padding:20px 14px;
+  }
+
+  .error-card{
+    padding:
+      32px 24px;
+  }
+
+  .error-card::after{
+    width:150px;
+    height:92px;
+
+    right:-58px;
+    top:52px;
+  }
+
+  .error-brand{
+    margin-bottom:28px;
+  }
+
+  .error-actions .btn{
+    width:100%;
+  }
+
+}

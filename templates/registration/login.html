@@ -2,7 +2,7 @@
 {% block title %}Login{% endblock %}
 
 {% block content %}
-<h2>Login</h2>
+<h2>Iniciar sesión</h2>
 <p class="muted small">Inicia sesión con tu nombre de usuario o correo electrónico.</p>
 
 {% if form.errors %}
@@ -13,17 +13,17 @@
   {% csrf_token %}
 
   <div class="field">
-    <label for="{{ form.username.id_for_label }}">Usuario o E-Mail</label>
+    <label for="{{ form.username.id_for_label }}">Usuario o correo electrónico</label>
     {{ form.username }}
   </div>
 
   <div class="field">
-    <label for="{{ form.password.id_for_label }}">Clave</label>
+    <label for="{{ form.password.id_for_label }}">Contraseña</label>
     {{ form.password }}
   </div>
 
   <div class="actions">
-    <button class="btn primary" type="submit">Comenzar sesión</button>
+    <button class="btn primary" type="submit">Iniciar sesión</button>
   </div>
 </form>
 

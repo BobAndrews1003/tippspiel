@@ -1,10 +1,14 @@
 {% load static %}
 <!doctype html>
-<html lang="de">
+<html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Tippspiel{% endblock %}</title>
+  <title>Puntero · {% block title %}Cuenta{% endblock %}</title>
+  <meta
+    name="description"
+    content="El juego de pronósticos de fútbol para competir con tus amigos."
+  >
 
   <!-- App CSS -->
   <link rel="stylesheet" href="{% static 'app.css' %}">
@@ -30,9 +34,17 @@
   </style>
 </head>
 
-<body>
+<body class="auth-body">
   <div class="auth-wrap">
     <div class="card auth-card">
+      <header class="auth-header auth-header--puntero">
+        <a href="{% url 'root' %}" class="auth-logo">
+          Puntero
+        </a>
+        <p class="auth-subtitle">
+          El juego de pronósticos de fútbol para competir con tus amigos.
+        </p>
+      </header>
       {% block content %}{% endblock %}
     </div>
   </div>

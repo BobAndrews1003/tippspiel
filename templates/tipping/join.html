@@ -3,8 +3,8 @@
 {% block title %}Unirse a un grupo{% endblock %}
 
 {% block content %}
-<div class="container">
-  <div class="card" style="max-width:620px; margin:0 auto;">
+<div class="container join-group-page">
+  <div class="card group-form-shell join-group-card" style="max-width:620px; margin:0 auto;">
 
     <h2 style="margin-bottom:10px;">Unirse a un grupo</h2>
     <p class="muted" style="margin-top:0;">
@@ -24,7 +24,7 @@
       {% csrf_token %}
 
       <div class="field">
-        <label>Join-Code</label>
+        <label>Código de acceso</label>
         <input class="input"
                name="code"
                value="{{ code|default:'' }}"
@@ -40,8 +40,8 @@
     <hr style="margin:28px 0; border:0; border-top:1px solid var(--border);">
 
     <!-- CREATE GROUP -->
-    <h3 style="margin:0 0 8px;">Todavia sin grupo?</h3>
-    <p class="muted" style="margin-top:0;">Entonces crea tu grupo propio en 30 segundos.</p>
+    <h3 style="margin:0 0 8px;">¿Todavía sin grupo?</h3>
+    <p class="muted" style="margin-top:0;">Crea tu propio grupo en 30 segundos.</p>
 
     <a href="{% url 'create_group' %}" class="btn">
       Crear grupo
@@ -54,14 +54,14 @@
       <h3 style="margin-bottom:14px;">Tus grupos</h3>
 
       {% for membership in user_groups %}
-        <div class="card" style="margin-bottom:12px; background: rgba(255,255,255,.03);">
+        <div class="card join-existing-group-card" style="margin-bottom:12px;">
 
           <div class="header-flex">
 
             <div>
               <strong>{{ membership.group.name }}</strong><br>
               <span class="small muted">
-                Turnier: {{ membership.group.tournament.name }}
+                Campeonato: {{ membership.group.tournament.name }}
               </span>
 
               {% if membership.group.id == active_group_id %}
@@ -72,7 +72,7 @@
 
               {% if membership.is_creator %}
                 <div class="small" style="margin-top:6px;">
-                  <strong>Join-Code:</strong>
+                  <strong>Código de acceso:</strong>
                   <span style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; letter-spacing:1px;">
                     {{ membership.group.join_code }}
                   </span>

@@ -23,7 +23,7 @@
   </div>
 
   <div class="field">
-    <label for="{{ form.email.id_for_label }}">E-Mail</label>
+    <label for="{{ form.email.id_for_label }}">Correo electrónico</label>
     {{ form.email }}
     {% for e in form.email.errors %}
       <div class="form-error">{{ e }}</div>
@@ -31,7 +31,7 @@
   </div>
 
   <div class="field">
-    <label for="{{ form.password1.id_for_label }}">Clave</label>
+    <label for="{{ form.password1.id_for_label }}">Contraseña</label>
     {{ form.password1 }}
     {% for e in form.password1.errors %}
       <div class="form-error">{{ e }}</div>
@@ -39,7 +39,7 @@
   </div>
 
   <div class="field">
-    <label for="{{ form.password2.id_for_label }}">Repetir clave</label>
+    <label for="{{ form.password2.id_for_label }}">Repetir contraseña</label>
     {{ form.password2 }}
     {% for e in form.password2.errors %}
       <div class="form-error">{{ e }}</div>
@@ -57,6 +57,6 @@
 
 <div class="links muted small">
   ¿Ya estás registrado?
-  <a href="{% url 'login' %}">Para iniciar sesión</a>
+  <a href="{% url 'login' %}">Iniciar sesión</a>
 </div>
 {% endblock %}

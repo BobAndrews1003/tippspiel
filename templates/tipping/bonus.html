@@ -3,10 +3,10 @@
 {% block title %}Pronósticos especiales{% endblock %}
 
 {% block content %}
-<div class="container">
+<div class="container puntero-bonus-page">
 
   <!-- Header -->
-  <div class="card">
+  <div class="card bonus-hero-card">
     <div class="header-flex">
       <div>
         <h2>Pronósticos especiales</h2>
@@ -29,7 +29,7 @@
   {% endif %}
 
   <!-- Form -->
-  <div class="card" style="margin-top:12px;">
+  <div class="card bonus-form-card" style="margin-top:12px;">
     <form method="post" class="form-grid">
       {% csrf_token %}
 
