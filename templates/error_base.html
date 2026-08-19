@@ -1,0 +1,58 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>{% block title %}Error{% endblock %} · Puntero</title>
+
+  <meta name="robots" content="noindex,nofollow">
+  <meta
+    name="description"
+    content="Página de error de Puntero."
+  >
+
+  <link rel="stylesheet" href="{% static 'app.css' %}">
+</head>
+
+<body class="error-body">
+
+  <main class="error-main">
+
+    <section class="error-card">
+
+      <a href="/" class="error-brand">
+        Puntero
+      </a>
+
+      <div class="error-code">
+        {% block error_code %}{% endblock %}
+      </div>
+
+      <div class="error-eyebrow">
+        {% block error_label %}{% endblock %}
+      </div>
+
+      <h1 id="error-title">
+        {% block error_title %}{% endblock %}
+      </h1>
+
+      <p class="error-message">
+        {% block error_message %}{% endblock %}
+      </p>
+
+      <div class="error-actions">
+
+        <a href="/" class="btn primary">
+          Volver al inicio
+        </a>
+
+      </div>
+
+    </section>
+
+  </main>
+
+</body>
+</html>

@@ -1,0 +1,17 @@
+{% extends "error_base.html" %}
+
+{% block title %}Sesión no válida{% endblock %}
+
+{% block error_code %}403{% endblock %}
+
+{% block error_label %}
+Sesión no válida
+{% endblock %}
+
+{% block error_title %}
+No pudimos completar esta acción.
+{% endblock %}
+
+{% block error_message %}
+Por seguridad, la sesión o el formulario ya no son válidos. Vuelve a la página anterior e inténtalo de nuevo.
+{% endblock %}

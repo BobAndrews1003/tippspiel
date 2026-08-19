@@ -3,64 +3,9 @@
 from __future__ import annotations
 
 from django import forms
-from django.contrib.auth import get_user_model
-from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
-from django.core.validators import FileExtensionValidator
 
-from .models import Group, Tournament, Match, BonusPrediction
+from .models import Group, Match, Tournament
 
-
-User = get_user_model()
-
-
-# ---------------------------------------------------------------------
-# Signup
-# ---------------------------------------------------------------------
-class SignupForm(UserCreationForm):
-    email = forms.EmailField(required=True, label="E-Mail", widget=forms.EmailInput(attrs={"class": "input"}))
-
-    class Meta(UserCreationForm.Meta):
-        model = User
-        fields = ("username", "email", "password1", "password2")
-        widgets = {
-            "username": forms.TextInput(attrs={"class": "input"}),
-        }
-
-    def clean_email(self):
-        email = (self.cleaned_data.get("email") or "").strip().lower()
-        if User.objects.filter(email__iexact=email).exists():
-            raise forms.ValidationError("Este correo ya esta registrado")
-        return email
-
-    def save(self, commit: bool = True):
-        user = super().save(commit=False)
-        user.email = (self.cleaned_data.get("email") or "").strip().lower()
-        if commit:
-            user.save()
-        return user
-
-
-# ---------------------------------------------------------------------
-# Login: Username ODER E-Mail
-# ---------------------------------------------------------------------
-class EmailOrUsernameAuthenticationForm(AuthenticationForm):
-    """
-    Ermöglicht Login mit Username ODER E-Mail.
-    Django nennt das Feld intern weiterhin 'username'.
-    """
-
-    def clean(self):
-        username_or_email = (self.cleaned_data.get("username") or "").strip()
-        password = self.cleaned_data.get("password")
-
-        if username_or_email and password:
-            if "@" in username_or_email:
-                user = User.objects.filter(email__iexact=username_or_email).first()
-                if user:
-                    # AuthenticationForm erwartet hier weiterhin den Username
-                    self.cleaned_data["username"] = user.get_username()
-
-        return super().clean()
 
 
 # ---------------------------------------------------------------------
@@ -93,10 +38,10 @@ class GroupCreateForm(forms.ModelForm):
 
 
 class BonusPredictionForm(forms.Form):
-    herbstmeister = forms.ChoiceField(label="Campeon de medio año", choices=[])
-    meister = forms.ChoiceField(label="Campeon", choices=[])
+    herbstmeister = forms.ChoiceField(label="Campeón de medio año", choices=[])
+    meister = forms.ChoiceField(label="Campeón", choices=[])
     trainer_first = forms.ChoiceField(label="Primer cambio de entrenador", choices=[])
-    topscorer = forms.ChoiceField(label="Maxio goleador", choices=[])
+    topscorer = forms.ChoiceField(label="Máximo goleador", choices=[])
     relegation1 = forms.ChoiceField(label="Desciende 1", choices=[])
     relegation2 = forms.ChoiceField(label="Desciende 2", choices=[])
 
@@ -105,7 +50,7 @@ class BonusPredictionForm(forms.Form):
     def __init__(self, *args, tournament=None, **kwargs):
         super().__init__(*args, **kwargs)
 
-        team_choices = [("", "Bitte wählen…")]
+        team_choices = [("", "Seleccionar…")]
 
         if tournament is not None:
             qs = (
@@ -124,8 +69,6 @@ class BonusPredictionForm(forms.Form):
             for t in sorted(teams, key=lambda s: s.lower()):
                 team_choices.append((t, t))
 
-        print("BONUS choices:", len(team_choices), "example:", team_choices[:5])
-
         # ✅ Wichtig: choices am Feld UND am Widget setzen (damit <option> gerendert wird)
         for name in self.TEAM_FIELDS:
             field = self.fields[name]
@@ -142,7 +85,10 @@ class BonusPredictionForm(forms.Form):
         r1 = cleaned.get("relegation1")
         r2 = cleaned.get("relegation2")
         if r1 and r2 and r1 == r2:
-            self.add_error("relegation2", "Absteiger 2 darf nicht identisch mit Absteiger 1 sein.")
+            self.add_error(
+                "relegation2",
+                "El segundo equipo descendido no puede ser igual al primero.",
+            )
         return cleaned
     
 class DeleteAccountForm(forms.Form):

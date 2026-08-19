@@ -21,7 +21,7 @@ from django.db.models.functions import Cast, Coalesce, Concat, Lower, NullIf
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
-from django.views.decorators.http import require_http_methods, require_POST
+from django.views.decorators.http import require_http_methods, require_POST, require_safe
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 
@@ -54,6 +54,40 @@ from .scoring import points_for_prediction
 User = get_user_model()
 
 GROUP_PAGE_SIZE = 50
+
+MAX_DATABASE_ID = 9_223_372_036_854_775_807
+
+
+def _parse_positive_database_id(value):
+    """
+    Akzeptiert ausschließlich positive ASCII-Dezimalzahlen,
+    die in ein Django BigAutoField passen.
+
+    Ungültige, extrem lange oder übergroße Werte werden als
+    None zurückgegeben, statt später einen 500-Fehler auszulösen.
+    """
+    if value is None:
+        return None
+
+    value = str(value).strip()
+
+    if (
+        not value
+        or len(value) > 19
+        or not value.isascii()
+        or not value.isdecimal()
+    ):
+        return None
+
+    parsed = int(value)
+
+    if (
+        parsed <= 0
+        or parsed > MAX_DATABASE_ID
+    ):
+        return None
+
+    return parsed
 
 
 # ---------------------------------------------------------------------
@@ -197,6 +231,7 @@ def _prev_next_md(tournament, matchday):
 # Views
 # ---------------------------------------------------------------------
 @login_required
+@require_safe
 def dashboard(request):
     membership = _require_active_membership(
         request
@@ -1155,6 +1190,7 @@ def tippen(request):
     )
 
 @login_required
+@require_safe
 def spieltag(request):
     membership = _require_active_membership(request)
 
@@ -1749,6 +1785,7 @@ def spieltag(request):
     )
 
 @login_required
+@require_safe
 def tabelle(request):
     membership = _require_active_membership(
         request
@@ -2246,13 +2283,14 @@ def tabelle(request):
     )
     
 @login_required
+@require_http_methods(["GET", "POST"])
 def join_group(request):
     if request.method == "POST":
         code = request.POST.get("code", "").strip().upper()
 
         group = Group.objects.filter(join_code=code).select_related("tournament").first()
         if not group:
-            messages.error(request, "Code nicht gefunden.")
+            messages.error(request, "No se encontró el código de acceso.")
             return render(request, "tipping/join.html", {"code": code})
 
         membership, _ = GroupMembership.objects.get_or_create(
@@ -2262,7 +2300,7 @@ def join_group(request):
 
         request.session["active_group_id"] = group.id
 
-        messages.success(request, f"Beigetreten ✅ Gruppe: {group.name}")
+        messages.success(request, f"Te uniste al grupo «{group.name}».")
         return redirect("tippen")
 
     user_groups = (
@@ -2279,6 +2317,7 @@ def join_group(request):
 
 
 @login_required
+@require_safe
 def user_stats(request, user_id: int):
     """
     Statistik pro User (sichtbar für alle User derselben aktiven Gruppe):
@@ -2445,6 +2484,7 @@ def user_stats(request, user_id: int):
     })
 
 @login_required
+@require_http_methods(["GET", "POST"])
 def create_group(request: HttpRequest):
     if request.method == "POST":
         form = GroupCreateForm(request.POST)
@@ -2464,19 +2504,32 @@ def create_group(request: HttpRequest):
                 request.session["active_group_id"] = group.id
 
                 # Pro: Code sofort, aber nicht nur "einmalig"
-                messages.success(request, f"Gruppe erstellt ✅ Join-Code: {group.join_code}")
+                messages.success(
+                    request,
+                    (
+                        "Grupo creado. Código de acceso: "
+                        f"{group.join_code}"
+                    ),
+                )
                 return redirect("tippen")
 
             except IntegrityError:
-                messages.error(request, "Konnte die Gruppe nicht erstellen (Kollision). Bitte erneut versuchen.")
+                messages.error(
+                    request,
+                    (
+                        "No se pudo crear el grupo por un conflicto. "
+                        "Inténtalo de nuevo."
+                    ),
+                )
         else:
-            messages.error(request, "Bitte prüfe deine Eingaben.")
+            messages.error(request, "Revisa los datos introducidos.")
     else:
         form = GroupCreateForm()
 
     return render(request, "tipping/create_group.html", {"form": form})
 
 @login_required
+@require_safe
 def my_groups(request):
     active_membership = _require_active_membership(request)
 
@@ -2559,13 +2612,11 @@ def transfer_group_ownership(
     request,
     group_id,
 ):
-    new_owner_id = (
-        request.POST
-        .get("new_owner_id", "")
-        .strip()
+    new_owner_id = _parse_positive_database_id(
+        request.POST.get("new_owner_id")
     )
 
-    if not new_owner_id.isdigit():
+    if new_owner_id is None:
         messages.error(
             request,
             (
@@ -2610,7 +2661,7 @@ def transfer_group_ownership(
             )
             return redirect("my_groups")
 
-        if int(new_owner_id) == request.user.id:
+        if new_owner_id == request.user.id:
             messages.error(
                 request,
                 (
@@ -2687,7 +2738,7 @@ def transfer_group_ownership(
     return redirect("my_groups")
 
 @login_required
-@require_http_methods(["GET", "POST"])
+@require_POST
 def delete_group(request, group_id):
     confirmation = (
         request.POST
@@ -2781,7 +2832,16 @@ def delete_group(request, group_id):
 @login_required
 @require_POST
 def set_active_group(request: HttpRequest):
-    group_id = request.POST.get("group_id")
+    group_id = _parse_positive_database_id(
+        request.POST.get("group_id")
+    )
+
+    if group_id is None:
+        messages.error(
+            request,
+            "El grupo seleccionado no es válido.",
+        )
+        return redirect("dashboard")
 
     membership = (
         GroupMembership.objects
@@ -2994,7 +3054,8 @@ def delete_account(request):
                     rebuild_affected_groups
                 )
 
-            # Sitzung vollständig beenden.            logout(request)
+            # Sitzung vollständig beenden.
+            logout(request)
 
             # Die Nachricht erst nach logout erzeugen, damit sie in
             # der neuen anonymen Sitzung erhalten bleibt.

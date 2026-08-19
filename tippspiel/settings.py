@@ -2,6 +2,9 @@ from pathlib import Path
 import os
 
 import dj_database_url
+from dotenv import load_dotenv
+
+from django.utils.csp import CSP
 
 
 # ============================================================
@@ -68,6 +71,13 @@ def env_int(
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Lokale Entwicklung kann eine nicht versionierte .env-Datei
+# verwenden. Bereits gesetzte Umgebungsvariablen haben Vorrang.
+load_dotenv(
+    BASE_DIR / ".env",
+    override=False,
+)
+
 
 # ============================================================
 # Umgebung und zentrale Sicherheitswerte
@@ -78,6 +88,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DEBUG = env_bool(
     "DEBUG",
     default=False,
+)
+
+# Railway stellt diese Variable automatisch bereit.
+ON_RAILWAY = bool(
+    os.environ.get("RAILWAY_ENVIRONMENT_ID")
 )
 
 
@@ -176,7 +191,7 @@ if not DEBUG:
 # zuverlässig selbst setzt und fremde Werte entfernt.
 if env_bool(
     "TRUST_X_FORWARDED_PROTO",
-    default=False,
+    default=ON_RAILWAY,
 ):
     SECURE_PROXY_SSL_HEADER = (
         "HTTP_X_FORWARDED_PROTO",
@@ -217,6 +232,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "django.middleware.csp.ContentSecurityPolicyMiddleware",
 
     # WhiteNoise direkt nach SecurityMiddleware.
     "whitenoise.middleware.WhiteNoiseMiddleware",
@@ -387,6 +403,16 @@ REDIS_URL = os.environ.get(
     "REDIS_URL",
     "",
 ).strip()
+
+
+# Allauth verwendet den Django-Cache unter anderem für
+# Rate-Limits. In Produktion darf deshalb kein prozesslokaler
+# LocMemCache verwendet werden.
+if not DEBUG and not REDIS_URL:
+    raise RuntimeError(
+        "REDIS_URL muss in der "
+        "Produktionsumgebung gesetzt werden."
+    )
 
 
 if REDIS_URL:
@@ -637,7 +663,7 @@ EMAIL_TIMEOUT = env_int(
 
 DEFAULT_FROM_EMAIL = os.environ.get(
     "DEFAULT_FROM_EMAIL",
-    "CatoLiga <noreply@localhost>",
+    "Puntero <noreply@localhost>",
 ).strip()
 
 
@@ -779,7 +805,11 @@ ALLAUTH_TRUSTED_PROXY_COUNT = env_int(
 ALLAUTH_TRUSTED_CLIENT_IP_HEADER = (
     os.environ.get(
         "ALLAUTH_TRUSTED_CLIENT_IP_HEADER",
-        "",
+        (
+            "X-Real-IP"
+            if ON_RAILWAY
+            else ""
+        ),
     ).strip()
     or None
 )
@@ -828,6 +858,47 @@ DEFAULT_AUTO_FIELD = (
 # ============================================================
 # Sitzungen, Cookies und Sicherheitsheader
 # ============================================================
+
+
+# ============================================================
+# Content Security Policy
+# ============================================================
+
+# Zunächst nur Report-Only:
+# Verstöße werden gemeldet, Inhalte aber noch nicht blockiert.
+SECURE_CSP_REPORT_ONLY = {
+    "default-src": [
+        CSP.SELF,
+    ],
+    "base-uri": [
+        CSP.SELF,
+    ],
+    "form-action": [
+        CSP.SELF,
+    ],
+    "frame-ancestors": [
+        CSP.NONE,
+    ],
+    "object-src": [
+        CSP.NONE,
+    ],
+    "script-src": [
+        CSP.SELF,
+    ],
+    "style-src": [
+        CSP.SELF,
+    ],
+    "img-src": [
+        CSP.SELF,
+        "data:",
+    ],
+    "font-src": [
+        CSP.SELF,
+    ],
+    "connect-src": [
+        CSP.SELF,
+    ],
+}
 
 SESSION_COOKIE_HTTPONLY = True
 
@@ -969,3 +1040,5 @@ LOGGING = {
         },
     },
 }
+
+CSRF_FAILURE_VIEW = "tipping.error_views.csrf_failure"

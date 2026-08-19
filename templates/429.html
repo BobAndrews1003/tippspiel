@@ -1,0 +1,17 @@
+{% extends "error_base.html" %}
+
+{% block title %}Demasiadas solicitudes{% endblock %}
+
+{% block error_code %}429{% endblock %}
+
+{% block error_label %}
+Demasiadas solicitudes
+{% endblock %}
+
+{% block error_title %}
+Has realizado demasiados intentos.
+{% endblock %}
+
+{% block error_message %}
+Por seguridad, espera unos minutos antes de intentarlo de nuevo.
+{% endblock %}
