@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+  <body style="margin:0;background:#0b1220;color:#e8eefc;font-family:Arial,sans-serif;">
+    <div style="max-width:620px;margin:0 auto;padding:28px 18px;">
+      <div style="background:#111a2e;border:1px solid #29344d;border-radius:18px;padding:26px;">
+        <div style="color:#69a5ff;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">
+          Puntero
+        </div>
+
+        <h1 style="margin:10px 0 8px;font-size:27px;line-height:1.2;">
+          Te faltan pronósticos
+        </h1>
+
+        <p style="margin:0 0 22px;color:#a9b6d6;line-height:1.6;">
+          Hola {{ user.username }}, se acercan partidos para los que
+          todavía no has guardado todos tus pronósticos.
+        </p>
+
+        {% for section in sections %}
+          <div style="margin-top:16px;padding:18px;border:1px solid #29344d;border-radius:14px;background:#0e1728;">
+            <h2 style="margin:0 0 12px;font-size:18px;">
+              {{ section.group.name }}
+              {% if section.matchday %}
+                · Fecha {{ section.matchday }}
+              {% endif %}
+            </h2>
+
+            {% for match in section.matches %}
+              <p style="margin:8px 0;color:#dce5f8;line-height:1.45;">
+                <strong>{{ match.home_team }} – {{ match.away_team }}</strong><br>
+                <span style="color:#a9b6d6;">
+                  {{ match.kickoff|date:"d/m/Y H:i" }} (hora de Ecuador)
+                </span>
+              </p>
+            {% endfor %}
+
+            <a
+              href="{{ section.tip_url }}"
+              style="display:inline-block;margin-top:10px;padding:11px 16px;border-radius:999px;background:#438cff;color:#ffffff;font-weight:700;text-decoration:none;"
+            >
+              Pronosticar ahora
+            </a>
+          </div>
+        {% endfor %}
+
+        <p style="margin:22px 0 0;color:#8291b2;font-size:13px;line-height:1.55;">
+          Cada partido se recuerda como máximo una vez por grupo.
+          Puedes <a href="{{ settings_url }}" style="color:#8fbdff;">desactivar los avisos</a>
+          en cualquier momento.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

@@ -77,6 +77,7 @@ def _rebuild_affected_groups(
             .filter(
                 pk=group_id,
                 memberships__isnull=False,
+                memberships__is_active=True,
             )
             .only(
                 "id",

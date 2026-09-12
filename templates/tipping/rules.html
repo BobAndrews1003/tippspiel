@@ -1,0 +1,295 @@
+{% extends "tipping/base.html" %}
+
+{% block title %}
+  Reglas del juego
+{% endblock %}
+
+{% block content %}
+  <div class="container rules-page">
+
+    <header class="card rules-hero">
+      <div class="rules-eyebrow">
+        Reglas oficiales de Puntero
+      </div>
+
+      <h1>Cómo se juega</h1>
+
+      <p>
+        Pronostica el resultado de cada partido antes de su inicio,
+        suma puntos y compite en la tabla de tu grupo.
+      </p>
+
+      <nav class="rules-anchor-nav" aria-label="Contenido de las reglas">
+        <a href="#puntuacion">Puntuación</a>
+        <a href="#plazos">Plazos</a>
+        <a href="#visibilidad">Visibilidad</a>
+        <a href="#especiales">Especiales</a>
+        <a href="#clasificacion">Clasificación</a>
+      </nav>
+    </header>
+
+    <section class="rules-summary" aria-labelledby="rules-summary-title">
+      <h2 id="rules-summary-title">En pocas palabras</h2>
+
+      <div class="rules-summary-grid">
+        <article class="card rules-summary-card">
+          <span class="rules-summary-number">1</span>
+          <div>
+            <h3>Pronostica</h3>
+            <p>Introduce los goles de ambos equipos antes del inicio.</p>
+          </div>
+        </article>
+
+        <article class="card rules-summary-card">
+          <span class="rules-summary-number">2</span>
+          <div>
+            <h3>Suma puntos</h3>
+            <p>Recibe entre 0 y 4 puntos por cada partido evaluado.</p>
+          </div>
+        </article>
+
+        <article class="card rules-summary-card">
+          <span class="rules-summary-number">3</span>
+          <div>
+            <h3>Compite</h3>
+            <p>Compara cada fecha y el acumulado con tu grupo.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <div class="rules-content-grid">
+      <div class="rules-sections">
+
+        <section class="card rules-section" id="puntuacion">
+          <div class="rules-section-heading">
+            <span class="rules-section-index" aria-hidden="true">01</span>
+            <div>
+              <div class="rules-eyebrow">Partidos</div>
+              <h2>Puntuación</h2>
+            </div>
+          </div>
+
+          <p>
+            Para cada partido se aplica únicamente la categoría de mayor
+            valor que corresponda a tu pronóstico.
+          </p>
+
+          <div class="rules-score-grid">
+            <article class="rules-score-card rules-score-card--exact">
+              <strong>4</strong>
+              <div>
+                <h3>Resultado exacto</h3>
+                <p>Aciertas los goles de ambos equipos.</p>
+              </div>
+            </article>
+
+            <article class="rules-score-card">
+              <strong>3</strong>
+              <div>
+                <h3>Diferencia correcta</h3>
+                <p>
+                  Aciertas la diferencia de goles, pero no el resultado
+                  exacto. Otro empate también pertenece a esta categoría.
+                </p>
+              </div>
+            </article>
+
+            <article class="rules-score-card">
+              <strong>2</strong>
+              <div>
+                <h3>Tendencia correcta</h3>
+                <p>
+                  Aciertas qué equipo gana, pero no la diferencia de goles.
+                  Los empates no exactos reciben 3 puntos por tener la misma
+                  diferencia.
+                </p>
+              </div>
+            </article>
+
+            <article class="rules-score-card">
+              <strong>0</strong>
+              <div>
+                <h3>Pronóstico incorrecto</h3>
+                <p>No aciertas la tendencia del partido.</p>
+              </div>
+            </article>
+          </div>
+
+          <div class="rules-example" aria-label="Ejemplo de puntuación">
+            <strong>Ejemplo: resultado oficial 2:1</strong>
+            <span>2:1 = 4 puntos</span>
+            <span>3:2 = 3 puntos</span>
+            <span>3:1 = 2 puntos</span>
+            <span>0:1 = 0 puntos</span>
+          </div>
+        </section>
+
+        <section class="card rules-section" id="plazos">
+          <div class="rules-section-heading">
+            <span class="rules-section-index" aria-hidden="true">02</span>
+            <div>
+              <div class="rules-eyebrow">Pronósticos</div>
+              <h2>Plazos y guardado</h2>
+            </div>
+          </div>
+
+          <ul class="rules-list">
+            <li>
+              Cada partido se puede pronosticar y modificar hasta la hora de
+              inicio indicada en Puntero.
+            </li>
+            <li>
+              Al alcanzar esa hora, el partido se cierra automáticamente y
+              ya no admite cambios.
+            </li>
+            <li>
+              Un pronóstico solo queda registrado después de pulsar
+              <strong>Guardar pronósticos</strong> y recibir la confirmación.
+            </li>
+            <li>
+              Si no existe un pronóstico completo para un partido, se
+              obtienen 0 puntos en ese encuentro.
+            </li>
+          </ul>
+
+          <aside class="rules-notice">
+            La hora mostrada en Puntero determina el cierre. Si la organización
+            modifica el horario de un partido, la administración actualizará
+            el encuentro manualmente.
+          </aside>
+        </section>
+
+        <section class="card rules-section" id="visibilidad">
+          <div class="rules-section-heading">
+            <span class="rules-section-index" aria-hidden="true">03</span>
+            <div>
+              <div class="rules-eyebrow">Juego limpio</div>
+              <h2>Visibilidad de los pronósticos</h2>
+            </div>
+          </div>
+
+          <ul class="rules-list">
+            <li>Siempre puedes revisar tus propios pronósticos guardados.</li>
+            <li>
+              Los pronósticos de otros participantes permanecen ocultos hasta
+              que comienza el partido correspondiente.
+            </li>
+            <li>
+              Después del cierre se muestran en la
+              <strong>Tabla por fecha</strong>, aunque el resultado todavía no
+              haya sido registrado.
+            </li>
+          </ul>
+        </section>
+
+        <section class="card rules-section" id="especiales">
+          <div class="rules-section-heading">
+            <span class="rules-section-index" aria-hidden="true">04</span>
+            <div>
+              <div class="rules-eyebrow">Bonus</div>
+              <h2>Pronósticos especiales</h2>
+            </div>
+          </div>
+
+          <p>
+            Los pronósticos especiales incluyen campeón de medio año,
+            campeón, primer cambio de entrenador, máximo goleador y los dos
+            equipos descendidos.
+          </p>
+
+          <ul class="rules-list">
+            <li>Cada respuesta correcta suma 5 puntos.</li>
+            <li>
+              El mismo equipo descendido no puede obtener puntos dos veces.
+            </li>
+            <li>
+              Los especiales se pueden modificar hasta el inicio del primer
+              partido del torneo.
+            </li>
+            <li>
+              Después de ese momento quedan bloqueados y pasan a ser visibles
+              para el grupo.
+            </li>
+          </ul>
+        </section>
+
+        <section class="card rules-section" id="clasificacion">
+          <div class="rules-section-heading">
+            <span class="rules-section-index" aria-hidden="true">05</span>
+            <div>
+              <div class="rules-eyebrow">Tablas</div>
+              <h2>Resultados y clasificación</h2>
+            </div>
+          </div>
+
+          <ul class="rules-list">
+            <li>
+              Los resultados oficiales son registrados manualmente por la
+              administración después de los partidos.
+            </li>
+            <li>
+              Puntero calcula los puntos y actualiza las tablas cuando el
+              resultado ha sido registrado.
+            </li>
+            <li>
+              En esta versión no se muestran resultados ni puntos en vivo.
+            </li>
+            <li>
+              La tabla general suma los puntos de los partidos evaluados y,
+              una vez publicados, los puntos especiales.
+            </li>
+            <li>
+              En la tabla de una fecha, quienes suman los mismos puntos
+              comparten la misma posición.
+            </li>
+            <li>
+              En la tabla general, los puntos son el primer criterio y las
+              victorias de fecha sirven como desempate. Si también coinciden,
+              los participantes comparten la misma posición.
+            </li>
+            <li>
+              Cada participante que alcanza la puntuación máxima de una fecha
+              recibe una victoria de fecha. Si hay varios ganadores, la
+              victoria cuenta para todos ellos.
+            </li>
+            <li>
+              Una corrección posterior del resultado vuelve a calcular los
+              puntos y las clasificaciones afectadas.
+            </li>
+          </ul>
+        </section>
+
+      </div>
+
+      <aside class="card rules-sidebar" aria-labelledby="rules-sidebar-title">
+        <div class="rules-eyebrow">Importante</div>
+        <h2 id="rules-sidebar-title">Antes de jugar</h2>
+
+        <ol>
+          <li>Comprueba el grupo activo.</li>
+          <li>Completa ambos marcadores.</li>
+          <li>Guarda y espera la confirmación.</li>
+          <li>Revisa que no queden pronósticos pendientes.</li>
+        </ol>
+
+        {% if request.user.is_authenticated %}
+          {% if group %}
+            <a class="btn primary" href="{% url 'tippen' %}">
+              Ir a pronosticar
+            </a>
+          {% else %}
+            <a class="btn primary" href="{% url 'join_group' %}">
+              Unirse a un grupo
+            </a>
+          {% endif %}
+        {% else %}
+          <a class="btn primary" href="{% url 'account_signup' %}">
+            Crear una cuenta
+          </a>
+        {% endif %}
+      </aside>
+    </div>
+
+  </div>
+{% endblock %}

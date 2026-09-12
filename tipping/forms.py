@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from django import forms
 
-from .models import Group, Match, Tournament
+from .models import (
+    Group,
+    Match,
+    Tournament,
+    UserProfile,
+)
 
 
 
@@ -35,6 +40,44 @@ class GroupCreateForm(forms.ModelForm):
         # kleine UX-Extras
         self.fields["name"].required = True
         self.fields["tournament"].required = True
+
+
+class GroupSettingsForm(forms.ModelForm):
+    class Meta:
+        model = Group
+        fields = (
+            "name",
+            "join_enabled",
+        )
+        widgets = {
+            "name": forms.TextInput(
+                attrs={
+                    "class": "input",
+                    "autocomplete": "off",
+                }
+            ),
+            "join_enabled": forms.CheckboxInput(
+                attrs={
+                    "class": "group-settings-checkbox",
+                }
+            ),
+        }
+        labels = {
+            "name": "Nombre del grupo",
+            "join_enabled": (
+                "Permitir que nuevos participantes se unan"
+            ),
+        }
+
+    def clean_name(self):
+        name = self.cleaned_data["name"].strip()
+
+        if not name:
+            raise forms.ValidationError(
+                "El nombre del grupo no puede estar vacío."
+            )
+
+        return name
 
 
 class BonusPredictionForm(forms.Form):
@@ -144,5 +187,13 @@ class DeleteAccountForm(forms.Form):
             )
 
         return confirmation
+
+
+class TipReminderSettingsForm(forms.ModelForm):
+    class Meta:
+        model = UserProfile
+        fields = (
+            "tip_reminders_enabled",
+        )
     
     

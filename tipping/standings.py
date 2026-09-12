@@ -1,5 +1,5 @@
 from django.db import transaction
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, Max, Q, Sum
 from django.utils import timezone
 
 from .models import (
@@ -319,6 +319,9 @@ def rebuild_group_standing(
             exact_predictions=Sum(
                 "exact_predictions"
             ),
+            matchday_wins=Max(
+                "cumulative_matchday_wins"
+            ),
         )
     )
 
@@ -330,6 +333,10 @@ def rebuild_group_standing(
             ),
             "exact_predictions": (
                 row["exact_predictions"]
+                or 0
+            ),
+            "matchday_wins": (
+                row["matchday_wins"]
                 or 0
             ),
         }
@@ -370,6 +377,11 @@ def rebuild_group_standing(
             0,
         )
 
+        matchday_wins = score_data.get(
+            "matchday_wins",
+            0,
+        )
+
         bonus_points = (
             bonus_by_user.get(
                 user_id,
@@ -391,6 +403,7 @@ def rebuild_group_standing(
                 exact_predictions=(
                     exact_predictions
                 ),
+                matchday_wins=matchday_wins,
                 updated_at=updated_at,
             )
         )
@@ -404,6 +417,7 @@ def rebuild_group_standing(
             "bonus_points",
             "total_points",
             "exact_predictions",
+            "matchday_wins",
             "updated_at",
         ],
         unique_fields=[
@@ -418,13 +432,15 @@ def rebuild_group_standing(
 def _competition_ranks(
     user_ids,
     cumulative_points,
+    cumulative_matchday_wins,
     username_by_id,
 ):
     """
     Berechnet Wettbewerbsränge anhand der kumulierten
-    Punkte.
+    Punkte und der Spieltagssiege als Tiebreaker.
 
-    Gleiche Punktzahlen erhalten denselben Rang.
+    Gleiche Punktzahlen und gleich viele Spieltagssiege
+    erhalten denselben Rang.
     Der folgende Rang wird entsprechend übersprungen:
 
         1, 2, 2, 4
@@ -437,6 +453,10 @@ def _competition_ranks(
         user_ids,
         key=lambda user_id: (
             -cumulative_points.get(
+                user_id,
+                0,
+            ),
+            -cumulative_matchday_wins.get(
                 user_id,
                 0,
             ),
@@ -453,7 +473,7 @@ def _competition_ranks(
 
     ranks = {}
 
-    previous_points = None
+    previous_ranking_key = None
     current_rank = 0
 
     for index, user_id in enumerate(
@@ -464,13 +484,24 @@ def _competition_ranks(
             user_id,
             0,
         )
+        matchday_wins = (
+            cumulative_matchday_wins.get(
+                user_id,
+                0,
+            )
+        )
+        ranking_key = (
+            points,
+            matchday_wins,
+        )
 
         if (
-            previous_points is None
-            or points != previous_points
+            previous_ranking_key is None
+            or ranking_key
+            != previous_ranking_key
         ):
             current_rank = index
-            previous_points = points
+            previous_ranking_key = ranking_key
 
         ranks[user_id] = current_rank
 
@@ -577,6 +608,7 @@ def rebuild_group_timeline(
             "points",
             "exact_predictions",
             "cumulative_points",
+            "cumulative_matchday_wins",
             "rank",
             "rank_change",
             "updated_at",
@@ -651,6 +683,7 @@ def rebuild_group_timeline(
                 "points",
                 "exact_predictions",
                 "cumulative_points",
+                "cumulative_matchday_wins",
                 "rank",
                 "rank_change",
                 "updated_at",
@@ -670,6 +703,11 @@ def rebuild_group_timeline(
     }
 
     cumulative_points = {
+        user_id: 0
+        for user_id in user_ids
+    }
+
+    cumulative_matchday_wins = {
         user_id: 0
         for user_id in user_ids
     }
@@ -716,6 +754,7 @@ def rebuild_group_timeline(
                 .only(
                     "user_id",
                     "cumulative_points",
+                    "cumulative_matchday_wins",
                     "rank",
                 )
                 .order_by(
@@ -759,6 +798,16 @@ def rebuild_group_timeline(
                 for user_id in user_ids
             }
 
+            cumulative_matchday_wins = {
+                user_id: (
+                    previous_by_user[
+                        user_id
+                    ].cumulative_matchday_wins
+                    or 0
+                )
+                for user_id in user_ids
+            }
+
             previous_rank = {
                 user_id: previous_by_user[
                     user_id
@@ -769,6 +818,8 @@ def rebuild_group_timeline(
     changed_scores = []
 
     for matchday in matchdays:
+        matchday_points = {}
+
         for user_id in user_ids:
             score = score_by_user_matchday[
                 (
@@ -781,9 +832,30 @@ def rebuild_group_timeline(
                 user_id
             ] += score.points
 
+            matchday_points[user_id] = (
+                score.points
+            )
+
+        winning_points = max(
+            matchday_points.values(),
+            default=0,
+        )
+
+        for user_id in user_ids:
+            if (
+                matchday_points[user_id]
+                == winning_points
+            ):
+                cumulative_matchday_wins[
+                    user_id
+                ] += 1
+
         current_ranks = _competition_ranks(
             user_ids=user_ids,
             cumulative_points=cumulative_points,
+            cumulative_matchday_wins=(
+                cumulative_matchday_wins
+            ),
             username_by_id=username_by_id,
         )
 
@@ -807,6 +879,12 @@ def rebuild_group_timeline(
                 cumulative_points[user_id]
             )
 
+            score.cumulative_matchday_wins = (
+                cumulative_matchday_wins[
+                    user_id
+                ]
+            )
+
             score.rank = new_rank
 
             score.rank_change = (
@@ -827,6 +905,7 @@ def rebuild_group_timeline(
         changed_scores,
         [
             "cumulative_points",
+            "cumulative_matchday_wins",
             "rank",
             "rank_change",
             "updated_at",

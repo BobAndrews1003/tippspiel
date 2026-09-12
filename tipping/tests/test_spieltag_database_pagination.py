@@ -261,6 +261,18 @@ class SpieltagDatabasePaginationTests(TestCase):
             expected_usernames,
         )
 
+        self.assertEqual(
+            [
+                row["position"]
+                for row in rows[:3]
+            ],
+            [
+                1,
+                1,
+                1,
+            ],
+        )
+
     def test_hidden_bonus_places_current_user_first(
         self,
     ):

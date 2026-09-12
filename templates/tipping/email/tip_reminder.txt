@@ -1,0 +1,13 @@
+Hola {{ user.username }},
+
+se acercan partidos para los que todavía no has guardado todos tus pronósticos:
+{% for section in sections %}
+{{ section.group.name }}{% if section.matchday %} · Fecha {{ section.matchday }}{% endif %}
+{% for match in section.matches %}- {{ match.home_team }} – {{ match.away_team }}: {{ match.kickoff|date:"d/m/Y H:i" }}
+{% endfor %}Pronosticar ahora: {{ section.tip_url }}
+{% endfor %}
+Los horarios se muestran en la hora de Ecuador. Cada partido se recuerda como máximo una vez por grupo.
+
+Puedes desactivar estos avisos en cualquier momento: {{ settings_url }}
+
+Puntero

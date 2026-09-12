@@ -230,6 +230,77 @@ class TabelleDatabasePaginationTests(TestCase):
             expected_usernames,
         )
 
+        self.assertEqual(
+            [
+                row["position"]
+                for row in rows[:3]
+            ],
+            [
+                1,
+                1,
+                1,
+            ],
+        )
+
+    def test_matchday_wins_break_equal_total_points(self):
+        first_winner = self.users[1]
+        second_winner = self.users[2]
+        lower_tiebreaker = self.users[3]
+
+        GroupStanding.objects.filter(
+            group=self.group,
+            user__in=[
+                first_winner,
+                second_winner,
+            ],
+        ).update(
+            match_points=999,
+            total_points=999,
+            matchday_wins=3,
+        )
+        GroupStanding.objects.filter(
+            group=self.group,
+            user=lower_tiebreaker,
+        ).update(
+            match_points=999,
+            total_points=999,
+            matchday_wins=1,
+        )
+
+        response = self.get_table()
+        rows = response.context[
+            "table_rows"
+        ]
+
+        expected_winners = sorted(
+            [
+                first_winner.username,
+                second_winner.username,
+            ]
+        )
+        self.assertEqual(
+            [
+                row["user"].username
+                for row in rows[:2]
+            ],
+            expected_winners,
+        )
+        self.assertEqual(
+            rows[2]["user"],
+            lower_tiebreaker,
+        )
+        self.assertEqual(
+            [
+                row["position"]
+                for row in rows[:3]
+            ],
+            [
+                1,
+                1,
+                3,
+            ],
+        )
+
     def test_hidden_bonus_does_not_change_visible_order(
         self,
     ):

@@ -52,6 +52,7 @@ def _get_tournament_group_ids(
         .filter(
             tournament_id=tournament_id,
             memberships__isnull=False,
+            memberships__is_active=True,
         )
     )
 

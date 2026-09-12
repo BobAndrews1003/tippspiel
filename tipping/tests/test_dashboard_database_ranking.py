@@ -208,3 +208,51 @@ class DashboardDatabaseRankingTests(TestCase):
                 "is_extra"
             ]
         )
+
+    def test_matchday_wins_break_total_points_tie(self):
+        GroupStanding.objects.filter(
+            group=self.group,
+            user=self.alpha_user,
+        ).update(
+            matchday_wins=1,
+        )
+        GroupStanding.objects.filter(
+            group=self.group,
+            user=self.beta_user,
+        ).update(
+            matchday_wins=2,
+        )
+
+        response = self.get_dashboard()
+        rows = response.context[
+            "mini_table_rows"
+        ]
+
+        self.assertEqual(
+            [
+                row["user"].username
+                for row in rows
+            ],
+            [
+                "ranking-first",
+                "ranking-beta",
+                "ranking-alpha",
+                "ranking-current",
+            ],
+        )
+        self.assertEqual(
+            [
+                row["position"]
+                for row in rows
+            ],
+            [
+                1,
+                2,
+                3,
+                4,
+            ],
+        )
+        self.assertEqual(
+            rows[1]["matchday_wins"],
+            2,
+        )

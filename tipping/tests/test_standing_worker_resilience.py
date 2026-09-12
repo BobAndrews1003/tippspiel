@@ -6,6 +6,7 @@ from django.core.management import (
     call_command,
 )
 from django.test import TransactionTestCase
+from django.test import override_settings
 from django.utils import timezone
 
 from tipping.models import (
@@ -137,3 +138,40 @@ class StandingWorkerResilienceTests(
             "Standing-Worker beendet",
             output.getvalue(),
         )
+
+    @override_settings(
+        TIP_REMINDERS_ENABLED=True,
+        TIP_REMINDER_POLL_SECONDS=300,
+    )
+    def test_watch_mode_checks_tip_reminders(self):
+        output = StringIO()
+        errors = StringIO()
+
+        with patch(
+            (
+                "tipping.management.commands."
+                "process_standing_jobs."
+                "send_due_tip_reminders"
+            )
+        ) as send_reminders:
+            send_reminders.return_value.recipients = 0
+            send_reminders.return_value.failures = 0
+
+            with patch(
+                (
+                    "tipping.management.commands."
+                    "process_standing_jobs.sleep"
+                ),
+                side_effect=KeyboardInterrupt,
+            ):
+                call_command(
+                    "process_standing_jobs",
+                    watch=True,
+                    limit=1,
+                    poll_seconds=0.1,
+                    stale_minutes=60,
+                    stdout=output,
+                    stderr=errors,
+                )
+
+        send_reminders.assert_called_once_with()

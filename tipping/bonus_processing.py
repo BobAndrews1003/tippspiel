@@ -52,6 +52,7 @@ def rebuild_bonus_for_tournament_id(
         .filter(
             tournament_id=tournament_id,
             memberships__isnull=False,
+            memberships__is_active=True,
         )
         .values_list(
             "id",

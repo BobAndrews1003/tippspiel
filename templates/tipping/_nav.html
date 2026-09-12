@@ -187,6 +187,13 @@
 
         {% endif %}
 
+        <a
+          href="{% url 'rules' %}"
+          class="nav-link {% if request.resolver_match.url_name == 'rules' %}active{% endif %}"
+        >
+          Reglas del juego
+        </a>
+
       </div>
     </div>
   </div>
@@ -303,6 +310,18 @@
             "
           >
             Cambiar correo electrónico
+          </a>
+
+          <a
+            href="{% url 'notification_settings' %}"
+            class="
+              nav-link
+              {% if request.resolver_match.url_name == 'notification_settings' %}
+                active
+              {% endif %}
+            "
+          >
+            Recordatorios
           </a>
 
 

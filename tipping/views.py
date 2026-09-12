@@ -4,20 +4,23 @@ from collections import Counter, defaultdict
 
 from typing import Optional
 
+from allauth.account.models import EmailAddress
+
 from .bonus_scoring import (
     get_bonus_lock_time,
 )
 
+from django.conf import settings
 from django.core.paginator import Paginator
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth import logout
-from django.db.models import Case, IntegerField, OuterRef, Subquery, When
+from django.db.models import Case, F, IntegerField, OuterRef, Subquery, When, Window
 from django.db.models import CharField, Q, Value
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
 from django.db.models import Count
-from django.db.models.functions import Cast, Coalesce, Concat, Lower, NullIf
+from django.db.models.functions import Cast, Coalesce, Concat, Lower, NullIf, Rank
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -29,6 +32,8 @@ from .forms import (
     BonusPredictionForm,
     DeleteAccountForm,
     GroupCreateForm,
+    GroupSettingsForm,
+    TipReminderSettingsForm,
 )
 from .membership_processing import (
     rebuild_group_after_membership_change,
@@ -47,6 +52,7 @@ from .models import (
     MAX_GOALS,
     Prediction,
     Tournament,
+    UserProfile,
 )
 
 from .scoring import points_for_prediction
@@ -56,6 +62,107 @@ User = get_user_model()
 GROUP_PAGE_SIZE = 50
 
 MAX_DATABASE_ID = 9_223_372_036_854_775_807
+
+
+@require_safe
+def rules(request):
+    """
+    Zeigt die aktuell gültigen Spielregeln.
+
+    Die Seite ist bewusst ohne Anmeldung erreichbar, damit
+    Interessierte die Regeln vor der Registrierung lesen können.
+    """
+
+    return render(
+        request,
+        "tipping/rules.html",
+    )
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def notification_settings(request):
+    profile, _ = UserProfile.objects.get_or_create(
+        user=request.user,
+    )
+
+    if request.method == "POST":
+        form = TipReminderSettingsForm(
+            request.POST,
+            instance=profile,
+        )
+
+        if form.is_valid():
+            form.save()
+
+            messages.success(
+                request,
+                (
+                    "La configuración de recordatorios "
+                    "se guardó correctamente."
+                ),
+            )
+
+            return redirect(
+                "notification_settings"
+            )
+
+    else:
+        form = TipReminderSettingsForm(
+            instance=profile,
+        )
+
+    return render(
+        request,
+        "tipping/notification_settings.html",
+        {
+            "form": form,
+            "profile": profile,
+            "reminder_lead_hours": (
+                settings.TIP_REMINDER_LEAD_HOURS
+            ),
+            "verified_email_address": (
+                EmailAddress.objects
+                .filter(
+                    user=request.user,
+                    verified=True,
+                )
+                .order_by(
+                    "-primary",
+                    "id",
+                )
+                .first()
+            ),
+        },
+    )
+
+
+@login_required
+@require_safe
+def group_tip_redirect(
+    request,
+    group_id: int,
+):
+    membership = get_object_or_404(
+        GroupMembership,
+        user=request.user,
+        group_id=group_id,
+    )
+
+    request.session["active_group_id"] = (
+        membership.group_id
+    )
+
+    matchday = _parse_positive_database_id(
+        request.GET.get("md")
+    )
+
+    target = reverse("tippen")
+
+    if matchday is not None:
+        target = f"{target}?md={matchday}"
+
+    return redirect(target)
 
 
 def _parse_positive_database_id(value):
@@ -88,6 +195,25 @@ def _parse_positive_database_id(value):
         return None
 
     return parsed
+
+
+def _is_group_owner(
+    *,
+    group: Group,
+    membership: GroupMembership | None,
+) -> bool:
+    """Prüft regulären und älteren, noch owner-losen Gruppenbesitz."""
+
+    if membership is None:
+        return False
+
+    return (
+        group.owner_id == membership.user_id
+        or (
+            group.owner_id is None
+            and membership.is_creator
+        )
+    )
 
 
 # ---------------------------------------------------------------------
@@ -448,6 +574,12 @@ def dashboard(request):
         else 0
     )
 
+    user_matchday_wins = (
+        current_user_standing.matchday_wins
+        if current_user_standing
+        else 0
+    )
+
     # --------------------------------------------------------------
     # Eigene Punkte nach Spieltag
     # --------------------------------------------------------------
@@ -620,10 +752,22 @@ def dashboard(request):
                         ),
                         output_field=CharField(),
                     )
-                )
+                ),
+                dashboard_rank=Window(
+                    expression=Rank(),
+                    order_by=(
+                        F(
+                            ranking_points_field
+                        ).desc(),
+                        F(
+                            "matchday_wins"
+                        ).desc(),
+                    ),
+                ),
             )
             .order_by(
                 f"-{ranking_points_field}",
+                "-matchday_wins",
                 "dashboard_sort_name",
                 "user_id",
             )
@@ -633,13 +777,7 @@ def dashboard(request):
             leaderboard_queryset[:3]
         )
 
-        previous_total = None
-        current_position = 0
-
-        for index, standing in enumerate(
-            top_standings,
-            start=1,
-        ):
+        for standing in top_standings:
             visible_total = (
                 getattr(
                     standing,
@@ -648,20 +786,16 @@ def dashboard(request):
                 or 0
             )
 
-            # Wettbewerbsrang:
-            # 1, 1, 3 statt 1, 1, 2.
-            if (
-                previous_total is None
-                or visible_total != previous_total
-            ):
-                current_position = index
-                previous_total = visible_total
-
             mini_table_rows.append(
                 {
                     "user": standing.user,
-                    "position": current_position,
+                    "position": (
+                        standing.dashboard_rank
+                    ),
                     "total": visible_total,
+                    "matchday_wins": (
+                        standing.matchday_wins
+                    ),
                     "bonus": (
                         standing.bonus_points or 0
                         if bonus_reveal
@@ -675,18 +809,32 @@ def dashboard(request):
             )
 
         if current_user_standing:
-            # Rang = Anzahl der Nutzer mit mehr Punkten + 1.
-            # Dadurch bleibt das Wettbewerbssystem erhalten.
+            # Rang = Anzahl der Nutzer mit mehr Punkten oder
+            # bei Punktgleichheit mehr Spieltagssiegen + 1.
             user_position = (
                 GroupStanding.objects
                 .filter(
                     group=group,
-                    **{
-                        (
-                            f"{ranking_points_field}"
-                            "__gt"
-                        ): user_total_points,
-                    },
+                )
+                .filter(
+                    Q(
+                        **{
+                            (
+                                f"{ranking_points_field}"
+                                "__gt"
+                            ): user_total_points,
+                        }
+                    )
+                    | Q(
+                        **{
+                            ranking_points_field: (
+                                user_total_points
+                            ),
+                            "matchday_wins__gt": (
+                                user_matchday_wins
+                            ),
+                        }
+                    )
                 )
                 .count()
                 + 1
@@ -708,6 +856,9 @@ def dashboard(request):
                         ),
                         "position": user_position,
                         "total": user_total_points,
+                        "matchday_wins": (
+                            user_matchday_wins
+                        ),
                         "bonus": (
                             current_user_standing
                             .bonus_points
@@ -784,6 +935,9 @@ def dashboard(request):
             ),
             "user_total_points": (
                 user_total_points
+            ),
+            "user_matchday_wins": (
+                user_matchday_wins
             ),
 
             "standings_started": (
@@ -1351,6 +1505,14 @@ def spieltag(request):
                         ),
                     )
                 )
+                .annotate(
+                    page_rank=Window(
+                        expression=Rank(),
+                        order_by=(
+                            F("page_points").desc(),
+                        ),
+                    )
+                )
                 .order_by(
                     "-page_points",
                     "page_sort_name",
@@ -1402,6 +1564,16 @@ def spieltag(request):
                     Value(0),
                     output_field=(
                         IntegerField()
+                    ),
+                )
+            )
+            .annotate(
+                page_bonus_rank=Window(
+                    expression=Rank(),
+                    order_by=(
+                        F(
+                            "page_bonus_points"
+                        ).desc(),
                     ),
                 )
             )
@@ -1610,7 +1782,10 @@ def spieltag(request):
     bonus_rows = []
 
     if tab == "bonus":
-        for user in page_users:
+        for page_membership, user in zip(
+            page_memberships,
+            page_users,
+        ):
             predictions = bonus_by_user.get(
                 user.id,
                 [],
@@ -1670,6 +1845,11 @@ def spieltag(request):
                         if bonus_reveal
                         else None
                     ),
+                    "position": getattr(
+                        page_membership,
+                        "page_bonus_rank",
+                        None,
+                    ),
                 }
             )
 
@@ -1697,7 +1877,10 @@ def spieltag(request):
     table_rows = []
 
     if tab == "matches":
-        for user in page_users:
+        for page_membership, user in zip(
+            page_memberships,
+            page_users,
+        ):
             cells = []
 
             for match in matches:
@@ -1756,6 +1939,11 @@ def spieltag(request):
                     "user": user,
                     "cells": cells,
                     "total_points": total_points,
+                    "position": getattr(
+                        page_membership,
+                        "page_rank",
+                        None,
+                    ),
                 }
             )
 
@@ -2095,10 +2283,22 @@ def tabelle(request):
                     ),
                     output_field=CharField(),
                 )
-            )
+            ),
+            table_rank=Window(
+                expression=Rank(),
+                order_by=(
+                    F(
+                        ranking_points_field
+                    ).desc(),
+                    F(
+                        "matchday_wins"
+                    ).desc(),
+                ),
+            ),
         )
         .order_by(
             f"-{ranking_points_field}",
+            "-matchday_wins",
             "table_sort_name",
             "user_id",
         )
@@ -2248,6 +2448,10 @@ def tabelle(request):
                     )
                     or 0
                 ),
+                "matchday_wins": (
+                    standing.matchday_wins
+                ),
+                "position": standing.table_rank,
             }
         )
 
@@ -2293,14 +2497,86 @@ def join_group(request):
             messages.error(request, "No se encontró el código de acceso.")
             return render(request, "tipping/join.html", {"code": code})
 
-        membership, _ = GroupMembership.objects.get_or_create(
-            user=request.user,
-            group=group
+        existing_membership = (
+            GroupMembership.objects
+            .filter(
+                user=request.user,
+                group=group,
+            )
+            .first()
         )
+
+        if (
+            not group.join_enabled
+            and existing_membership is None
+        ):
+            messages.error(
+                request,
+                (
+                    "Este grupo no admite nuevos "
+                    "participantes en este momento."
+                ),
+            )
+            return render(
+                request,
+                "tipping/join.html",
+                {"code": code},
+            )
+
+        restored = False
+
+        if existing_membership is not None:
+            membership = existing_membership
+            created = False
+        else:
+            membership = (
+                GroupMembership.all_objects
+                .filter(
+                    user=request.user,
+                    group=group,
+                )
+                .first()
+            )
+
+            if membership is not None:
+                membership.is_active = True
+                membership.removed_at = None
+                membership.save(
+                    update_fields=[
+                        "is_active",
+                        "removed_at",
+                    ]
+                )
+                restored = True
+                created = False
+            else:
+                membership = GroupMembership.objects.create(
+                    user=request.user,
+                    group=group,
+                )
+                created = True
 
         request.session["active_group_id"] = group.id
 
-        messages.success(request, f"Te uniste al grupo «{group.name}».")
+        if restored:
+            messages.success(
+                request,
+                (
+                    f"Volviste al grupo «{group.name}». "
+                    "Tus pronósticos anteriores fueron restaurados."
+                ),
+            )
+        elif created:
+            messages.success(
+                request,
+                f"Te uniste al grupo «{group.name}».",
+            )
+        else:
+            messages.success(
+                request,
+                f"El grupo activo ahora es «{group.name}».",
+            )
+
         return redirect("tippen")
 
     user_groups = (
@@ -2313,6 +2589,7 @@ def join_group(request):
     return render(request, "tipping/join.html", {
         "user_groups": user_groups,
         "active_group_id": request.session.get("active_group_id"),
+        "code": request.GET.get("code", "").strip().upper(),
     })
 
 
@@ -2549,6 +2826,9 @@ def my_groups(request):
         .annotate(
             member_count=Count(
                 "group__memberships",
+                filter=Q(
+                    group__memberships__is_active=True,
+                ),
                 distinct=True,
             )
         )
@@ -2570,17 +2850,6 @@ def my_groups(request):
             )
         )
 
-        transfer_candidates = []
-
-        if is_owner:
-            transfer_candidates = list(
-                GroupMembership.objects
-                .filter(group=current_group)
-                .exclude(user=request.user)
-                .select_related("user")
-                .order_by("user__username")
-            )
-
         group_rows.append({
             "membership": membership,
             "group": current_group,
@@ -2589,7 +2858,6 @@ def my_groups(request):
                 current_group.id == active_group_id
             ),
             "member_count": membership.member_count,
-            "transfer_candidates": transfer_candidates,
         })
 
     return render(
@@ -2604,6 +2872,341 @@ def my_groups(request):
             "group_rows": group_rows,
             "active_group_id": active_group_id,
         },
+    )
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def group_detail(
+    request: HttpRequest,
+    group_id: int,
+):
+    membership = get_object_or_404(
+        GroupMembership.objects
+        .select_related(
+            "group__tournament",
+            "group__owner",
+        ),
+        group_id=group_id,
+        user=request.user,
+    )
+
+    group = membership.group
+    is_owner = _is_group_owner(
+        group=group,
+        membership=membership,
+    )
+
+    settings_form = GroupSettingsForm(
+        request.POST or None,
+        instance=group,
+    )
+
+    if request.method == "POST":
+        if not is_owner:
+            messages.error(
+                request,
+                (
+                    "No tienes permiso para cambiar "
+                    "la configuración de este grupo."
+                ),
+            )
+            return redirect(
+                "group_detail",
+                group_id=group.id,
+            )
+
+        if settings_form.is_valid():
+            settings_form.save()
+
+            messages.success(
+                request,
+                "La configuración del grupo fue guardada.",
+            )
+            return redirect(
+                "group_detail",
+                group_id=group.id,
+            )
+
+        messages.error(
+            request,
+            "Revisa la configuración del grupo.",
+        )
+
+    member_memberships = list(
+        GroupMembership.objects
+        .filter(group=group)
+        .select_related("user")
+        .order_by("joined_at", "id")
+    )
+
+    standings_by_user_id = {
+        standing.user_id: standing
+        for standing in (
+            GroupStanding.objects
+            .filter(group=group)
+        )
+    }
+
+    bonus_lock_time = get_bonus_lock_time(
+        group.tournament
+    )
+    bonus_reveal = bool(
+        bonus_lock_time
+        and timezone.now() >= bonus_lock_time
+    )
+
+    member_rows = []
+
+    for member_membership in member_memberships:
+        standing = standings_by_user_id.get(
+            member_membership.user_id
+        )
+        points = 0
+        matchday_wins = 0
+
+        if standing is not None:
+            points = (
+                standing.total_points
+                if bonus_reveal
+                else standing.match_points
+            ) or 0
+            matchday_wins = (
+                standing.matchday_wins or 0
+            )
+
+        display_name = (
+            member_membership.user.username.strip()
+            if member_membership.user.username
+            else ""
+        )
+
+        if not display_name:
+            display_name = (
+                f"Jugador {member_membership.user_id}"
+            )
+
+        member_rows.append(
+            {
+                "membership": member_membership,
+                "display_name": display_name,
+                "points": points,
+                "matchday_wins": matchday_wins,
+                "is_owner": _is_group_owner(
+                    group=group,
+                    membership=member_membership,
+                ),
+            }
+        )
+
+    member_rows.sort(
+        key=lambda row: (
+            -row["points"],
+            -row["matchday_wins"],
+            row["display_name"].casefold(),
+            row["membership"].user_id,
+        )
+    )
+
+    previous_ranking_key = None
+    current_rank = 0
+
+    for index, row in enumerate(
+        member_rows,
+        start=1,
+    ):
+        ranking_key = (
+            row["points"],
+            row["matchday_wins"],
+        )
+
+        if ranking_key != previous_ranking_key:
+            current_rank = index
+            previous_ranking_key = ranking_key
+
+        row["rank"] = current_rank
+
+    invite_url = request.build_absolute_uri(
+        f'{reverse("join_group")}?code={group.join_code}'
+    )
+
+    return render(
+        request,
+        "tipping/group_detail.html",
+        {
+            "group": group,
+            "membership": membership,
+            "is_owner": is_owner,
+            "is_active": (
+                request.session.get("active_group_id")
+                == group.id
+            ),
+            "settings_form": settings_form,
+            "member_rows": member_rows,
+            "member_count": len(member_rows),
+            "invite_url": invite_url,
+            "bonus_reveal": bonus_reveal,
+            "transfer_candidates": [
+                row
+                for row in member_rows
+                if row["membership"].user_id
+                != request.user.id
+            ],
+        },
+    )
+
+
+@login_required
+@require_POST
+def rotate_group_join_code(
+    request: HttpRequest,
+    group_id: int,
+):
+    with transaction.atomic():
+        group = get_object_or_404(
+            Group.objects.select_for_update(),
+            pk=group_id,
+        )
+        membership = (
+            GroupMembership.objects
+            .filter(
+                group=group,
+                user=request.user,
+            )
+            .first()
+        )
+
+        if not _is_group_owner(
+            group=group,
+            membership=membership,
+        ):
+            messages.error(
+                request,
+                (
+                    "No tienes permiso para renovar "
+                    "el código de este grupo."
+                ),
+            )
+            return redirect("my_groups")
+
+        group.rotate_join_code()
+
+    messages.success(
+        request,
+        (
+            "Se creó un nuevo código de acceso. "
+            "El código anterior ya no funciona."
+        ),
+    )
+    return redirect(
+        "group_detail",
+        group_id=group.id,
+    )
+
+
+@login_required
+@require_POST
+def remove_group_member(
+    request: HttpRequest,
+    group_id: int,
+    user_id: int,
+):
+    with transaction.atomic():
+        group = get_object_or_404(
+            Group.objects.select_for_update(),
+            pk=group_id,
+        )
+        current_membership = (
+            GroupMembership.objects
+            .filter(
+                group=group,
+                user=request.user,
+            )
+            .first()
+        )
+
+        if not _is_group_owner(
+            group=group,
+            membership=current_membership,
+        ):
+            messages.error(
+                request,
+                (
+                    "No tienes permiso para eliminar "
+                    "participantes de este grupo."
+                ),
+            )
+            return redirect("my_groups")
+
+        target_membership = (
+            GroupMembership.objects
+            .select_for_update()
+            .select_related("user")
+            .filter(
+                group=group,
+                user_id=user_id,
+            )
+            .first()
+        )
+
+        if target_membership is None:
+            messages.error(
+                request,
+                "El participante ya no pertenece al grupo.",
+            )
+            return redirect(
+                "group_detail",
+                group_id=group.id,
+            )
+
+        if _is_group_owner(
+            group=group,
+            membership=target_membership,
+        ):
+            messages.error(
+                request,
+                (
+                    "El administrador no puede eliminarse. "
+                    "Primero debe transferir la administración."
+                ),
+            )
+            return redirect(
+                "group_detail",
+                group_id=group.id,
+            )
+
+        display_name = (
+            target_membership.user.username.strip()
+            if target_membership.user.username
+            else ""
+        ) or f"Jugador {target_membership.user_id}"
+
+        # Die Mitgliedschaft wird deaktiviert. Tipp- und Bonusdaten
+        # bleiben für einen späteren, bewussten Wiedereintritt erhalten.
+        target_membership.is_active = False
+        target_membership.removed_at = timezone.now()
+        target_membership.save(
+            update_fields=[
+                "is_active",
+                "removed_at",
+            ]
+        )
+
+        # Der entfernte Nutzer soll mit einem zuvor bekannten Code nicht
+        # unmittelbar wieder beitreten können.
+        group.rotate_join_code()
+
+    messages.success(
+        request,
+        (
+            f"{display_name} fue eliminado del grupo. "
+            "Sus pronósticos se conservaron y el código "
+            "de acceso fue renovado."
+        ),
+    )
+    return redirect(
+        "group_detail",
+        group_id=group.id,
     )
     
 @login_required
@@ -2721,7 +3324,6 @@ def transfer_group_ownership(
 
         new_owner_name = (
             new_owner_membership.user.username
-            or new_owner_membership.user.email
             or f"Jugador {new_owner_membership.user_id}"
         )
 
@@ -2735,7 +3337,10 @@ def transfer_group_ownership(
         ),
     )
 
-    return redirect("my_groups")
+    return redirect(
+        "group_detail",
+        group_id=current_group.id,
+    )
 
 @login_required
 @require_POST
@@ -2872,6 +3477,18 @@ def set_active_group(request: HttpRequest):
         ),
     )
 
+    next_url = request.POST.get("next", "")
+
+    if (
+        next_url
+        and url_has_allowed_host_and_scheme(
+            url=next_url,
+            allowed_hosts={request.get_host()},
+            require_https=request.is_secure(),
+        )
+    ):
+        return redirect(next_url)
+
     return redirect("dashboard")
 
 @login_required
@@ -2988,6 +3605,7 @@ def delete_account(request):
                 owner__isnull=True,
                 memberships__user=request.user,
                 memberships__is_creator=True,
+                memberships__is_active=True,
             )
         )
         .select_related("tournament")

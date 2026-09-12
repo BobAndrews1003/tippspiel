@@ -241,6 +241,35 @@ class RebuildGroupStandingTests(TestCase):
             2,
         )
 
+    def test_rebuild_copies_latest_matchday_wins(self):
+        MatchdayScore.objects.filter(
+            group=self.group_a,
+            user=self.creator,
+            matchday=1,
+        ).update(
+            cumulative_matchday_wins=1,
+        )
+        MatchdayScore.objects.filter(
+            group=self.group_a,
+            user=self.creator,
+            matchday=2,
+        ).update(
+            cumulative_matchday_wins=2,
+        )
+
+        rebuild_group_standing(
+            group_id=self.group_a.id,
+        )
+
+        standing = GroupStanding.objects.get(
+            group=self.group_a,
+            user=self.creator,
+        )
+        self.assertEqual(
+            standing.matchday_wins,
+            2,
+        )
+
     def test_departed_members_are_removed(self):
         rebuild_group_standing(
             group_id=self.group_a.id,

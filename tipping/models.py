@@ -157,6 +157,13 @@ class UserProfile(models.Model):
         related_name="tip_profile",
     )
 
+    tip_reminders_enabled = models.BooleanField(
+        default=False,
+        help_text=(
+            "Der Nutzer erhält Erinnerungen für "
+            "noch nicht getippte Spiele."
+        ),
+    )
 
 
     updated_at = models.DateTimeField(
@@ -260,6 +267,14 @@ class Group(models.Model):
         validators=[
             MinLengthValidator(12),
         ],
+    )
+
+    join_enabled = models.BooleanField(
+        default=True,
+        help_text=(
+            "Controla si nuevos usuarios pueden "
+            "unirse mediante el código de acceso."
+        ),
     )
 
     def save(
@@ -523,6 +538,19 @@ class Match(models.Model):
 # GroupMembership
 # ============================================================
 
+class ActiveGroupMembershipManager(
+    models.Manager
+):
+    """Standardmäßig sind nur aktuelle Mitgliedschaften sichtbar."""
+
+    def get_queryset(self):
+        return (
+            super()
+            .get_queryset()
+            .filter(is_active=True)
+        )
+
+
 class GroupMembership(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -540,11 +568,26 @@ class GroupMembership(models.Model):
         default=False,
     )
 
+    is_active = models.BooleanField(
+        default=True,
+    )
+
+    removed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
     joined_at = models.DateTimeField(
         auto_now_add=True,
     )
 
+    objects = ActiveGroupMembershipManager()
+    all_objects = models.Manager()
+
     class Meta:
+        base_manager_name = "all_objects"
+        default_manager_name = "objects"
+
         constraints = [
             models.UniqueConstraint(
                 fields=[
@@ -991,6 +1034,12 @@ class MatchdayScore(models.Model):
         default=0,
     )
 
+    cumulative_matchday_wins = (
+        models.PositiveIntegerField(
+            default=0,
+        )
+    )
+
     rank = models.PositiveIntegerField(
         null=True,
         blank=True,
@@ -1073,6 +1122,10 @@ class GroupStanding(models.Model):
         default=0,
     )
 
+    matchday_wins = models.PositiveIntegerField(
+        default=0,
+    )
+
     updated_at = models.DateTimeField(
         auto_now=True,
     )
@@ -1093,18 +1146,20 @@ class GroupStanding(models.Model):
                 fields=[
                     "group",
                     "-total_points",
+                    "-matchday_wins",
                     "user",
                 ],
-                name="standing_group_total_idx",
+                name="standing_group_total_win_idx",
             ),
 
             models.Index(
                 fields=[
                     "group",
                     "-match_points",
+                    "-matchday_wins",
                     "user",
                 ],
-                name="standing_group_match_idx",
+                name="standing_group_match_win_idx",
             ),
         ]
 
@@ -1113,6 +1168,67 @@ class GroupStanding(models.Model):
             f"{self.group_id} · "
             f"{self.user_id} · "
             f"{self.total_points} Punkte"
+        )
+
+
+class TipReminderDelivery(models.Model):
+    """
+    Merkt sich erfolgreich versendete Tipperinnerungen.
+
+    Eine Kombination aus Nutzer, Gruppe und Spiel darf nur
+    einmal versendet werden. Derselbe Nutzer kann für dasselbe
+    Spiel in unterschiedlichen Gruppen getrennt erinnert werden.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="tip_reminder_deliveries",
+    )
+
+    group = models.ForeignKey(
+        Group,
+        on_delete=models.CASCADE,
+        related_name="tip_reminder_deliveries",
+    )
+
+    match = models.ForeignKey(
+        Match,
+        on_delete=models.CASCADE,
+        related_name="tip_reminder_deliveries",
+    )
+
+    sent_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "user",
+                    "group",
+                    "match",
+                ],
+                name="uniq_tip_reminder_delivery",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "match",
+                    "sent_at",
+                ],
+                name="reminder_match_sent_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.user_id} · "
+            f"{self.group_id} · "
+            f"{self.match_id}"
         )
 
 class StandingRebuildJob(models.Model):

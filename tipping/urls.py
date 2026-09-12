@@ -5,6 +5,21 @@ from . import views
 
 urlpatterns = [
     path(
+        "reglas/",
+        views.rules,
+        name="rules",
+    ),
+    path(
+        "perfil/notificaciones/",
+        views.notification_settings,
+        name="notification_settings",
+    ),
+    path(
+        "groups/<int:group_id>/pronosticar/",
+        views.group_tip_redirect,
+        name="group_tip_redirect",
+    ),
+    path(
         "tippen/",
         views.tippen,
         name="tippen",
@@ -38,6 +53,21 @@ urlpatterns = [
         "groups/",
         views.my_groups,
         name="my_groups",
+    ),
+    path(
+        "groups/<int:group_id>/",
+        views.group_detail,
+        name="group_detail",
+    ),
+    path(
+        "groups/<int:group_id>/rotate-code/",
+        views.rotate_group_join_code,
+        name="rotate_group_join_code",
+    ),
+    path(
+        "groups/<int:group_id>/members/<int:user_id>/remove/",
+        views.remove_group_member,
+        name="remove_group_member",
     ),
     path(
         "groups/<int:group_id>/leave/",

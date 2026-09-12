@@ -1,5 +1,6 @@
-from time import sleep
+from time import monotonic, sleep
 
+from django.conf import settings
 from django.core.management.base import (
     BaseCommand,
     CommandError,
@@ -17,6 +18,9 @@ from tipping.standing_jobs import (
     claim_next_standing_rebuild_job,
     execute_standing_rebuild_job,
     recover_stale_standing_rebuild_jobs,
+)
+from tipping.tip_reminders import (
+    send_due_tip_reminders,
 )
 
 
@@ -220,9 +224,50 @@ class Command(BaseCommand):
             )
         )
 
+        next_reminder_check = monotonic()
+
         try:
             while True:
                 close_old_connections()
+
+                if (
+                    settings.TIP_REMINDERS_ENABLED
+                    and monotonic()
+                    >= next_reminder_check
+                ):
+                    try:
+                        reminder_result = (
+                            send_due_tip_reminders()
+                        )
+
+                        if (
+                            reminder_result.recipients
+                            or reminder_result.failures
+                        ):
+                            self.stdout.write(
+                                (
+                                    "Tipperinnerungen: "
+                                    f"{reminder_result.recipients} "
+                                    "Empfänger, "
+                                    f"{reminder_result.failures} "
+                                    "Fehler."
+                                )
+                            )
+
+                    except Exception as exc:
+                        self.stderr.write(
+                            self.style.ERROR(
+                                "Prüfung der Tipperinnerungen "
+                                f"fehlgeschlagen: {exc}"
+                            )
+                        )
+
+                    finally:
+                        next_reminder_check = (
+                            monotonic()
+                            + settings
+                            .TIP_REMINDER_POLL_SECONDS
+                        )
 
                 recovered = (
                     self._recover_stale_jobs(

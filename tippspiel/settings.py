@@ -1,5 +1,6 @@
 from pathlib import Path
 import os
+from urllib.parse import urlsplit
 
 import dj_database_url
 from dotenv import load_dotenv
@@ -677,6 +678,76 @@ if EMAIL_USE_TLS and EMAIL_USE_SSL:
     raise RuntimeError(
         "EMAIL_USE_TLS und EMAIL_USE_SSL "
         "dürfen nicht gleichzeitig aktiviert sein."
+    )
+
+
+# Öffentliche Basisadresse für Links in automatisch
+# versendeten E-Mails. In Produktion ist HTTPS Pflicht.
+PUBLIC_BASE_URL = os.environ.get(
+    "PUBLIC_BASE_URL",
+    "http://127.0.0.1:8000",
+).strip().rstrip("/")
+
+
+public_base_url_parts = urlsplit(
+    PUBLIC_BASE_URL
+)
+
+
+if (
+    public_base_url_parts.scheme
+    not in {
+        "http",
+        "https",
+    }
+    or not public_base_url_parts.netloc
+    or public_base_url_parts.query
+    or public_base_url_parts.fragment
+):
+    raise RuntimeError(
+        "PUBLIC_BASE_URL muss eine vollständige "
+        "HTTP(S)-Adresse ohne Query oder Fragment sein."
+    )
+
+
+if (
+    not DEBUG
+    and public_base_url_parts.scheme != "https"
+):
+    raise RuntimeError(
+        "PUBLIC_BASE_URL muss in Produktion HTTPS verwenden."
+    )
+
+
+TIP_REMINDERS_ENABLED = env_bool(
+    "TIP_REMINDERS_ENABLED",
+    default=False,
+)
+
+
+TIP_REMINDER_LEAD_HOURS = env_int(
+    "TIP_REMINDER_LEAD_HOURS",
+    24,
+)
+
+
+if not 1 <= TIP_REMINDER_LEAD_HOURS <= 168:
+    raise RuntimeError(
+        "TIP_REMINDER_LEAD_HOURS muss zwischen "
+        "1 und 168 liegen."
+    )
+
+
+TIP_REMINDER_POLL_SECONDS = env_int(
+    "TIP_REMINDER_POLL_SECONDS",
+    300,
+)
+
+
+if TIP_REMINDER_POLL_SECONDS < 60:
+    raise RuntimeError(
+        "TIP_REMINDER_POLL_SECONDS muss mindestens "
+        "60 sein."
     )
 
 

@@ -219,7 +219,7 @@
           </strong>
 
           <span class="dashboard-kpi-note">
-            Total acumulado
+            {{ user_matchday_wins }} victorias de fecha
           </span>
         </article>
 
@@ -434,6 +434,9 @@
                 href="{% url 'user_stats' row.user.id %}"
                 class="
                   dashboard-ranking-row
+                  {% if row.position == 1 %}
+                    dashboard-ranking-row--leader
+                  {% endif %}
                   {% if row.is_current_user %}
                     dashboard-ranking-row--me
                   {% endif %}
@@ -455,9 +458,15 @@
                   {{ row.user.username|default:row.user.email }}
                 </span>
 
-                <strong class="dashboard-ranking-points">
-                  {{ row.total }}
-                </strong>
+                <span class="dashboard-ranking-result">
+                  <strong class="dashboard-ranking-points">
+                    {{ row.total }}
+                  </strong>
+
+                  <small title="Victorias de fecha">
+                    {{ row.matchday_wins }} V
+                  </small>
+                </span>
 
               </a>
 

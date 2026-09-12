@@ -169,6 +169,12 @@
           {% endif %}
         </p>
 
+        <p>
+          La tabla general se ordena primero por puntos y después por
+          victorias de fecha. Si ambos valores coinciden, los
+          participantes comparten la misma posición.
+        </p>
+
       </div>
     </section>
 
@@ -228,7 +234,7 @@
                 </span>
 
                 <span class="table-matchday-heading-date">
-                  Puntos totales
+                  Puntos · victorias
                 </span>
 
               </th>
@@ -242,7 +248,7 @@
 
               <tr
                 class="
-                  {% if forloop.first %}{% if not page_obj or page_obj.number == 1 %}table-row--leader {% endif %}{% endif %}{% if row.user.id == me_id %}
+                  {% if row.position == 1 %}table-row--leader {% endif %}{% if row.user.id == me_id %}
                     me
                   {% endif %}
                 "
@@ -251,11 +257,7 @@
                 <!-- Globale Position über alle Seiten -->
 
                 <td class="sticky-left pos">
-                  {% if page_obj %}
-                    {{ page_obj.start_index|add:forloop.counter0 }}.
-                  {% else %}
-                    {{ forloop.counter }}.
-                  {% endif %}
+                  {{ row.position }}.
                 </td>
 
                 <td class="sticky-left name">
@@ -356,6 +358,13 @@
                   <strong>
                     {{ row.total }}
                   </strong>
+
+                  <span
+                    class="table-matchday-wins"
+                    title="Victorias de fecha"
+                  >
+                    {{ row.matchday_wins }} V
+                  </span>
 
                   {% if bonus_reveal and row.bonus %}
                     <span

@@ -211,10 +211,10 @@
                   class="{% if row.user.id == request.user.id %}me{% endif %}"
                 >
                   <td class="sticky-left pos">
-                    {% if page_obj %}
-                      {{ page_obj.start_index|add:forloop.counter0 }}.
+                    {% if row.position %}
+                      {{ row.position }}.
                     {% else %}
-                      {{ forloop.counter }}.
+                      —
                     {% endif %}
                   </td>
 
@@ -465,13 +465,13 @@
                 {% for row in table_rows %}
 
                   <tr
-                    class="{% if forloop.first %}{% if not page_obj or page_obj.number == 1 %}table-row--leader {% endif %}{% endif %}{% if row.user.id == request.user.id %}me{% endif %}"
+                    class="{% if row.position == 1 %}table-row--leader {% endif %}{% if row.user.id == request.user.id %}me{% endif %}"
                   >
                     <td class="sticky-left pos">
-                      {% if page_obj %}
-                        {{ page_obj.start_index|add:forloop.counter0 }}.
+                      {% if row.position %}
+                        {{ row.position }}.
                       {% else %}
-                        {{ forloop.counter }}.
+                        —
                       {% endif %}
                     </td>
 

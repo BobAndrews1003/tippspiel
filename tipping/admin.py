@@ -11,8 +11,68 @@ from .models import (
     Match,
     Prediction,
     StandingRebuildJob,
+    TipReminderDelivery,
     Tournament,
 )
+
+
+@admin.register(TipReminderDelivery)
+class TipReminderDeliveryAdmin(
+    admin.ModelAdmin
+):
+    list_display = (
+        "id",
+        "user",
+        "group",
+        "match",
+        "sent_at",
+    )
+
+    list_filter = (
+        "group",
+        "sent_at",
+    )
+
+    search_fields = (
+        "user__username",
+        "group__name",
+        "match__home_team",
+        "match__away_team",
+    )
+
+    list_select_related = (
+        "user",
+        "group",
+        "match",
+    )
+
+    readonly_fields = (
+        "id",
+        "user",
+        "group",
+        "match",
+        "sent_at",
+    )
+
+    def has_add_permission(
+        self,
+        request,
+    ):
+        return False
+
+    def has_change_permission(
+        self,
+        request,
+        obj=None,
+    ):
+        return False
+
+    def has_delete_permission(
+        self,
+        request,
+        obj=None,
+    ):
+        return False
 
 
 @admin.register(Tournament)
@@ -29,6 +89,7 @@ class GroupAdmin(admin.ModelAdmin):
         "id",
         "name",
         "tournament",
+        "join_enabled",
         "join_code",
     )
 
@@ -39,6 +100,7 @@ class GroupAdmin(admin.ModelAdmin):
 
     list_filter = (
         "tournament",
+        "join_enabled",
     )
 
 
@@ -70,11 +132,23 @@ class GroupMembershipAdmin(admin.ModelAdmin):
         "id",
         "user",
         "group",
+        "is_active",
+        "removed_at",
     )
 
     list_filter = (
         "group",
+        "is_active",
     )
+
+    def get_queryset(self, request):
+        return (
+            GroupMembership.all_objects
+            .select_related(
+                "user",
+                "group",
+            )
+        )
 
 
 @admin.register(Prediction)

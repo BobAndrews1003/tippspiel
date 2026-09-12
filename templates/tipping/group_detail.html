@@ -1,0 +1,443 @@
+{% extends "tipping/base.html" %}
+
+{% block title %}{{ group.name }} · Grupo{% endblock %}
+
+{% block content %}
+  <div class="container group-detail-page">
+    <a class="group-detail-back" href="{% url 'my_groups' %}">
+      ← Volver a mis grupos
+    </a>
+
+    <section class="card groups-page-header group-detail-hero">
+      <div class="group-detail-hero-copy">
+        <div class="group-card-label">
+          {{ group.tournament.name }}
+        </div>
+
+        <h1>{{ group.name }}</h1>
+
+        <div class="group-card-badges">
+          {% if is_active %}
+            <span class="pill">Grupo activo</span>
+          {% endif %}
+
+          {% if is_owner %}
+            <span class="pill">Administrador</span>
+          {% endif %}
+
+          <span class="pill">
+            {{ member_count }} participante{{ member_count|pluralize:"s" }}
+          </span>
+        </div>
+      </div>
+
+      <div class="group-detail-hero-actions">
+        {% if not is_active %}
+          <form method="post" action="{% url 'set_active_group' %}">
+            {% csrf_token %}
+            <input type="hidden" name="group_id" value="{{ group.id }}">
+            <input type="hidden" name="next" value="{% url 'tabelle' %}">
+            <button type="submit" class="btn primary">
+              Activar y ver clasificación
+            </button>
+          </form>
+        {% else %}
+          <a class="btn primary" href="{% url 'tabelle' %}">
+            Ver clasificación
+          </a>
+        {% endif %}
+      </div>
+    </section>
+
+    <div class="group-detail-layout">
+      <main class="group-detail-main">
+        <section class="card group-detail-section" id="participantes">
+          <div class="group-section-heading">
+            <div>
+              <div class="group-card-label">Clasificación</div>
+              <h2>Participantes</h2>
+            </div>
+
+            <span class="muted small">
+              Desempate: victorias de fecha
+            </span>
+          </div>
+
+          <div class="group-member-list">
+            <div class="group-member-row group-member-row--header">
+              <span>Pos.</span>
+              <span>Participante</span>
+              <span>Puntos</span>
+              <span>Victorias</span>
+              <span aria-hidden="true"></span>
+            </div>
+
+            {% for row in member_rows %}
+              <div
+                class="group-member-row{% if row.membership.user_id == request.user.id %} group-member-row--me{% endif %}"
+              >
+                <div class="group-member-rank" aria-label="Posición {{ row.rank }}">
+                  {{ row.rank }}.
+                </div>
+
+                <div class="group-member-identity">
+                  <strong>{{ row.display_name }}</strong>
+
+                  <div class="group-member-badges">
+                    {% if row.membership.user_id == request.user.id %}
+                      <span class="pill">Tú</span>
+                    {% endif %}
+
+                    {% if row.is_owner %}
+                      <span class="pill">Administrador</span>
+                    {% endif %}
+                  </div>
+                </div>
+
+                <div class="group-member-stat">
+                  <span class="group-mobile-label">Puntos</span>
+                  <strong>{{ row.points }}</strong>
+                </div>
+
+                <div class="group-member-stat">
+                  <span class="group-mobile-label">Victorias</span>
+                  <strong>{{ row.matchday_wins }}</strong>
+                </div>
+
+                <div class="group-member-action">
+                  {% if is_owner and not row.is_owner %}
+                    <form
+                      method="post"
+                      action="{% url 'remove_group_member' group.id row.membership.user_id %}"
+                      data-remove-member-form
+                      data-member-name="{{ row.display_name }}"
+                    >
+                      {% csrf_token %}
+                      <button type="submit" class="btn small danger-outline">
+                        Eliminar
+                      </button>
+                    </form>
+                  {% endif %}
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+
+          {% if not bonus_reveal %}
+            <p class="muted small group-section-note">
+              Los puntos de bonus aparecerán aquí cuando se cierre el plazo.
+            </p>
+          {% endif %}
+        </section>
+
+        <section class="card group-detail-section" id="invitacion">
+          <div class="group-section-heading">
+            <div>
+              <div class="group-card-label">Acceso</div>
+              <h2>Invitación</h2>
+            </div>
+
+            {% if group.join_enabled %}
+              <span class="group-status group-status--open">Abierta</span>
+            {% else %}
+              <span class="group-status group-status--closed">Cerrada</span>
+            {% endif %}
+          </div>
+
+          {% if group.join_enabled %}
+            <p class="muted">
+              Comparte el enlace o el código con las personas que quieras invitar.
+            </p>
+          {% else %}
+            <p class="muted">
+              Los nuevos participantes no pueden unirse hasta que el administrador vuelva a abrir el acceso.
+            </p>
+          {% endif %}
+
+          <div class="group-invite-fields">
+            <div class="field">
+              <label for="group-invite-link">Enlace de invitación</label>
+              <div class="group-copy-field">
+                <input
+                  id="group-invite-link"
+                  class="input"
+                  value="{{ invite_url }}"
+                  readonly
+                >
+                <button
+                  type="button"
+                  class="btn"
+                  data-copy-text="{{ invite_url }}"
+                >
+                  Copiar enlace
+                </button>
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="group-invite-code">Código de acceso</label>
+              <div class="group-copy-field group-copy-field--code">
+                <code id="group-invite-code">{{ group.join_code }}</code>
+                <button
+                  type="button"
+                  class="btn"
+                  data-copy-text="{{ group.join_code }}"
+                >
+                  Copiar código
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {% if is_owner %}
+            <form
+              method="post"
+              action="{% url 'rotate_group_join_code' group.id %}"
+              data-rotate-code-form
+              class="group-inline-admin-action"
+            >
+              {% csrf_token %}
+              <button type="submit" class="btn">
+                Crear un código nuevo
+              </button>
+              <span class="muted small">
+                El código y todos los enlaces anteriores dejarán de funcionar.
+              </span>
+            </form>
+          {% endif %}
+        </section>
+      </main>
+
+      <aside class="group-detail-sidebar">
+        {% if is_owner %}
+          <section class="card group-detail-section" id="configuracion">
+            <div class="group-card-label">Administración</div>
+            <h2>Configuración</h2>
+
+            <form method="post" class="form-grid group-settings-form">
+              {% csrf_token %}
+
+              <div class="field">
+                <label for="{{ settings_form.name.id_for_label }}">
+                  {{ settings_form.name.label }}
+                </label>
+                {{ settings_form.name }}
+                {% for error in settings_form.name.errors %}
+                  <div class="form-error">{{ error }}</div>
+                {% endfor %}
+              </div>
+
+              <label class="group-checkbox-row" for="{{ settings_form.join_enabled.id_for_label }}">
+                {{ settings_form.join_enabled }}
+                <span>
+                  <strong>{{ settings_form.join_enabled.label }}</strong>
+                  <small>El código solo funciona mientras el acceso esté abierto.</small>
+                </span>
+              </label>
+
+              <button type="submit" class="btn primary">
+                Guardar configuración
+              </button>
+            </form>
+          </section>
+
+          <section class="card group-detail-section">
+            <div class="group-card-label">Responsabilidad</div>
+            <h2>Transferir administración</h2>
+
+            {% if transfer_candidates %}
+              <form
+                method="post"
+                action="{% url 'transfer_group_ownership' group.id %}"
+                class="group-transfer-form"
+                data-transfer-group-form
+                data-group-name="{{ group.name }}"
+              >
+                {% csrf_token %}
+
+                <select
+                  name="new_owner_id"
+                  required
+                  aria-label="Seleccionar nuevo administrador"
+                >
+                  <option value="">Seleccionar participante…</option>
+                  {% for row in transfer_candidates %}
+                    <option value="{{ row.membership.user_id }}">
+                      {{ row.display_name }}
+                    </option>
+                  {% endfor %}
+                </select>
+
+                <button type="submit" class="btn">
+                  Transferir
+                </button>
+              </form>
+            {% else %}
+              <p class="muted small">
+                Para transferir la administración debe haber otro participante.
+              </p>
+            {% endif %}
+          </section>
+
+          <section class="card group-detail-section group-danger-zone">
+            <div class="group-card-label">Zona de riesgo</div>
+            <h2>Eliminar grupo</h2>
+
+            <p class="muted small">
+              Se eliminarán permanentemente el grupo, sus membresías y todos sus pronósticos.
+            </p>
+
+            <form
+              method="post"
+              action="{% url 'delete_group' group.id %}"
+              class="group-delete-form"
+              data-delete-group-form
+              data-group-name="{{ group.name }}"
+            >
+              {% csrf_token %}
+              <label for="group-delete-confirmation" class="small">
+                Escribe <strong>{{ group.name }}</strong> para confirmar.
+              </label>
+              <input
+                id="group-delete-confirmation"
+                type="text"
+                name="confirmation"
+                autocomplete="off"
+                required
+              >
+              <button type="submit" class="btn danger">
+                Eliminar permanentemente
+              </button>
+            </form>
+          </section>
+        {% else %}
+          <section class="card group-detail-section">
+            <div class="group-card-label">Membresía</div>
+            <h2>Abandonar grupo</h2>
+
+            <p class="muted small">
+              Tus pronósticos y bonus de este grupo se eliminarán al abandonarlo.
+            </p>
+
+            <form
+              method="post"
+              action="{% url 'leave_group' group.id %}"
+              data-leave-group-form
+              data-group-name="{{ group.name }}"
+            >
+              {% csrf_token %}
+              <button type="submit" class="btn danger-outline">
+                Abandonar grupo
+              </button>
+            </form>
+          </section>
+        {% endif %}
+      </aside>
+    </div>
+  </div>
+{% endblock %}
+
+{% block extra_js %}
+  {{ block.super }}
+  <script>
+    (function () {
+      async function copyText(value, button) {
+        try {
+          await navigator.clipboard.writeText(value);
+        } catch (error) {
+          const helper = document.createElement("textarea");
+          helper.value = value;
+          helper.setAttribute("readonly", "");
+          helper.style.position = "fixed";
+          helper.style.opacity = "0";
+          document.body.appendChild(helper);
+          helper.select();
+          document.execCommand("copy");
+          helper.remove();
+        }
+
+        const oldText = button.textContent;
+        button.textContent = "Copiado ✓";
+        button.disabled = true;
+
+        window.setTimeout(function () {
+          button.textContent = oldText;
+          button.disabled = false;
+        }, 1500);
+      }
+
+      document.querySelectorAll("[data-copy-text]").forEach((button) => {
+        button.addEventListener("click", function () {
+          copyText(button.getAttribute("data-copy-text"), button);
+        });
+      });
+
+      document.querySelectorAll("[data-remove-member-form]").forEach((form) => {
+        form.addEventListener("submit", function (event) {
+          const memberName = form.getAttribute("data-member-name");
+          const confirmed = window.confirm(
+            "¿Eliminar a " + memberName + " del grupo? "
+            + "Sus pronósticos se conservarán y el código de acceso será renovado."
+          );
+
+          if (!confirmed) {
+            event.preventDefault();
+          }
+        });
+      });
+
+      document.querySelectorAll("[data-rotate-code-form]").forEach((form) => {
+        form.addEventListener("submit", function (event) {
+          if (!window.confirm("¿Crear un código nuevo e invalidar el anterior?")) {
+            event.preventDefault();
+          }
+        });
+      });
+
+      document.querySelectorAll("[data-transfer-group-form]").forEach((form) => {
+        form.addEventListener("submit", function (event) {
+          const select = form.querySelector('select[name="new_owner_id"]');
+          if (!select || !select.value) {
+            event.preventDefault();
+            return;
+          }
+
+          const newOwnerName = select.options[select.selectedIndex].textContent.trim();
+          const groupName = form.getAttribute("data-group-name");
+
+          if (!window.confirm(
+            "¿Transferir la administración de «" + groupName + "» a " + newOwnerName + "?"
+          )) {
+            event.preventDefault();
+          }
+        });
+      });
+
+      document.querySelectorAll("[data-delete-group-form]").forEach((form) => {
+        form.addEventListener("submit", function (event) {
+          const groupName = form.getAttribute("data-group-name");
+          const input = form.querySelector('input[name="confirmation"]');
+
+          if (!input || input.value.trim() !== groupName) {
+            event.preventDefault();
+            window.alert("Debes escribir exactamente el nombre del grupo.");
+            return;
+          }
+
+          if (!window.confirm("Esta acción es permanente. ¿Eliminar «" + groupName + "»?")) {
+            event.preventDefault();
+          }
+        });
+      });
+
+      document.querySelectorAll("[data-leave-group-form]").forEach((form) => {
+        form.addEventListener("submit", function (event) {
+          const groupName = form.getAttribute("data-group-name");
+          if (!window.confirm("¿Realmente quieres abandonar «" + groupName + "»?")) {
+            event.preventDefault();
+          }
+        });
+      });
+    })();
+  </script>
+{% endblock %}

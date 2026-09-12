@@ -1,0 +1,95 @@
+{% extends "tipping/base.html" %}
+
+{% block title %}
+  Recordatorios
+{% endblock %}
+
+{% block content %}
+  <div class="container notification-settings-container">
+    <section class="card notification-settings-card">
+      <header class="notification-settings-header">
+        <span class="notification-settings-icon" aria-hidden="true">
+          ⏰
+        </span>
+
+        <div>
+          <h1>Recordatorios de pronósticos</h1>
+
+          <p class="muted">
+            Recibe un aviso cuando se acerque un partido y todavía
+            te falte guardar un pronóstico.
+          </p>
+        </div>
+      </header>
+
+      <div class="notification-settings-details">
+        <div>
+          <strong>Un solo correo agrupado</strong>
+          <span>
+            Te avisamos aproximadamente {{ reminder_lead_hours }} horas
+            antes y agrupamos en un correo todos los pronósticos
+            pendientes del momento.
+          </span>
+        </div>
+
+        <div>
+          <strong>Sin correos repetidos</strong>
+          <span>
+            Cada partido se recuerda como máximo una vez por grupo.
+          </span>
+        </div>
+      </div>
+
+      <form
+        method="post"
+        class="notification-settings-form"
+      >
+        {% csrf_token %}
+
+        <label
+          class="notification-option"
+          for="{{ form.tip_reminders_enabled.id_for_label }}"
+        >
+          {{ form.tip_reminders_enabled }}
+
+          <span class="notification-option-control" aria-hidden="true">
+            <span></span>
+          </span>
+
+          <span class="notification-option-copy">
+            <strong>Activar recordatorios por correo</strong>
+            <span>
+              Puedes desactivarlos aquí en cualquier momento.
+            </span>
+          </span>
+        </label>
+
+        {% for error in form.tip_reminders_enabled.errors %}
+          <div class="field-error">
+            {{ error }}
+          </div>
+        {% endfor %}
+
+        <div class="notification-email-note">
+          {% if verified_email_address %}
+            Los avisos se enviarán a
+            <strong>{{ verified_email_address.email }}</strong>.
+          {% else %}
+            Para recibir avisos primero debes confirmar una dirección
+            de correo electrónico.
+          {% endif %}
+        </div>
+
+        <div class="notification-settings-actions">
+          <a href="{% url 'dashboard' %}" class="btn">
+            Volver
+          </a>
+
+          <button type="submit" class="btn primary">
+            Guardar configuración
+          </button>
+        </div>
+      </form>
+    </section>
+  </div>
+{% endblock %}

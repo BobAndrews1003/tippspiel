@@ -226,6 +226,92 @@ class RebuildGroupTimelineTests(TestCase):
         self.assertEqual(self.score_a_3.rank, 2)
         self.assertEqual(self.score_b_3.rank, 2)
 
+    def test_matchday_wins_break_equal_points(
+        self,
+    ):
+        # Ausgangslage nach Fecha 1:
+        # A führt und hat einen Spieltagssieg.
+        rebuild_group_timeline(
+            group_id=self.group_a.id,
+        )
+
+        # Danach gewinnt B zwei Spieltage mit jeweils
+        # einem Punkt. Am Ende haben A und B fünf Punkte,
+        # B aber zwei Spieltagssiege gegenüber einem.
+        self.score_b_2.points = 1
+        self.score_b_2.save(
+            update_fields=[
+                "points",
+            ]
+        )
+        self.score_b_3.points = 1
+        self.score_b_3.save(
+            update_fields=[
+                "points",
+            ]
+        )
+        self.score_c_3.points = 0
+        self.score_c_3.save(
+            update_fields=[
+                "points",
+            ]
+        )
+
+        rebuild_group_timeline(
+            group_id=self.group_a.id,
+            start_matchday=2,
+        )
+
+        self.score_a_3.refresh_from_db()
+        self.score_b_3.refresh_from_db()
+
+        self.assertEqual(
+            self.score_a_3.cumulative_points,
+            5,
+        )
+        self.assertEqual(
+            self.score_b_3.cumulative_points,
+            5,
+        )
+        self.assertEqual(
+            self.score_a_3.cumulative_matchday_wins,
+            1,
+        )
+        self.assertEqual(
+            self.score_b_3.cumulative_matchday_wins,
+            2,
+        )
+        self.assertEqual(self.score_b_3.rank, 1)
+        self.assertEqual(self.score_a_3.rank, 2)
+
+    def test_shared_matchday_win_counts_for_all_winners(
+        self,
+    ):
+        self.score_b_1.points = 5
+        self.score_b_1.save(
+            update_fields=[
+                "points",
+            ]
+        )
+
+        rebuild_group_timeline(
+            group_id=self.group_a.id,
+        )
+
+        self.score_a_1.refresh_from_db()
+        self.score_b_1.refresh_from_db()
+
+        self.assertEqual(self.score_a_1.rank, 1)
+        self.assertEqual(self.score_b_1.rank, 1)
+        self.assertEqual(
+            self.score_a_1.cumulative_matchday_wins,
+            1,
+        )
+        self.assertEqual(
+            self.score_b_1.cumulative_matchday_wins,
+            1,
+        )
+
     def test_rank_changes_match_existing_logic(
         self,
     ):

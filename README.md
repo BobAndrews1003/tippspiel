@@ -120,6 +120,8 @@ Die folgenden Variablen müssen im Web- und Worker-Service gesetzt sein:
 | `EMAIL_HOST_PASSWORD` | SMTP-Passwort |
 | `EMAIL_USE_TLS` | normalerweise `1` |
 | `EMAIL_USE_SSL` | normalerweise `0` |
+| `PUBLIC_BASE_URL` | öffentliche HTTPS-Adresse, zum Beispiel `https://app.example.com` |
+| `TIP_REMINDERS_ENABLED` | `1`, sobald der automatische Versand freigegeben ist |
 | `LOG_LEVEL` | `INFO` |
 
 `ALLOWED_HOSTS` enthält nur Hostnamen ohne Schema. Die Einträge in
@@ -142,6 +144,14 @@ Optionale Worker-Anpassungen:
 | `STANDING_JOB_BATCH_SIZE` | `10` |
 | `STANDING_JOB_POLL_SECONDS` | `2` |
 | `STANDING_JOB_STALE_MINUTES` | `60` |
+| `TIP_REMINDER_LEAD_HOURS` | `24` |
+| `TIP_REMINDER_POLL_SECONDS` | `300` |
+
+Der `standing-worker` prüft zusätzlich auf fällige Tipperinnerungen.
+Deshalb darf genau ein solcher Worker laufen. Nutzer müssen die Option
+unter `Perfil` → `Recordatorios` selbst aktivieren. Der Versand erfolgt
+nur an eine bestätigte E-Mail-Adresse und wird je Nutzer, Gruppe und
+Spiel protokolliert.
 
 Der zufällige Secret Key kann lokal erzeugt und anschließend als
 Railway-Secret eingetragen werden:
@@ -182,6 +192,28 @@ Fehlgeschlagene Jobs werden nach Ursachenanalyse erneut freigegeben mit:
 ```sh
 python manage.py process_standing_jobs --retry-failed --limit 10
 ```
+
+### Tipperinnerungen
+
+Vor der Aktivierung kann die Auswahl ohne Versand geprüft werden:
+
+```sh
+python manage.py send_tip_reminders --dry-run
+```
+
+Danach werden `PUBLIC_BASE_URL` auf die öffentliche HTTPS-Adresse und
+`TIP_REMINDERS_ENABLED=1` im Worker gesetzt. Der Versand verwendet die
+oben konfigurierte SMTP-Verbindung. Zum kontrollierten Einzeltest kann
+der Befehl auch einmal manuell ausgeführt werden:
+
+```sh
+python manage.py send_tip_reminders
+```
+
+Der reguläre Betrieb erfolgt automatisch im `standing-worker`. Fehler
+bei Erinnerungen stoppen die Standing-Verarbeitung nicht; sie werden im
+Worker-Log ohne E-Mail-Adresse ausgegeben und beim nächsten Lauf erneut
+versucht.
 
 Die Produktionsüberwachung sollte mindestens alarmieren bei:
 

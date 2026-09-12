@@ -72,6 +72,12 @@
                     Administrador
                   </span>
                 {% endif %}
+
+                {% if not row.group.join_enabled %}
+                  <span class="pill">
+                    Acceso cerrado
+                  </span>
+                {% endif %}
               </div>
             </div>
 
@@ -156,6 +162,17 @@
                 </span>
               {% endif %}
 
+              <a
+                href="{% url 'group_detail' row.group.id %}"
+                class="btn"
+              >
+                {% if row.is_owner %}
+                  Administrar grupo
+                {% else %}
+                  Abrir grupo
+                {% endif %}
+              </a>
+
               {% if not row.is_owner %}
                 <form
                   method="post"
@@ -175,114 +192,6 @@
               {% endif %}
 
             </div>
-
-            <!-- Verwaltungsfunktionen für Eigentümer -->
-            {% if row.is_owner %}
-              <details class="group-owner-tools">
-                <summary>
-                  Administrar grupo
-                </summary>
-
-                <div class="group-owner-tools-content">
-
-                  <!-- Verwaltung übertragen -->
-                  <section class="group-admin-block">
-                    <h3>
-                      Transferir administración
-                    </h3>
-
-                    {% if row.transfer_candidates %}
-                      <p class="muted small">
-                        El nuevo administrador debe ser miembro
-                        del grupo.
-                      </p>
-
-                      <form
-                        method="post"
-                        action="{% url 'transfer_group_ownership' row.group.id %}"
-                        class="group-transfer-form"
-                        data-transfer-group-form
-                        data-group-name="{{ row.group.name }}"
-                      >
-                        {% csrf_token %}
-
-                        <select
-                          name="new_owner_id"
-                          required
-                          aria-label="Seleccionar nuevo administrador"
-                        >
-                          <option value="">
-                            Seleccionar miembro…
-                          </option>
-
-                          {% for candidate in row.transfer_candidates %}
-                            <option value="{{ candidate.user.id }}">
-                              {{ candidate.user.username|default:candidate.user.email }}
-                            </option>
-                          {% endfor %}
-                        </select>
-
-                        <button
-                          type="submit"
-                          class="btn"
-                        >
-                          Transferir administración
-                        </button>
-                      </form>
-
-                    {% else %}
-                      <p class="muted small">
-                        No puedes transferir la administración porque
-                        todavía no hay otro miembro en este grupo.
-                      </p>
-                    {% endif %}
-                  </section>
-
-                  <!-- Gruppe löschen -->
-                  <section class="group-admin-block group-danger-zone">
-                    <h3>
-                      Eliminar grupo
-                    </h3>
-
-                    <p class="muted small">
-                      Se eliminarán permanentemente el grupo,
-                      sus membresías y todos sus pronósticos.
-                    </p>
-
-                    <p class="muted small">
-                      Para confirmar, escribe exactamente:
-                      <strong>{{ row.group.name }}</strong>
-                    </p>
-
-                    <form
-                      method="post"
-                      action="{% url 'delete_group' row.group.id %}"
-                      class="group-delete-form"
-                      data-delete-group-form
-                      data-group-name="{{ row.group.name }}"
-                    >
-                      {% csrf_token %}
-
-                      <input
-                        type="text"
-                        name="confirmation"
-                        placeholder="{{ row.group.name }}"
-                        autocomplete="off"
-                        required
-                      >
-
-                      <button
-                        type="submit"
-                        class="btn danger"
-                      >
-                        Eliminar grupo permanentemente
-                      </button>
-                    </form>
-                  </section>
-
-                </div>
-              </details>
-            {% endif %}
 
           </section>
         {% endfor %}
