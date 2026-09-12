@@ -777,6 +777,17 @@ ACCOUNT_SIGNUP_FIELDS = [
 ]
 
 
+# Die Registrierung ist ausschließlich für Volljährige gedacht.
+# Es wird kein Geburtsdatum gespeichert; die Bestätigung wird
+# bei jedem Registrierungsversuch serverseitig validiert.
+ACCOUNT_FORMS = {
+    "signup": (
+        "tipping.account_forms."
+        "AdultSignupForm"
+    ),
+}
+
+
 ACCOUNT_SIGNUP_REDIRECT_URL = (
     "join_group"
 )
