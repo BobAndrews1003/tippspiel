@@ -752,6 +752,46 @@ if TIP_REMINDER_POLL_SECONDS < 60:
 
 
 # ============================================================
+# Datenaufbewahrung
+# ============================================================
+
+# Diese Werte bilden das beschlossene Löschkonzept ab. Der
+# Bereinigungsbefehl arbeitet trotzdem standardmäßig nur im
+# Prüfmodus; eine Löschung erfordert ausdrücklich --execute.
+DATA_RETENTION_UNVERIFIED_ACCOUNT_DAYS = env_int(
+    "DATA_RETENTION_UNVERIFIED_ACCOUNT_DAYS",
+    14,
+)
+
+DATA_RETENTION_INACTIVE_ACCOUNT_DAYS = env_int(
+    "DATA_RETENTION_INACTIVE_ACCOUNT_DAYS",
+    730,
+)
+
+DATA_RETENTION_INACTIVE_MEMBERSHIP_DAYS = env_int(
+    "DATA_RETENTION_INACTIVE_MEMBERSHIP_DAYS",
+    365,
+)
+
+DATA_RETENTION_REMINDER_DELIVERY_DAYS = env_int(
+    "DATA_RETENTION_REMINDER_DELIVERY_DAYS",
+    90,
+)
+
+
+for retention_setting_name in (
+    "DATA_RETENTION_UNVERIFIED_ACCOUNT_DAYS",
+    "DATA_RETENTION_INACTIVE_ACCOUNT_DAYS",
+    "DATA_RETENTION_INACTIVE_MEMBERSHIP_DAYS",
+    "DATA_RETENTION_REMINDER_DELIVERY_DAYS",
+):
+    if globals()[retention_setting_name] < 1:
+        raise RuntimeError(
+            f"{retention_setting_name} muss mindestens 1 sein."
+        )
+
+
+# ============================================================
 # Authentifizierung und django-allauth
 # ============================================================
 
@@ -852,7 +892,30 @@ ACCOUNT_CONFIRM_EMAIL_ON_GET = False
 ACCOUNT_LOGIN_ON_PASSWORD_RESET = False
 
 
-ACCOUNT_EMAIL_CONFIRMATION_EXPIRE_DAYS = 3
+PASSWORD_RESET_TIMEOUT = env_int(
+    "PASSWORD_RESET_TIMEOUT",
+    3600,
+)
+
+
+if PASSWORD_RESET_TIMEOUT < 300:
+    raise RuntimeError(
+        "PASSWORD_RESET_TIMEOUT muss mindestens "
+        "300 Sekunden betragen."
+    )
+
+
+ACCOUNT_EMAIL_CONFIRMATION_EXPIRE_DAYS = env_int(
+    "ACCOUNT_EMAIL_CONFIRMATION_EXPIRE_DAYS",
+    3,
+)
+
+
+if ACCOUNT_EMAIL_CONFIRMATION_EXPIRE_DAYS < 1:
+    raise RuntimeError(
+        "ACCOUNT_EMAIL_CONFIRMATION_EXPIRE_DAYS muss "
+        "mindestens 1 sein."
+    )
 
 
 ACCOUNT_EMAIL_VERIFICATION_SUPPORTS_RESEND = True
@@ -985,6 +1048,20 @@ SECURE_CSP_REPORT_ONLY = {
 SESSION_COOKIE_HTTPONLY = True
 
 SESSION_COOKIE_SAMESITE = "Lax"
+
+# Anmeldung gilt höchstens 14 Tage. Abgelaufene serverseitige
+# Sitzungen werden durch cleanup_personal_data entfernt.
+SESSION_COOKIE_AGE = env_int(
+    "SESSION_COOKIE_AGE",
+    14 * 24 * 60 * 60,
+)
+
+
+if SESSION_COOKIE_AGE < 300:
+    raise RuntimeError(
+        "SESSION_COOKIE_AGE muss mindestens "
+        "300 Sekunden betragen."
+    )
 
 CSRF_COOKIE_SAMESITE = "Lax"
 

@@ -215,6 +215,45 @@ bei Erinnerungen stoppen die Standing-Verarbeitung nicht; sie werden im
 Worker-Log ohne E-Mail-Adresse ausgegeben und beim nächsten Lauf erneut
 versucht.
 
+### Datenaufbewahrung
+
+Die Anwendung verwendet folgende Standardfristen:
+
+| Daten | Frist |
+| --- | --- |
+| Unbestätigte Registrierung ohne Spieldaten | 14 Tage |
+| Bestätigtes, nicht mehr genutztes Konto | 730 Tage; derzeit nur Meldung |
+| Inaktive Gruppenmitgliedschaft und zugehörige Tipps | 365 Tage |
+| Nachweis einer versendeten Tipperinnerung | 90 Tage |
+| Anmeldung/Sitzung | höchstens 14 Tage |
+| E-Mail-Bestätigungslink | 3 Tage |
+| Passwort-Zurücksetzungslink | 1 Stunde |
+
+Vor jeder Löschung wird der ungefährliche Prüfmodus ausgeführt:
+
+```sh
+python manage.py cleanup_personal_data
+```
+
+Erst nach Kontrolle der Ausgabe und einem geprüften Backup wird die
+Bereinigung ausdrücklich freigegeben:
+
+```sh
+python manage.py cleanup_personal_data --execute
+```
+
+Pro Lauf werden höchstens 500 Hauptdatensätze je Kategorie ausgewählt;
+abhängige Daten einer ausgewählten Mitgliedschaft werden vollständig
+mitgelöscht. Mit `--limit` kann diese Batchgröße angepasst werden. Gruppenbesitzer,
+Administratoren und unbestätigte Konten mit Spieldaten werden nicht
+automatisch gelöscht. Bestätigte Konten nach 730 Tagen werden bislang nur
+gemeldet: Vor ihrer automatischen Löschung müssen Benachrichtigungen 30
+und 7 Tage vor Ablauf umgesetzt und getestet werden.
+
+Der Befehl ist noch nicht automatisch eingeplant. Nach einem erfolgreichen
+Prüf- und Backup-Lauf kann er als täglicher Railway-Cronjob mit
+`--execute` eingerichtet werden.
+
 Die Produktionsüberwachung sollte mindestens alarmieren bei:
 
 - nicht erreichbarem `/health/`-Endpoint,
