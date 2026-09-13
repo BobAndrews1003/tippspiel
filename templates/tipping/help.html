@@ -119,11 +119,15 @@
               <summary>¿Qué ocurre si cambia un horario o resultado?</summary>
               <div>
                 <p>
-                  La administración actualiza manualmente el horario o el
-                  resultado. Una corrección de resultado vuelve a calcular los
-                  puntos y clasificaciones afectadas. Los casos excepcionales
-                  se resolverán conforme a las reglas publicadas.
+                  La nueva hora publicada en Puntero pasa a ser el plazo para
+                  pronosticar. Un partido aplazado, suspendido o anulado no
+                  recibe puntos hasta que exista un resultado final numérico
+                  oficial. Una corrección posterior vuelve a calcular los
+                  puntos y las clasificaciones afectadas.
                 </p>
+                <a href="{% url 'rules' %}#incidencias">
+                  Ver todos los casos especiales
+                </a>
               </div>
             </details>
           </div>

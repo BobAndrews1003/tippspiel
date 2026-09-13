@@ -74,6 +74,10 @@ class PublicPageTests(TestCase):
             response,
             f'href="{reverse("rules")}"',
         )
+        self.assertContains(
+            response,
+            f'href="{reverse("rules")}#incidencias"',
+        )
 
     def test_help_is_linked_when_legal_pages_are_hidden(self):
         response = self.client.get(

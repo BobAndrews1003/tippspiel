@@ -40,6 +40,16 @@ class RulesPageTests(TestCase):
             "victorias de fecha sirven como desempate",
         )
 
+        self.assertContains(
+            response,
+            "Partidos aplazados, suspendidos o anulados",
+        )
+
+        self.assertContains(
+            response,
+            "resultado numérico oficial",
+        )
+
     def test_rules_page_is_linked_for_anonymous_users(self):
         response = self.client.get(
             reverse("account_login")
