@@ -55,6 +55,18 @@ statische Dateien und die vollständige Testsuite. Es verwendet bewusst
 SQLite und den lokalen Cache, damit niemals versehentlich eine
 Produktionsdatenbank für Tests verwendet wird.
 
+Zusätzlich prüft eine kleine Ende-zu-Ende-Abnahme die wichtigsten
+Nutzerwege in einem zusammenhängenden Szenario. Dabei werden eine
+temporäre SQLite-Datenbank und ein E-Mail-Backend ohne externen Versand
+verwendet:
+
+```sh
+bin/check_acceptance.sh
+```
+
+Die ergänzende manuelle Produktprüfung ist in
+[`docs/release-acceptance.md`](docs/release-acceptance.md) dokumentiert.
+
 ## Produktionsarchitektur auf Railway
 
 In einem Railway-Projekt werden vier Services angelegt:
