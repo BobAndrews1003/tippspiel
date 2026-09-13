@@ -1,0 +1,126 @@
+{% extends "tipping/base.html" %}
+
+{% block title %}
+  Contacto e información legal
+{% endblock %}
+
+{% block extra_head %}
+  {% if legal_pages_have_placeholders %}
+    <meta name="robots" content="noindex,nofollow">
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+  <div class="container legal-page">
+    {% include "tipping/legal/_draft_notice.html" %}
+
+    <header class="card legal-hero">
+      <div class="legal-eyebrow">Estamos para ayudarte</div>
+      <h1>Contacto e información legal</h1>
+      <p>
+        Canales para consultas sobre la cuenta, el juego, la seguridad y el
+        ejercicio de derechos sobre datos personales.
+      </p>
+      <span class="legal-version">
+        Última actualización: {{ legal_last_updated }}
+      </span>
+    </header>
+
+    <div class="legal-contact-grid">
+      <section class="card legal-contact-card">
+        <span class="legal-section-number" aria-hidden="true">01</span>
+        <h2>Responsable de Puntero</h2>
+        <dl class="legal-details">
+          <div>
+            <dt>Nombre completo</dt>
+            <dd class="legal-placeholder">{{ legal_operator_name }}</dd>
+          </div>
+          <div>
+            <dt>Domicilio legal en Ecuador</dt>
+            <dd class="legal-placeholder">{{ legal_operator_address }}</dd>
+          </div>
+          <div>
+            <dt>Teléfono</dt>
+            <dd class="legal-placeholder">{{ legal_operator_phone }}</dd>
+          </div>
+          <div>
+            <dt>Correo</dt>
+            <dd class="legal-placeholder">{{ legal_contact_email }}</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="card legal-contact-card">
+        <span class="legal-section-number" aria-hidden="true">02</span>
+        <h2>¿Qué necesitas comunicar?</h2>
+        <ul class="legal-contact-topics">
+          <li>
+            <strong>Cuenta:</strong> acceso, verificación, eliminación o
+            cambio de correo.
+          </li>
+          <li>
+            <strong>Privacidad:</strong> acceso, rectificación, eliminación,
+            oposición, portabilidad o revocación.
+          </li>
+          <li>
+            <strong>Seguridad:</strong> accesos sospechosos o una posible
+            vulnerabilidad.
+          </li>
+          <li>
+            <strong>Juego:</strong> horarios, resultados o cálculos que
+            parezcan incorrectos.
+          </li>
+          <li>
+            <strong>Grupos:</strong> invitaciones, administración o conducta
+            de un participante.
+          </li>
+        </ul>
+      </section>
+    </div>
+
+    <section class="card legal-section legal-section--standalone">
+      <span class="legal-section-number" aria-hidden="true">03</span>
+      <div>
+        <h2>Cómo presentar una solicitud</h2>
+        <p>
+          Escribe a
+          <span class="legal-placeholder">{{ legal_contact_email }}</span>
+          indicando el asunto, el nombre de usuario afectado y una descripción
+          clara. No envíes contraseñas. Para proteger la cuenta podremos pedir
+          únicamente la información proporcional necesaria para comprobar la
+          identidad.
+        </p>
+        <p>
+          En comunicaciones de seguridad, evita incluir datos personales de
+          terceros y explica cómo reproducir el problema. No accedas a datos
+          ajenos ni alteres el servicio para demostrarlo.
+        </p>
+        <aside class="legal-note">
+          Esta página no reemplaza los canales oficiales de emergencia. Si
+          existe un peligro inmediato, contacta a las autoridades competentes.
+        </aside>
+      </div>
+    </section>
+
+    <section class="card legal-section legal-section--standalone">
+      <span class="legal-section-number" aria-hidden="true">04</span>
+      <div>
+        <h2>Protección de datos en Ecuador</h2>
+        <p>
+          Las solicitudes se tramitarán conforme a la normativa ecuatoriana
+          aplicable. También puedes consultar los canales oficiales de la
+          <a
+            href="https://spdp.gob.ec/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >Superintendencia de Protección de Datos Personales</a>.
+        </p>
+        <p>
+          Consulta además la
+          <a href="{% url 'privacy_policy' %}">política de protección de datos</a>
+          y los <a href="{% url 'terms_of_use' %}">términos de uso</a>.
+        </p>
+      </div>
+    </section>
+  </div>
+{% endblock %}

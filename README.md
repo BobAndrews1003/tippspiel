@@ -169,6 +169,41 @@ python -c 'import secrets; print(secrets.token_urlsafe(64))'
 Echte Zugangsdaten gehören ausschließlich in Railway-Variablen und
 niemals in `.env.example`, Commits, Logs oder Tickets.
 
+## Rechtliche Seiten als geschützte Entwürfe
+
+Die spanischen Seiten `/privacidad/`, `/terminos/` und `/contacto/` sind
+in der Anwendung vorbereitet, bleiben aber standardmäßig deaktiviert.
+Solange `LEGAL_PAGES_ENABLED=0` gilt, antworten die URLs mit HTTP 404 und
+es erscheinen weder im Menü noch im Footer Links darauf.
+
+Zur lokalen Vorschau kann in `.env` vorübergehend gesetzt werden:
+
+```sh
+LEGAL_PAGES_ENABLED=1
+```
+
+Die Entwürfe zeigen dann einen deutlichen Hinweis und werden mit
+`noindex,nofollow` ausgeliefert, solange mindestens ein Wert leer ist
+oder mit `[COMPLETAR:` beginnt. Folgende Angaben sind vor einer
+fachlichen und juristischen Endprüfung zu ersetzen:
+
+| Variable | Benötigte Angabe |
+| --- | --- |
+| `LEGAL_OPERATOR_NAME` | vollständiger Betreibername |
+| `LEGAL_OPERATOR_ADDRESS` | zustellfähige Anschrift in Ecuador |
+| `LEGAL_OPERATOR_PHONE` | Telefonnummer |
+| `LEGAL_CONTACT_EMAIL` | Datenschutz- und Kontakt-E-Mail |
+| `LEGAL_HOSTING_REGION` | endgültige Railway-Region |
+| `LEGAL_COMMERCIAL_MODEL` | Entscheidung zu Preisen, Werbung und Sponsoring |
+| `LEGAL_MATCH_EXCEPTION_RULE` | Regel für ausgesetzte oder verlegte Spiele |
+| `LEGAL_PAGES_LAST_UPDATED` | Datum der freigegebenen Fassung |
+
+Eine Produktionsumgebung startet nicht, wenn die Seiten aktiviert sind
+und noch ein Platzhalter vorhanden ist oder
+`LEGAL_REVIEW_CONFIRMED=1` fehlt. Dieser Schalter darf erst nach der
+inhaltlichen Endprüfung gesetzt werden. Die technische Sperre ersetzt
+keine juristische Beratung.
+
 ## Deployment-Ablauf
 
 1. Release-Prüfung mit `bin/check_release.sh` ausführen.

@@ -1,0 +1,366 @@
+{% extends "tipping/base.html" %}
+
+{% block title %}
+  Política de protección de datos
+{% endblock %}
+
+{% block extra_head %}
+  {% if legal_pages_have_placeholders %}
+    <meta name="robots" content="noindex,nofollow">
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+  <div class="container legal-page">
+    {% include "tipping/legal/_draft_notice.html" %}
+
+    <header class="card legal-hero">
+      <div class="legal-eyebrow">Privacidad en Puntero</div>
+      <h1>Política de protección de datos personales</h1>
+      <p>
+        Información sobre los datos utilizados por Puntero, sus fines,
+        plazos de conservación y los derechos de cada participante.
+      </p>
+      <span class="legal-version">
+        Última actualización: {{ legal_last_updated }}
+      </span>
+    </header>
+
+    <nav class="legal-document-nav" aria-label="Contenido de la política">
+      <a href="#responsable">Responsable</a>
+      <a href="#datos">Datos utilizados</a>
+      <a href="#finalidades">Finalidades</a>
+      <a href="#proveedores">Proveedores</a>
+      <a href="#conservacion">Conservación</a>
+      <a href="#derechos">Derechos</a>
+    </nav>
+
+    <div class="legal-document">
+      <section class="card legal-section" id="responsable">
+        <span class="legal-section-number" aria-hidden="true">01</span>
+        <div>
+          <h2>Responsable del tratamiento</h2>
+          <p>
+            La persona que decide sobre las finalidades y los medios del
+            tratamiento de datos personales en Puntero es:
+          </p>
+          <dl class="legal-details">
+            <div>
+              <dt>Nombre completo</dt>
+              <dd class="legal-placeholder">{{ legal_operator_name }}</dd>
+            </div>
+            <div>
+              <dt>Domicilio legal en Ecuador</dt>
+              <dd class="legal-placeholder">{{ legal_operator_address }}</dd>
+            </div>
+            <div>
+              <dt>Teléfono</dt>
+              <dd class="legal-placeholder">{{ legal_operator_phone }}</dd>
+            </div>
+            <div>
+              <dt>Correo de contacto y privacidad</dt>
+              <dd class="legal-placeholder">{{ legal_contact_email }}</dd>
+            </div>
+          </dl>
+          <p>
+            Puntero es operado por una persona natural desde Ecuador y no
+            por una compañía. Antes del lanzamiento se comprobará si las
+            características del tratamiento exigen designar un delegado de
+            protección de datos personales.
+          </p>
+        </div>
+      </section>
+
+      <section class="card legal-section" id="alcance">
+        <span class="legal-section-number" aria-hidden="true">02</span>
+        <div>
+          <h2>Alcance</h2>
+          <p>
+            Esta política se aplica al registro, acceso y uso del juego de
+            pronósticos Puntero, a sus grupos, tablas, pronósticos y correos
+            transaccionales. No se aplica a páginas externas visitadas desde
+            enlaces de terceros.
+          </p>
+        </div>
+      </section>
+
+      <section class="card legal-section" id="datos">
+        <span class="legal-section-number" aria-hidden="true">03</span>
+        <div>
+          <h2>Datos tratados y origen</h2>
+          <h3>Datos proporcionados por el usuario</h3>
+          <ul>
+            <li>nombre de usuario y dirección de correo electrónico;</li>
+            <li>contraseña almacenada únicamente como resumen criptográfico;</li>
+            <li>nombres de grupos y decisiones de administración;</li>
+            <li>pronósticos de partidos y pronósticos especiales;</li>
+            <li>preferencia voluntaria de recibir recordatorios.</li>
+          </ul>
+
+          <h3>Datos generados al utilizar Puntero</h3>
+          <ul>
+            <li>fecha de creación y último acceso de la cuenta;</li>
+            <li>estado de verificación del correo;</li>
+            <li>membresías, roles y fechas dentro de los grupos;</li>
+            <li>puntos, aciertos, posiciones y victorias por fecha;</li>
+            <li>constancias de recordatorios y avisos de inactividad;</li>
+            <li>sesiones y datos necesarios para proteger formularios;</li>
+            <li>
+              registros técnicos como fecha, dirección IP, ruta solicitada,
+              respuesta y agente de usuario.
+            </li>
+          </ul>
+
+          <p>
+            Puntero no solicita datos de pago, documentos de identidad ni
+            categorías especiales de datos. No deben introducirse datos
+            sensibles propios o de terceros en nombres o pronósticos.
+          </p>
+        </div>
+      </section>
+
+      <section class="card legal-section" id="finalidades">
+        <span class="legal-section-number" aria-hidden="true">04</span>
+        <div>
+          <h2>Finalidades y bases de legitimación</h2>
+          <div class="legal-table-wrap">
+            <table class="legal-table">
+              <thead>
+                <tr>
+                  <th>Finalidad</th>
+                  <th>Datos principales</th>
+                  <th>Base prevista</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Crear y proteger la cuenta</td>
+                  <td>usuario, correo, contraseña resumida y datos técnicos</td>
+                  <td>relación de uso y medidas solicitadas por el titular</td>
+                </tr>
+                <tr>
+                  <td>Gestionar grupos y pronósticos</td>
+                  <td>membresías, roles, códigos, pronósticos y resultados</td>
+                  <td>ejecución de la relación de uso</td>
+                </tr>
+                <tr>
+                  <td>Calcular y mostrar clasificaciones</td>
+                  <td>pronósticos, puntos, posiciones y nombres de usuario</td>
+                  <td>ejecución de la relación de uso</td>
+                </tr>
+                <tr>
+                  <td>Enviar recordatorios opcionales</td>
+                  <td>correo verificado, preferencia y partidos pendientes</td>
+                  <td>consentimiento revocable desde el perfil</td>
+                </tr>
+                <tr>
+                  <td>Enviar avisos necesarios de cuenta y seguridad</td>
+                  <td>correo, cuenta y evento correspondiente</td>
+                  <td>relación de uso y obligaciones de seguridad</td>
+                </tr>
+                <tr>
+                  <td>Prevenir abuso y diagnosticar errores</td>
+                  <td>sesión, IP, fecha, ruta y respuesta</td>
+                  <td>obligaciones legales o interés legítimo documentado</td>
+                </tr>
+                <tr>
+                  <td>Atender solicitudes de los titulares</td>
+                  <td>identidad, contacto, solicitud y respuesta</td>
+                  <td>cumplimiento de obligaciones legales</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <aside class="legal-note">
+            La base aplicable a cada tratamiento deberá confirmarse durante
+            la revisión jurídica final. Esta información no sustituye el
+            consentimiento cuando sea la base exigible.
+          </aside>
+        </div>
+      </section>
+
+      <section class="card legal-section" id="visibilidad">
+        <span class="legal-section-number" aria-hidden="true">05</span>
+        <div>
+          <h2>Visibilidad dentro de los grupos</h2>
+          <p>
+            Los miembros de un grupo pueden ver nombres de usuario,
+            posiciones, puntos, victorias por fecha y los pronósticos que ya
+            puedan mostrarse según las reglas. El correo y la contraseña no
+            se muestran a otros participantes.
+          </p>
+          <p>
+            Una membresía retirada se conserva durante un máximo de 12 meses
+            para permitir una reincorporación y después se elimina junto con
+            sus datos asociados de la base principal.
+          </p>
+        </div>
+      </section>
+
+      <section class="card legal-section" id="proveedores">
+        <span class="legal-section-number" aria-hidden="true">06</span>
+        <div>
+          <h2>Proveedores, destinatarios y ubicación</h2>
+          <ul>
+            <li>
+              <strong>Railway Corporation</strong>, para alojamiento,
+              PostgreSQL, Redis, copias de seguridad y registros técnicos.
+              Región prevista:
+              <span class="legal-placeholder">{{ legal_hosting_region }}</span>.
+            </li>
+            <li>
+              <strong>Plus Five Five, Inc. (Resend)</strong>, para correos de
+              verificación, recuperación, seguridad y recordatorios.
+            </li>
+            <li>
+              Subencargados autorizados por esos proveedores, en la medida
+              necesaria para prestar sus servicios.
+            </li>
+            <li>Autoridades públicas cuando exista una obligación válida.</li>
+          </ul>
+          <p>
+            No se venden datos personales ni se entregan para publicidad.
+            Antes del lanzamiento deberán revisarse los contratos,
+            subencargados y garantías de tratamientos fuera de Ecuador.
+          </p>
+        </div>
+      </section>
+
+      <section class="card legal-section" id="conservacion">
+        <span class="legal-section-number" aria-hidden="true">07</span>
+        <div>
+          <h2>Plazos de conservación</h2>
+          <div class="legal-table-wrap">
+            <table class="legal-table legal-table--retention">
+              <thead>
+                <tr>
+                  <th>Categoría</th>
+                  <th>Plazo previsto</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>Registro sin correo confirmado y sin datos de juego</td><td>14 días</td></tr>
+                <tr><td>Cuenta confirmada sin actividad</td><td>24 meses, con avisos 30 y 7 días antes</td></tr>
+                <tr><td>Membresía inactiva e historial asociado</td><td>12 meses desde la retirada</td></tr>
+                <tr><td>Sesión</td><td>máximo 14 días y hasta su vencimiento o cierre</td></tr>
+                <tr><td>Confirmación de correo</td><td>3 días</td></tr>
+                <tr><td>Restablecimiento de contraseña</td><td>1 hora</td></tr>
+                <tr><td>Constancia de recordatorio</td><td>90 días desde el envío</td></tr>
+                <tr><td>Registros de Railway en el plan previsto</td><td>7 días</td></tr>
+                <tr><td>Copias diarias y semanales previstas</td><td>máximo 27 días</td></tr>
+                <tr><td>Datos de correo en Resend</td><td>30 días según su documentación vigente</td></tr>
+                <tr><td>Consultas generales de soporte</td><td>12 meses desde el cierre</td></tr>
+                <tr><td>Solicitudes de derechos</td><td>24 meses desde el cierre, sujeto a revisión final</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Vencido el plazo aplicable, los datos se eliminarán, anonimizarán
+            o bloquearán cuando corresponda. Los avisos de inactividad están
+            preparados, pero su activación y la eliminación automática de
+            cuentas confirmadas requieren una prueba operativa previa.
+          </p>
+        </div>
+      </section>
+
+      <section class="card legal-section" id="cookies">
+        <span class="legal-section-number" aria-hidden="true">08</span>
+        <div>
+          <h2>Cookies y almacenamiento de sesión</h2>
+          <p>Puntero utiliza únicamente mecanismos necesarios para:</p>
+          <ul>
+            <li>mantener la sesión iniciada;</li>
+            <li>proteger formularios contra solicitudes falsificadas;</li>
+            <li>conservar mensajes breves y el grupo activo.</li>
+          </ul>
+          <p>
+            No se utilizan cookies publicitarias, seguimiento entre sitios
+            ni medición de audiencia en la versión revisada.
+          </p>
+        </div>
+      </section>
+
+      <section class="card legal-section" id="seguridad">
+        <span class="legal-section-number" aria-hidden="true">09</span>
+        <div>
+          <h2>Seguridad y decisiones automatizadas</h2>
+          <p>
+            Se aplican contraseñas resumidas, HTTPS en producción, cookies
+            seguras, validación de solicitudes, controles de acceso,
+            limitación de autenticación, separación de secretos y copias de
+            seguridad. Ninguna medida elimina completamente el riesgo.
+          </p>
+          <p>
+            Puntero calcula automáticamente puntos, posiciones y victorias
+            aplicando las reglas publicadas. Esto solo determina la
+            clasificación del juego y no produce efectos jurídicos ni crea
+            perfiles publicitarios.
+          </p>
+        </div>
+      </section>
+
+      <section class="card legal-section" id="derechos">
+        <span class="legal-section-number" aria-hidden="true">10</span>
+        <div>
+          <h2>Derechos del titular</h2>
+          <p>Cuando corresponda, cada titular puede solicitar:</p>
+          <ul>
+            <li>información y acceso;</li>
+            <li>rectificación y actualización;</li>
+            <li>eliminación, oposición o limitación;</li>
+            <li>portabilidad;</li>
+            <li>revocación del consentimiento;</li>
+            <li>revisión humana de cálculos automatizados.</li>
+          </ul>
+          <p>
+            La cuenta puede eliminarse desde el perfil después de transferir
+            o eliminar los grupos administrados. Para otras solicitudes debe
+            escribirse a
+            <span class="legal-placeholder">{{ legal_contact_email }}</span>.
+            Solo se pedirá la información proporcional necesaria para
+            verificar la identidad.
+          </p>
+          <p>
+            También puede presentarse un reclamo ante la Superintendencia de
+            Protección de Datos Personales de Ecuador mediante sus canales
+            oficiales.
+          </p>
+        </div>
+      </section>
+
+      <section class="card legal-section" id="edad">
+        <span class="legal-section-number" aria-hidden="true">11</span>
+        <div>
+          <h2>Servicio exclusivo para mayores de edad</h2>
+          <p>
+            Puntero está destinado exclusivamente a personas de 18 años o
+            más. La inscripción exige confirmarlo, pero no se solicita ni se
+            almacena la fecha de nacimiento.
+          </p>
+        </div>
+      </section>
+
+      <section class="card legal-section" id="cambios">
+        <span class="legal-section-number" aria-hidden="true">12</span>
+        <div>
+          <h2>Cambios y contacto</h2>
+          <p>
+            Los cambios relevantes se comunicarán antes de aplicarse. Si un
+            nuevo tratamiento requiere consentimiento, se solicitará mediante
+            una acción afirmativa separada.
+          </p>
+          <p>
+            Responsable:
+            <span class="legal-placeholder">{{ legal_operator_name }}</span><br>
+            Correo:
+            <span class="legal-placeholder">{{ legal_contact_email }}</span><br>
+            Teléfono:
+            <span class="legal-placeholder">{{ legal_operator_phone }}</span><br>
+            Domicilio:
+            <span class="legal-placeholder">{{ legal_operator_address }}</span>
+          </p>
+        </div>
+      </section>
+    </div>
+  </div>
+{% endblock %}

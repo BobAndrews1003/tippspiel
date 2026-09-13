@@ -1,0 +1,19 @@
+{% if legal_pages_enabled %}
+  <footer class="site-legal-footer">
+    <div class="container site-legal-footer__inner">
+      <span>Puntero · Juego privado de pronósticos</span>
+
+      <nav aria-label="Información legal">
+        <a href="{% url 'privacy_policy' %}">
+          Privacidad
+        </a>
+        <a href="{% url 'terms_of_use' %}">
+          Términos de uso
+        </a>
+        <a href="{% url 'legal_contact' %}">
+          Contacto
+        </a>
+      </nav>
+    </div>
+  </footer>
+{% endif %}

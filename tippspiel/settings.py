@@ -300,6 +300,10 @@ TEMPLATES = [
                     "tipping.context_processors."
                     "active_group_context"
                 ),
+                (
+                    "tipping.context_processors."
+                    "legal_pages_context"
+                ),
             ],
         },
     },
@@ -716,6 +720,102 @@ if (
 ):
     raise RuntimeError(
         "PUBLIC_BASE_URL muss in Produktion HTTPS verwenden."
+    )
+
+
+# ============================================================
+# Rechtliche Seiten
+# ============================================================
+
+# Die Seiten bleiben bis zur fachlichen Freigabe verborgen. In
+# Produktion dürfen sie weder Platzhalter enthalten noch ohne eine
+# ausdrücklich bestätigte Endprüfung aktiviert werden.
+LEGAL_PAGES_ENABLED = env_bool(
+    "LEGAL_PAGES_ENABLED",
+    default=False,
+)
+
+LEGAL_REVIEW_CONFIRMED = env_bool(
+    "LEGAL_REVIEW_CONFIRMED",
+    default=False,
+)
+
+LEGAL_PAGES_LAST_UPDATED = os.environ.get(
+    "LEGAL_PAGES_LAST_UPDATED",
+    "12 de septiembre de 2026",
+).strip()
+
+LEGAL_OPERATOR_NAME = os.environ.get(
+    "LEGAL_OPERATOR_NAME",
+    "[COMPLETAR: NOMBRE COMPLETO DEL RESPONSABLE]",
+).strip()
+
+LEGAL_OPERATOR_ADDRESS = os.environ.get(
+    "LEGAL_OPERATOR_ADDRESS",
+    "[COMPLETAR: DOMICILIO LEGAL EN ECUADOR]",
+).strip()
+
+LEGAL_OPERATOR_PHONE = os.environ.get(
+    "LEGAL_OPERATOR_PHONE",
+    "[COMPLETAR: NÚMERO DE TELÉFONO]",
+).strip()
+
+LEGAL_CONTACT_EMAIL = os.environ.get(
+    "LEGAL_CONTACT_EMAIL",
+    "[COMPLETAR: CORREO DE CONTACTO Y PRIVACIDAD]",
+).strip()
+
+LEGAL_HOSTING_REGION = os.environ.get(
+    "LEGAL_HOSTING_REGION",
+    "[COMPLETAR: REGIÓN DEFINITIVA DE RAILWAY]",
+).strip()
+
+LEGAL_COMMERCIAL_MODEL = os.environ.get(
+    "LEGAL_COMMERCIAL_MODEL",
+    (
+        "[COMPLETAR: CONFIRMAR SI PREMIOS, PUBLICIDAD Y "
+        "PATROCINIO QUEDAN EXCLUIDOS]"
+    ),
+).strip()
+
+LEGAL_MATCH_EXCEPTION_RULE = os.environ.get(
+    "LEGAL_MATCH_EXCEPTION_RULE",
+    (
+        "[COMPLETAR: REGLA PARA PARTIDOS SUSPENDIDOS, "
+        "APLAZADOS O RESUELTOS ADMINISTRATIVAMENTE]"
+    ),
+).strip()
+
+
+LEGAL_PLACEHOLDER_VALUES = (
+    LEGAL_PAGES_LAST_UPDATED,
+    LEGAL_OPERATOR_NAME,
+    LEGAL_OPERATOR_ADDRESS,
+    LEGAL_OPERATOR_PHONE,
+    LEGAL_CONTACT_EMAIL,
+    LEGAL_HOSTING_REGION,
+    LEGAL_COMMERCIAL_MODEL,
+    LEGAL_MATCH_EXCEPTION_RULE,
+)
+
+LEGAL_PAGES_HAVE_PLACEHOLDERS = any(
+    not value or "[COMPLETAR:" in value
+    for value in LEGAL_PLACEHOLDER_VALUES
+)
+
+
+if (
+    LEGAL_PAGES_ENABLED
+    and not DEBUG
+    and (
+        LEGAL_PAGES_HAVE_PLACEHOLDERS
+        or not LEGAL_REVIEW_CONFIRMED
+    )
+):
+    raise RuntimeError(
+        "Rechtliche Seiten dürfen in Produktion erst ohne "
+        "Platzhalter und mit LEGAL_REVIEW_CONFIRMED=1 "
+        "aktiviert werden."
     )
 
 

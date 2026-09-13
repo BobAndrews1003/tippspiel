@@ -5,6 +5,21 @@ from . import views
 
 urlpatterns = [
     path(
+        "privacidad/",
+        views.privacy_policy,
+        name="privacy_policy",
+    ),
+    path(
+        "terminos/",
+        views.terms_of_use,
+        name="terms_of_use",
+    ),
+    path(
+        "contacto/",
+        views.legal_contact,
+        name="legal_contact",
+    ),
+    path(
         "reglas/",
         views.rules,
         name="rules",

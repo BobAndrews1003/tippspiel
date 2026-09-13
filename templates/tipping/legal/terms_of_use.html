@@ -1,0 +1,262 @@
+{% extends "tipping/base.html" %}
+
+{% block title %}
+  Términos de uso
+{% endblock %}
+
+{% block extra_head %}
+  {% if legal_pages_have_placeholders %}
+    <meta name="robots" content="noindex,nofollow">
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+  <div class="container legal-page">
+    {% include "tipping/legal/_draft_notice.html" %}
+
+    <header class="card legal-hero">
+      <div class="legal-eyebrow">Condiciones de Puntero</div>
+      <h1>Términos de uso</h1>
+      <p>
+        Reglas básicas para crear una cuenta, participar en grupos privados
+        y utilizar el juego de pronósticos de forma responsable.
+      </p>
+      <span class="legal-version">
+        Última actualización: {{ legal_last_updated }}
+      </span>
+    </header>
+
+    <nav class="legal-document-nav" aria-label="Contenido de los términos">
+      <a href="#operador">Operador</a>
+      <a href="#servicio">Servicio</a>
+      <a href="#cuenta">Cuenta</a>
+      <a href="#grupos">Grupos</a>
+      <a href="#puntuacion">Puntuación</a>
+      <a href="#responsabilidad">Responsabilidad</a>
+    </nav>
+
+    <div class="legal-document">
+      <section class="card legal-section" id="operador">
+        <span class="legal-section-number" aria-hidden="true">01</span>
+        <div>
+          <h2>Operador y aceptación</h2>
+          <p>
+            Puntero es ofrecido por
+            <span class="legal-placeholder">{{ legal_operator_name }}</span>,
+            con domicilio en
+            <span class="legal-placeholder">{{ legal_operator_address }}</span>.
+            El contacto está disponible mediante
+            <span class="legal-placeholder">{{ legal_contact_email }}</span>
+            y
+            <span class="legal-placeholder">{{ legal_operator_phone }}</span>.
+          </p>
+          <p>
+            Al registrarse o utilizar Puntero, la persona usuaria acepta
+            estos términos y las reglas del juego. Si no está de acuerdo,
+            no debe crear una cuenta ni continuar utilizando el servicio.
+          </p>
+        </div>
+      </section>
+
+      <section class="card legal-section" id="servicio">
+        <span class="legal-section-number" aria-hidden="true">02</span>
+        <div>
+          <h2>Naturaleza del servicio</h2>
+          <p>
+            Puntero es un juego privado y gratuito de pronósticos de fútbol
+            entre personas conocidas. No es una casa de apuestas, no recibe
+            depósitos, no permite apostar dinero y no vende participaciones.
+          </p>
+          <p>
+            La definición pendiente del modelo comercial es:
+            <span class="legal-placeholder">{{ legal_commercial_model }}</span>.
+            Cualquier futura introducción de premios, pagos, publicidad o
+            patrocinio exigirá una nueva evaluación legal y una actualización
+            previa de estos términos.
+          </p>
+        </div>
+      </section>
+
+      <section class="card legal-section" id="edad">
+        <span class="legal-section-number" aria-hidden="true">03</span>
+        <div>
+          <h2>Edad mínima</h2>
+          <p>
+            El servicio está reservado a personas de 18 años o más. Al crear
+            una cuenta, la persona declara que cumple este requisito. Puntero
+            puede bloquear o eliminar una cuenta cuando existan motivos
+            razonables para considerar que pertenece a una persona menor de
+            edad.
+          </p>
+        </div>
+      </section>
+
+      <section class="card legal-section" id="cuenta">
+        <span class="legal-section-number" aria-hidden="true">04</span>
+        <div>
+          <h2>Cuenta y seguridad</h2>
+          <ul>
+            <li>debe proporcionarse un correo propio, válido y verificable;</li>
+            <li>cada persona debe mantener en secreto su contraseña;</li>
+            <li>no se permite suplantar a terceros ni crear cuentas abusivas;</li>
+            <li>el nombre de usuario no debe vulnerar derechos ni ser ofensivo;</li>
+            <li>una sospecha de acceso indebido debe comunicarse de inmediato.</li>
+          </ul>
+          <p>
+            Puntero puede limitar temporalmente intentos de acceso, solicitar
+            una nueva verificación o suspender una cuenta para proteger el
+            servicio y a sus participantes.
+          </p>
+        </div>
+      </section>
+
+      <section class="card legal-section" id="grupos">
+        <span class="legal-section-number" aria-hidden="true">05</span>
+        <div>
+          <h2>Grupos privados y administración</h2>
+          <p>
+            El acceso a un grupo se realiza mediante un código de invitación.
+            Quien crea un grupo asume el rol de propietario y puede cambiar el
+            código, retirar miembros, transferir la propiedad o eliminar el
+            grupo conforme a las funciones disponibles.
+          </p>
+          <p>
+            Los códigos deben compartirse únicamente con las personas que se
+            desea invitar. Los miembros pueden ver los nombres de usuario,
+            posiciones, puntos, victorias por fecha y pronósticos que ya estén
+            desbloqueados de acuerdo con las reglas. Las decisiones internas
+            o premios organizados por los miembros quedan fuera de Puntero y
+            son responsabilidad exclusiva de esas personas.
+          </p>
+        </div>
+      </section>
+
+      <section class="card legal-section" id="puntuacion">
+        <span class="legal-section-number" aria-hidden="true">06</span>
+        <div>
+          <h2>Pronósticos, plazos y puntuación</h2>
+          <p>
+            Cada pronóstico debe guardarse antes del cierre indicado en la
+            aplicación. La hora registrada por el servidor es determinante.
+            Los puntos, posiciones y victorias por fecha se calculan según la
+            <a href="{% url 'rules' %}">página de reglas</a>. A igualdad de
+            puntos se muestra el mismo rango; las victorias por fecha sirven
+            como criterio adicional en la tabla general según esas reglas.
+          </p>
+          <p>
+            Los horarios y resultados pueden introducirse manualmente. Aunque
+            se revisan con cuidado, pueden producirse errores. Las correcciones
+            justificadas pueden recalcular la clasificación.
+          </p>
+          <aside class="legal-note">
+            Regla pendiente para casos excepcionales:
+            <span class="legal-placeholder">{{ legal_match_exception_rule }}</span>.
+          </aside>
+        </div>
+      </section>
+
+      <section class="card legal-section" id="conducta">
+        <span class="legal-section-number" aria-hidden="true">07</span>
+        <div>
+          <h2>Uso permitido y conducta</h2>
+          <p>No está permitido:</p>
+          <ul>
+            <li>interferir con el funcionamiento o el acceso de otras personas;</li>
+            <li>automatizar accesos o extraer datos sin autorización;</li>
+            <li>aprovechar errores para alterar pronósticos o puntuaciones;</li>
+            <li>difundir contenido ilícito, amenazante o discriminatorio;</li>
+            <li>intentar acceder a cuentas, grupos o sistemas ajenos.</li>
+          </ul>
+          <p>
+            Ante una infracción pueden retirarse contenidos, suspenderse
+            funciones o cerrarse la cuenta. Cuando sea razonable, se informará
+            el motivo y se permitirá presentar una aclaración.
+          </p>
+        </div>
+      </section>
+
+      <section class="card legal-section" id="correos">
+        <span class="legal-section-number" aria-hidden="true">08</span>
+        <div>
+          <h2>Comunicaciones</h2>
+          <p>
+            Los correos necesarios para verificar la cuenta, recuperar la
+            contraseña, informar sobre seguridad o gestionar la inactividad
+            forman parte del funcionamiento del servicio. Los recordatorios
+            de pronósticos son opcionales y pueden activarse o desactivarse
+            desde el perfil.
+          </p>
+        </div>
+      </section>
+
+      <section class="card legal-section" id="disponibilidad">
+        <span class="legal-section-number" aria-hidden="true">09</span>
+        <div>
+          <h2>Disponibilidad y cambios</h2>
+          <p>
+            Puntero se ofrece según su disponibilidad. Pueden existir
+            interrupciones por mantenimiento, fallos de proveedores, eventos
+            de seguridad o causas externas. No se garantiza una operación sin
+            errores ni una disponibilidad permanente.
+          </p>
+          <p>
+            Las funciones pueden ajustarse para mejorar la seguridad o el
+            juego. Los cambios relevantes de estos términos se comunicarán
+            antes de su aplicación cuando sea posible.
+          </p>
+        </div>
+      </section>
+
+      <section class="card legal-section" id="responsabilidad">
+        <span class="legal-section-number" aria-hidden="true">10</span>
+        <div>
+          <h2>Responsabilidad</h2>
+          <p>
+            La clasificación tiene una finalidad exclusivamente recreativa.
+            Puntero no responde por acuerdos, pagos, premios o conflictos que
+            los miembros organicen fuera de la plataforma, ni por decisiones
+            tomadas basándose en sus pronósticos o resultados.
+          </p>
+          <p>
+            Nada en estos términos excluye responsabilidades que no puedan
+            limitarse conforme a la legislación aplicable. La formulación
+            definitiva deberá confirmarse en la revisión jurídica previa al
+            lanzamiento.
+          </p>
+        </div>
+      </section>
+
+      <section class="card legal-section" id="finalizacion">
+        <span class="legal-section-number" aria-hidden="true">11</span>
+        <div>
+          <h2>Finalización y eliminación</h2>
+          <p>
+            La cuenta puede eliminarse desde el perfil, siempre que antes se
+            transfieran o eliminen los grupos administrados. Puntero puede
+            cerrar cuentas inactivas después de los avisos y plazos indicados
+            en la política de protección de datos.
+          </p>
+          <p>
+            La terminación del servicio no elimina de inmediato la información
+            que deba conservarse para seguridad, reclamaciones u obligaciones
+            legales. Los plazos concretos se explican en la
+            <a href="{% url 'privacy_policy' %}">política de protección de datos</a>.
+          </p>
+        </div>
+      </section>
+
+      <section class="card legal-section" id="ley">
+        <span class="legal-section-number" aria-hidden="true">12</span>
+        <div>
+          <h2>Ley aplicable y contacto</h2>
+          <p>
+            Estos términos se rigen por las leyes de la República del Ecuador,
+            sin limitar los derechos imperativos que correspondan a la persona
+            usuaria. Las consultas pueden enviarse a
+            <span class="legal-placeholder">{{ legal_contact_email }}</span>.
+          </p>
+        </div>
+      </section>
+    </div>
+  </div>
+{% endblock %}

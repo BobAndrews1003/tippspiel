@@ -194,6 +194,22 @@
           Reglas del juego
         </a>
 
+        {% if legal_pages_enabled %}
+          <a
+            href="{% url 'privacy_policy' %}"
+            class="nav-link {% if request.resolver_match.url_name == 'privacy_policy' %}active{% endif %}"
+          >
+            Privacidad
+          </a>
+
+          <a
+            href="{% url 'terms_of_use' %}"
+            class="nav-link {% if request.resolver_match.url_name == 'terms_of_use' %}active{% endif %}"
+          >
+            Términos de uso
+          </a>
+        {% endif %}
+
       </div>
     </div>
   </div>

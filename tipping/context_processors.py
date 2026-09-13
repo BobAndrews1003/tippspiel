@@ -1,4 +1,17 @@
+from django.conf import settings
+
 from .models import GroupMembership
+
+
+def legal_pages_context(request):
+    """Steuert Links auf die noch nicht freigegebenen Rechtstexte."""
+
+    return {
+        "legal_pages_enabled": (
+            settings.LEGAL_PAGES_ENABLED
+        ),
+    }
+
 
 def active_group_context(request):
     if not request.user.is_authenticated:

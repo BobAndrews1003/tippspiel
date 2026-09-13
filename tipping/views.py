@@ -21,7 +21,7 @@ from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
 from django.db.models import Count
 from django.db.models.functions import Cast, Coalesce, Concat, Lower, NullIf, Rank
-from django.http import HttpRequest
+from django.http import Http404, HttpRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
@@ -62,6 +62,76 @@ User = get_user_model()
 GROUP_PAGE_SIZE = 50
 
 MAX_DATABASE_ID = 9_223_372_036_854_775_807
+
+
+def _legal_page_context() -> dict:
+    return {
+        "legal_pages_have_placeholders": (
+            settings.LEGAL_PAGES_HAVE_PLACEHOLDERS
+        ),
+        "legal_last_updated": (
+            settings.LEGAL_PAGES_LAST_UPDATED
+        ),
+        "legal_operator_name": (
+            settings.LEGAL_OPERATOR_NAME
+        ),
+        "legal_operator_address": (
+            settings.LEGAL_OPERATOR_ADDRESS
+        ),
+        "legal_operator_phone": (
+            settings.LEGAL_OPERATOR_PHONE
+        ),
+        "legal_contact_email": (
+            settings.LEGAL_CONTACT_EMAIL
+        ),
+        "legal_hosting_region": (
+            settings.LEGAL_HOSTING_REGION
+        ),
+        "legal_commercial_model": (
+            settings.LEGAL_COMMERCIAL_MODEL
+        ),
+        "legal_match_exception_rule": (
+            settings.LEGAL_MATCH_EXCEPTION_RULE
+        ),
+    }
+
+
+def _render_legal_page(
+    request,
+    template_name: str,
+):
+    if not settings.LEGAL_PAGES_ENABLED:
+        raise Http404
+
+    return render(
+        request,
+        template_name,
+        _legal_page_context(),
+    )
+
+
+@require_safe
+def privacy_policy(request):
+    return _render_legal_page(
+        request,
+        "tipping/legal/privacy_policy.html",
+    )
+
+
+@require_safe
+def terms_of_use(request):
+    return _render_legal_page(
+        request,
+        "tipping/legal/terms_of_use.html",
+    )
+
+
+@require_safe
+def legal_contact(request):
+    return _render_legal_page(
+        request,
+        "tipping/legal/contact.html",
+    )
 
 
 @require_safe
