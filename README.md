@@ -122,6 +122,7 @@ Die folgenden Variablen müssen im Web- und Worker-Service gesetzt sein:
 | `EMAIL_USE_SSL` | normalerweise `0` |
 | `PUBLIC_BASE_URL` | öffentliche HTTPS-Adresse, zum Beispiel `https://app.example.com` |
 | `TIP_REMINDERS_ENABLED` | `1`, sobald der automatische Versand freigegeben ist |
+| `ACCOUNT_RETENTION_NOTICES_ENABLED` | zunächst `0`; erst nach geprüftem Testversand auf `1` setzen |
 | `LOG_LEVEL` | `INFO` |
 
 `ALLOWED_HOSTS` enthält nur Hostnamen ohne Schema. Die Einträge in
@@ -146,6 +147,11 @@ Optionale Worker-Anpassungen:
 | `STANDING_JOB_STALE_MINUTES` | `60` |
 | `TIP_REMINDER_LEAD_HOURS` | `24` |
 | `TIP_REMINDER_POLL_SECONDS` | `300` |
+| `ACCOUNT_RETENTION_FIRST_NOTICE_DAYS` | `30` |
+| `ACCOUNT_RETENTION_FINAL_NOTICE_DAYS` | `7` |
+| `ACCOUNT_RETENTION_NOTICE_BATCH_SIZE` | `100` |
+| `ACCOUNT_RETENTION_NOTICE_POLL_SECONDS` | `86400` |
+| `ACCOUNT_RETENTION_NOTICE_CLAIM_STALE_MINUTES` | `60` |
 
 Der `standing-worker` prüft zusätzlich auf fällige Tipperinnerungen.
 Deshalb darf genau ein solcher Worker laufen. Nutzer müssen die Option
@@ -247,12 +253,37 @@ abhängige Daten einer ausgewählten Mitgliedschaft werden vollständig
 mitgelöscht. Mit `--limit` kann diese Batchgröße angepasst werden. Gruppenbesitzer,
 Administratoren und unbestätigte Konten mit Spieldaten werden nicht
 automatisch gelöscht. Bestätigte Konten nach 730 Tagen werden bislang nur
-gemeldet: Vor ihrer automatischen Löschung müssen Benachrichtigungen 30
-und 7 Tage vor Ablauf umgesetzt und getestet werden.
+gemeldet und noch nicht gelöscht.
 
-Der Befehl ist noch nicht automatisch eingeplant. Nach einem erfolgreichen
-Prüf- und Backup-Lauf kann er als täglicher Railway-Cronjob mit
-`--execute` eingerichtet werden.
+Die Benachrichtigungen 30 und 7 Tage vor einer späteren Kontolöschung
+sind vorbereitet. Ihre Auswahl lässt sich ohne Versand prüfen:
+
+```sh
+python manage.py send_account_retention_notices
+```
+
+Ein echter Versand benötigt gleichzeitig den globalen Schalter
+`ACCOUNT_RETENTION_NOTICES_ENABLED=1` und die ausdrückliche Option:
+
+```sh
+python manage.py send_account_retention_notices --execute
+```
+
+Nach einer erfolgreichen ersten Warnung wartet das System mindestens 23
+Tage bis zur letzten Warnung. Eine verspätete erste Warnung gewährt immer
+noch mindestens 30 Tage; dadurch wird eine spätere Löschung entsprechend
+verschoben. Ein erfolgreicher Login beendet den Warnzyklus sofort.
+
+Wenn der globale Schalter aktiviert ist, übernimmt der vorhandene
+`standing-worker` die Prüfung einmal täglich. Es ist dafür kein weiterer
+Railway-Service erforderlich. Vor der Aktivierung müssen beide
+E-Mail-Stufen mit dem Produktions-SMTP-Konto getestet werden. Die spätere
+Kontolöschung selbst bleibt gesperrt, bis sie zusätzlich an zwei
+erfolgreich versendete Warnungen gekoppelt und separat geprüft wurde.
+
+Der eigentliche Bereinigungsbefehl `cleanup_personal_data` ist noch nicht
+automatisch eingeplant. Nach einem erfolgreichen Prüf- und Backup-Lauf
+kann er als täglicher Railway-Cronjob mit `--execute` eingerichtet werden.
 
 Die Produktionsüberwachung sollte mindestens alarmieren bei:
 

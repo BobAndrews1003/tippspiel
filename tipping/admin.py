@@ -5,6 +5,7 @@ from django.contrib import (
 from django.utils import timezone
 
 from .models import (
+    AccountRetentionNotice,
     BonusPrediction,
     Group,
     GroupMembership,
@@ -14,6 +15,65 @@ from .models import (
     TipReminderDelivery,
     Tournament,
 )
+
+
+@admin.register(AccountRetentionNotice)
+class AccountRetentionNoticeAdmin(
+    admin.ModelAdmin
+):
+    list_display = (
+        "id",
+        "user",
+        "inactivity_since",
+        "first_warning_sent_at",
+        "final_warning_sent_at",
+        "updated_at",
+    )
+
+    search_fields = (
+        "user__username",
+        "user__email",
+    )
+
+    list_select_related = (
+        "user",
+    )
+
+    readonly_fields = (
+        "id",
+        "user",
+        "inactivity_since",
+        "first_warning_claimed_at",
+        "first_warning_sent_at",
+        "final_warning_claimed_at",
+        "final_warning_sent_at",
+        "updated_at",
+    )
+
+    ordering = (
+        "inactivity_since",
+        "id",
+    )
+
+    def has_add_permission(
+        self,
+        request,
+    ):
+        return False
+
+    def has_change_permission(
+        self,
+        request,
+        obj=None,
+    ):
+        return False
+
+    def has_delete_permission(
+        self,
+        request,
+        obj=None,
+    ):
+        return False
 
 
 @admin.register(TipReminderDelivery)

@@ -1231,6 +1231,69 @@ class TipReminderDelivery(models.Model):
             f"{self.match_id}"
         )
 
+
+class AccountRetentionNotice(models.Model):
+    """
+    Versandstatus der Warnungen vor einer Kontolöschung.
+
+    Pro Konto wird nur der aktuelle Inaktivitätszyklus gehalten.
+    Ein erfolgreicher Login entfernt diesen Datensatz wieder.
+    """
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="account_retention_notice",
+    )
+
+    inactivity_since = models.DateTimeField()
+
+    first_warning_claimed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    first_warning_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    final_warning_claimed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    final_warning_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        final_warning_sent_at__isnull=True,
+                    )
+                    |
+                    models.Q(
+                        first_warning_sent_at__isnull=False,
+                    )
+                ),
+                name="retention_final_requires_first",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"Kontowarnung für User {self.user_id} "
+            f"seit {self.inactivity_since}"
+        )
+
 class StandingRebuildJob(models.Model):
     """
     Dauerhafter Auftrag zur Neuberechnung der vorberechneten

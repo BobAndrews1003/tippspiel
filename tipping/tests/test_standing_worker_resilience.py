@@ -175,3 +175,42 @@ class StandingWorkerResilienceTests(
                 )
 
         send_reminders.assert_called_once_with()
+
+    @override_settings(
+        ACCOUNT_RETENTION_NOTICES_ENABLED=True,
+        ACCOUNT_RETENTION_NOTICE_POLL_SECONDS=86400,
+    )
+    def test_watch_mode_checks_account_retention_notices(self):
+        output = StringIO()
+        errors = StringIO()
+
+        with patch(
+            (
+                "tipping.management.commands."
+                "process_standing_jobs."
+                "send_due_account_retention_notices"
+            )
+        ) as send_notices:
+            send_notices.return_value.sent = 0
+            send_notices.return_value.failures = 0
+
+            with patch(
+                (
+                    "tipping.management.commands."
+                    "process_standing_jobs.sleep"
+                ),
+                side_effect=KeyboardInterrupt,
+            ):
+                call_command(
+                    "process_standing_jobs",
+                    watch=True,
+                    limit=1,
+                    poll_seconds=0.1,
+                    stale_minutes=60,
+                    stdout=output,
+                    stderr=errors,
+                )
+
+        send_notices.assert_called_once_with(
+            dry_run=False,
+        )

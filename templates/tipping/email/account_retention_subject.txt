@@ -1,0 +1,1 @@
+{% if is_final %}Último aviso{% else %}Aviso{% endif %}: tu cuenta de Puntero está inactiva

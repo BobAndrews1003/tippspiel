@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="es">
+  <body style="margin:0;background:#0b1220;color:#e8eefc;font-family:Arial,sans-serif;">
+    <div style="max-width:620px;margin:0 auto;padding:28px 18px;">
+      <div style="background:#111a2e;border:1px solid #29344d;border-radius:18px;padding:26px;">
+        <div style="color:#69a5ff;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">
+          Puntero
+        </div>
+
+        <h1 style="margin:10px 0 8px;font-size:27px;line-height:1.2;">
+          {% if is_final %}Último aviso{% else %}Tu cuenta está inactiva{% endif %}
+        </h1>
+
+        <p style="margin:0 0 16px;color:#a9b6d6;line-height:1.6;">
+          Hola {{ user.username }}, tu cuenta no registra un inicio de
+          sesión desde el {{ inactivity_since|date:"d/m/Y" }}.
+        </p>
+
+        <p style="margin:0 0 20px;color:#dce5f8;line-height:1.6;">
+          Si deseas conservarla, inicia sesión antes del
+          <strong>{{ deletion_not_before|date:"d/m/Y" }}</strong>.
+          El inicio de sesión cancela automáticamente este proceso.
+        </p>
+
+        <a
+          href="{{ login_url }}"
+          style="display:inline-block;padding:11px 16px;border-radius:999px;background:#438cff;color:#ffffff;font-weight:700;text-decoration:none;"
+        >
+          Conservar mi cuenta
+        </a>
+
+        <p style="margin:22px 0 0;color:#a9b6d6;line-height:1.6;">
+          Si no vuelves a iniciar sesión, la eliminación de la cuenta y
+          sus datos asociados está prevista no antes de esa fecha.
+        </p>
+
+        {% if owns_groups %}
+          <div style="margin-top:18px;padding:16px;border:1px solid #8b6a2f;border-radius:12px;background:#211b10;color:#f3dfb3;line-height:1.55;">
+            Administras uno o más grupos. Antes de poder eliminar tu
+            cuenta tendrás que transferir su administración o eliminar
+            esos grupos. Mientras esto no se resuelva, la cuenta permanece
+            protegida frente a la eliminación automática.
+          </div>
+        {% endif %}
+
+        <p style="margin:22px 0 0;color:#8291b2;font-size:13px;line-height:1.55;">
+          No necesitas responder a este correo.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

@@ -14,6 +14,9 @@ from django.utils import timezone
 from tipping.models import (
     StandingRebuildJob,
 )
+from tipping.account_retention_notices import (
+    send_due_account_retention_notices,
+)
 from tipping.standing_jobs import (
     claim_next_standing_rebuild_job,
     execute_standing_rebuild_job,
@@ -225,10 +228,52 @@ class Command(BaseCommand):
         )
 
         next_reminder_check = monotonic()
+        next_account_retention_check = monotonic()
 
         try:
             while True:
                 close_old_connections()
+
+                if (
+                    settings.ACCOUNT_RETENTION_NOTICES_ENABLED
+                    and monotonic()
+                    >= next_account_retention_check
+                ):
+                    try:
+                        retention_result = (
+                            send_due_account_retention_notices(
+                                dry_run=False,
+                            )
+                        )
+
+                        if (
+                            retention_result.sent
+                            or retention_result.failures
+                        ):
+                            self.stdout.write(
+                                (
+                                    "Kontowarnungen: "
+                                    f"{retention_result.sent} "
+                                    "versendet, "
+                                    f"{retention_result.failures} "
+                                    "Fehler."
+                                )
+                            )
+
+                    except Exception as exc:
+                        self.stderr.write(
+                            self.style.ERROR(
+                                "Prüfung der Kontowarnungen "
+                                f"fehlgeschlagen: {exc}"
+                            )
+                        )
+
+                    finally:
+                        next_account_retention_check = (
+                            monotonic()
+                            + settings
+                            .ACCOUNT_RETENTION_NOTICE_POLL_SECONDS
+                        )
 
                 if (
                     settings.TIP_REMINDERS_ENABLED

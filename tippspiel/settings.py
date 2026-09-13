@@ -779,6 +779,37 @@ DATA_RETENTION_REMINDER_DELIVERY_DAYS = env_int(
 )
 
 
+ACCOUNT_RETENTION_NOTICES_ENABLED = env_bool(
+    "ACCOUNT_RETENTION_NOTICES_ENABLED",
+    default=False,
+)
+
+ACCOUNT_RETENTION_FIRST_NOTICE_DAYS = env_int(
+    "ACCOUNT_RETENTION_FIRST_NOTICE_DAYS",
+    30,
+)
+
+ACCOUNT_RETENTION_FINAL_NOTICE_DAYS = env_int(
+    "ACCOUNT_RETENTION_FINAL_NOTICE_DAYS",
+    7,
+)
+
+ACCOUNT_RETENTION_NOTICE_BATCH_SIZE = env_int(
+    "ACCOUNT_RETENTION_NOTICE_BATCH_SIZE",
+    100,
+)
+
+ACCOUNT_RETENTION_NOTICE_POLL_SECONDS = env_int(
+    "ACCOUNT_RETENTION_NOTICE_POLL_SECONDS",
+    86400,
+)
+
+ACCOUNT_RETENTION_NOTICE_CLAIM_STALE_MINUTES = env_int(
+    "ACCOUNT_RETENTION_NOTICE_CLAIM_STALE_MINUTES",
+    60,
+)
+
+
 for retention_setting_name in (
     "DATA_RETENTION_UNVERIFIED_ACCOUNT_DAYS",
     "DATA_RETENTION_INACTIVE_ACCOUNT_DAYS",
@@ -789,6 +820,39 @@ for retention_setting_name in (
         raise RuntimeError(
             f"{retention_setting_name} muss mindestens 1 sein."
         )
+
+
+if not (
+    DATA_RETENTION_INACTIVE_ACCOUNT_DAYS
+    > ACCOUNT_RETENTION_FIRST_NOTICE_DAYS
+    > ACCOUNT_RETENTION_FINAL_NOTICE_DAYS
+    >= 1
+):
+    raise RuntimeError(
+        "Die Kontowarnfristen müssen in dieser Reihenfolge "
+        "liegen: Aufbewahrung > erste Warnung > letzte Warnung."
+    )
+
+
+if ACCOUNT_RETENTION_NOTICE_BATCH_SIZE < 1:
+    raise RuntimeError(
+        "ACCOUNT_RETENTION_NOTICE_BATCH_SIZE muss "
+        "mindestens 1 sein."
+    )
+
+
+if ACCOUNT_RETENTION_NOTICE_POLL_SECONDS < 3600:
+    raise RuntimeError(
+        "ACCOUNT_RETENTION_NOTICE_POLL_SECONDS muss "
+        "mindestens 3600 sein."
+    )
+
+
+if ACCOUNT_RETENTION_NOTICE_CLAIM_STALE_MINUTES < 5:
+    raise RuntimeError(
+        "ACCOUNT_RETENTION_NOTICE_CLAIM_STALE_MINUTES "
+        "muss mindestens 5 sein."
+    )
 
 
 # ============================================================

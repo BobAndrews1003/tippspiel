@@ -1,0 +1,15 @@
+Hola {{ user.username }},
+
+tu cuenta de Puntero no registra un inicio de sesión desde el {{ inactivity_since|date:"d/m/Y" }}.
+
+Si deseas conservar tu cuenta, inicia sesión antes del {{ deletion_not_before|date:"d/m/Y" }}. El inicio de sesión cancela automáticamente este proceso:
+
+{{ login_url }}
+
+Si no vuelves a iniciar sesión, la eliminación de la cuenta y sus datos asociados está prevista no antes de esa fecha.
+{% if owns_groups %}
+Además, administras uno o más grupos. Antes de poder eliminar tu cuenta tendrás que transferir su administración o eliminar esos grupos. Mientras esto no se resuelva, la cuenta permanece protegida frente a la eliminación automática.
+{% endif %}
+No necesitas responder a este correo.
+
+Puntero
