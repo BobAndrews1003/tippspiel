@@ -64,6 +64,29 @@ GROUP_PAGE_SIZE = 50
 MAX_DATABASE_ID = 9_223_372_036_854_775_807
 
 
+@require_safe
+def public_home(request):
+    """Öffentliche Startseite; angemeldete Nutzer gehen zum Dashboard."""
+
+    if request.user.is_authenticated:
+        return redirect("dashboard")
+
+    return render(
+        request,
+        "tipping/public_home.html",
+    )
+
+
+@require_safe
+def help_page(request):
+    """Öffentliche Hilfe für Interessierte und aktive Teilnehmer."""
+
+    return render(
+        request,
+        "tipping/help.html",
+    )
+
+
 def _legal_page_context() -> dict:
     return {
         "legal_pages_have_placeholders": (

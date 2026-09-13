@@ -1,9 +1,16 @@
-{% if legal_pages_enabled %}
-  <footer class="site-legal-footer">
-    <div class="container site-legal-footer__inner">
-      <span>Puntero · Juego privado de pronósticos</span>
+<footer class="site-legal-footer">
+  <div class="container site-legal-footer__inner">
+    <span>Puntero · Juego privado de pronósticos</span>
 
-      <nav aria-label="Información legal">
+    <nav aria-label="Información y aspectos legales">
+      <a href="{% url 'help_page' %}">
+        Ayuda
+      </a>
+      <a href="{% url 'rules' %}">
+        Reglas
+      </a>
+
+      {% if legal_pages_enabled %}
         <a href="{% url 'privacy_policy' %}">
           Privacidad
         </a>
@@ -13,7 +20,7 @@
         <a href="{% url 'legal_contact' %}">
           Contacto
         </a>
-      </nav>
-    </div>
-  </footer>
-{% endif %}
+      {% endif %}
+    </nav>
+  </div>
+</footer>

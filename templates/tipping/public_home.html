@@ -1,0 +1,182 @@
+{% extends "tipping/base.html" %}
+
+{% block title %}
+  Pronósticos de fútbol con amigos
+{% endblock %}
+
+{% block body_class %}public-home-body{% endblock %}
+
+{% block content %}
+  <div class="container public-home-page">
+    <section class="public-home-hero">
+      <div class="public-home-hero__copy">
+        <div class="public-eyebrow">Tu grupo, tus pronósticos</div>
+        <h1>La emoción del fútbol se comparte mejor.</h1>
+        <p>
+          Crea un grupo privado, invita a tus amigos y compite fecha a
+          fecha pronosticando los resultados. Sin apuestas y sin dinero
+          real: solo fútbol, puntos y conversación.
+        </p>
+
+        <div class="public-home-actions">
+          <a class="btn primary" href="{% url 'account_signup' %}">
+            Crear una cuenta
+          </a>
+          <a class="btn" href="{% url 'account_login' %}">
+            Iniciar sesión
+          </a>
+        </div>
+
+        <ul class="public-home-trust" aria-label="Características principales">
+          <li>Gratis</li>
+          <li>Grupos privados</li>
+          <li>Para mayores de 18 años</li>
+        </ul>
+      </div>
+
+      <div class="public-home-preview" aria-label="Ejemplo de clasificación">
+        <div class="public-home-preview__head">
+          <div>
+            <span class="public-preview-label">Grupo</span>
+            <strong>Amigos de Puntero</strong>
+          </div>
+          <span class="public-preview-date">Fecha 8</span>
+        </div>
+
+        <div class="public-preview-row public-preview-row--leader">
+          <span class="public-preview-rank">1</span>
+          <span class="public-preview-avatar" aria-hidden="true">L</span>
+          <span class="public-preview-name">Lucía</span>
+          <strong>64 pts</strong>
+        </div>
+        <div class="public-preview-row">
+          <span class="public-preview-rank">2</span>
+          <span class="public-preview-avatar" aria-hidden="true">M</span>
+          <span class="public-preview-name">Mateo</span>
+          <strong>61 pts</strong>
+        </div>
+        <div class="public-preview-row">
+          <span class="public-preview-rank">3</span>
+          <span class="public-preview-avatar" aria-hidden="true">A</span>
+          <span class="public-preview-name">Ana</span>
+          <strong>58 pts</strong>
+        </div>
+
+        <div class="public-preview-result">
+          <span>Próximo partido</span>
+          <strong>Equipo Azul&nbsp;&nbsp;–&nbsp;&nbsp;Equipo Blanco</strong>
+          <small>Pronostica antes del inicio</small>
+        </div>
+      </div>
+    </section>
+
+    <section class="public-home-section" aria-labelledby="how-title">
+      <div class="public-section-heading">
+        <div class="public-eyebrow">Así de sencillo</div>
+        <h2 id="how-title">Del grupo a la tabla en tres pasos</h2>
+      </div>
+
+      <div class="public-step-grid">
+        <article class="card public-step-card">
+          <span>01</span>
+          <h3>Crea o únete</h3>
+          <p>
+            Abre tu propio grupo o entra con el código privado que te
+            comparta su administrador.
+          </p>
+        </article>
+        <article class="card public-step-card">
+          <span>02</span>
+          <h3>Pronostica</h3>
+          <p>
+            Guarda el marcador de cada partido antes de la hora de inicio
+            indicada en Puntero.
+          </p>
+        </article>
+        <article class="card public-step-card">
+          <span>03</span>
+          <h3>Compara</h3>
+          <p>
+            Cuando se registra el resultado, Puntero calcula los puntos y
+            actualiza las tablas del grupo.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section class="public-feature-layout">
+      <div class="public-section-heading">
+        <div class="public-eyebrow">Hecho para el grupo</div>
+        <h2>Todo lo importante, sin complicaciones</h2>
+        <p>
+          La experiencia se concentra en pronosticar, seguir la fecha y
+          comparar el rendimiento con las personas que invitaste.
+        </p>
+        <a class="public-inline-link" href="{% url 'rules' %}">
+          Consultar las reglas completas →
+        </a>
+      </div>
+
+      <div class="public-feature-grid">
+        <article class="public-feature-card">
+          <span aria-hidden="true">#</span>
+          <div>
+            <h3>Tablas claras</h3>
+            <p>Puntos por fecha, clasificación general y victorias de fecha.</p>
+          </div>
+        </article>
+        <article class="public-feature-card">
+          <span aria-hidden="true">✓</span>
+          <div>
+            <h3>Plazos justos</h3>
+            <p>Cada pronóstico se bloquea automáticamente al iniciar el partido.</p>
+          </div>
+        </article>
+        <article class="public-feature-card">
+          <span aria-hidden="true">◎</span>
+          <div>
+            <h3>Privado por diseño</h3>
+            <p>Solo quienes reciben el código pueden entrar al grupo.</p>
+          </div>
+        </article>
+        <article class="public-feature-card">
+          <span aria-hidden="true">↗</span>
+          <div>
+            <h3>Recordatorios opcionales</h3>
+            <p>Cada participante decide desde su perfil si desea recibirlos.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="card public-home-note">
+      <div>
+        <div class="public-eyebrow">Transparente desde el inicio</div>
+        <h2>Resultados controlados, puntuación comprensible</h2>
+        <p>
+          Los resultados se registran manualmente después de los partidos.
+          Puntero no muestra puntuaciones en vivo en esta versión. Si un
+          resultado se corrige, las clasificaciones afectadas se recalculan.
+        </p>
+      </div>
+      <a class="btn" href="{% url 'help_page' %}">
+        Ver ayuda y preguntas
+      </a>
+    </section>
+
+    <section class="public-final-cta">
+      <div>
+        <div class="public-eyebrow">¿Listo para empezar?</div>
+        <h2>Crea el grupo y comparte el código.</h2>
+      </div>
+      <div class="public-home-actions">
+        <a class="btn primary" href="{% url 'account_signup' %}">
+          Registrarse
+        </a>
+        <a class="btn" href="{% url 'help_page' %}">
+          Resolver dudas
+        </a>
+      </div>
+    </section>
+  </div>
+{% endblock %}

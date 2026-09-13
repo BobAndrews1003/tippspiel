@@ -1,0 +1,263 @@
+{% extends "tipping/base.html" %}
+
+{% block title %}
+  Ayuda y preguntas frecuentes
+{% endblock %}
+
+{% block content %}
+  <div class="container help-page">
+    <header class="card help-hero">
+      <div class="public-eyebrow">Centro de ayuda</div>
+      <h1>Preguntas frecuentes</h1>
+      <p>
+        Respuestas rápidas sobre cuentas, grupos, pronósticos, puntos y
+        recordatorios en Puntero.
+      </p>
+
+      <nav class="help-anchor-nav" aria-label="Categorías de ayuda">
+        <a href="#primeros-pasos">Primeros pasos</a>
+        <a href="#pronosticos">Pronósticos</a>
+        <a href="#clasificacion">Clasificación</a>
+        <a href="#cuenta">Cuenta</a>
+      </nav>
+    </header>
+
+    <div class="help-layout">
+      <main class="help-content">
+        <section class="help-topic" id="primeros-pasos">
+          <div class="help-topic-heading">
+            <span aria-hidden="true">01</span>
+            <div>
+              <div class="public-eyebrow">Empezar</div>
+              <h2>Cuenta y grupos</h2>
+            </div>
+          </div>
+
+          <div class="help-questions">
+            <details class="card help-question">
+              <summary>¿Qué es Puntero?</summary>
+              <div>
+                <p>
+                  Es un juego gratuito de pronósticos de fútbol para grupos
+                  privados. No admite apuestas, depósitos ni dinero real.
+                </p>
+              </div>
+            </details>
+            <details class="card help-question">
+              <summary>¿Cómo creo una cuenta?</summary>
+              <div>
+                <p>
+                  Elige un nombre de usuario, introduce una dirección de
+                  correo válida, crea una contraseña y confirma que tienes
+                  al menos 18 años. Después debes verificar el correo.
+                </p>
+              </div>
+            </details>
+            <details class="card help-question">
+              <summary>¿Cómo entro a un grupo?</summary>
+              <div>
+                <p>
+                  Inicia sesión, abre “Unirse a un grupo” e introduce el
+                  código recibido. También puedes abrir directamente el
+                  enlace de invitación del propietario.
+                </p>
+              </div>
+            </details>
+            <details class="card help-question">
+              <summary>¿Quién puede administrar un grupo?</summary>
+              <div>
+                <p>
+                  La persona que lo crea es su propietaria. Puede cambiar el
+                  nombre y el código, cerrar nuevos ingresos, retirar miembros,
+                  transferir la propiedad o eliminar el grupo.
+                </p>
+              </div>
+            </details>
+          </div>
+        </section>
+
+        <section class="help-topic" id="pronosticos">
+          <div class="help-topic-heading">
+            <span aria-hidden="true">02</span>
+            <div>
+              <div class="public-eyebrow">Partidos</div>
+              <h2>Pronósticos y plazos</h2>
+            </div>
+          </div>
+
+          <div class="help-questions">
+            <details class="card help-question">
+              <summary>¿Hasta cuándo puedo cambiar un pronóstico?</summary>
+              <div>
+                <p>
+                  Hasta la hora de inicio indicada para ese partido. Al llegar
+                  el plazo, el pronóstico se bloquea automáticamente. Recuerda
+                  pulsar “Guardar pronósticos”.
+                </p>
+              </div>
+            </details>
+            <details class="card help-question">
+              <summary>¿Cuándo puedo ver los pronósticos de los demás?</summary>
+              <div>
+                <p>
+                  Después del inicio de cada partido. Antes de ese momento
+                  permanecen ocultos para proteger el juego limpio.
+                </p>
+              </div>
+            </details>
+            <details class="card help-question">
+              <summary>¿Los resultados y puntos se muestran en vivo?</summary>
+              <div>
+                <p>
+                  No en esta versión. La administración registra los resultados
+                  después de cada partido y Puntero actualiza entonces las
+                  puntuaciones y tablas.
+                </p>
+              </div>
+            </details>
+            <details class="card help-question">
+              <summary>¿Qué ocurre si cambia un horario o resultado?</summary>
+              <div>
+                <p>
+                  La administración actualiza manualmente el horario o el
+                  resultado. Una corrección de resultado vuelve a calcular los
+                  puntos y clasificaciones afectadas. Los casos excepcionales
+                  se resolverán conforme a las reglas publicadas.
+                </p>
+              </div>
+            </details>
+          </div>
+        </section>
+
+        <section class="help-topic" id="clasificacion">
+          <div class="help-topic-heading">
+            <span aria-hidden="true">03</span>
+            <div>
+              <div class="public-eyebrow">Puntos</div>
+              <h2>Resultados y clasificación</h2>
+            </div>
+          </div>
+
+          <div class="help-questions">
+            <details class="card help-question">
+              <summary>¿Cómo se calculan los puntos?</summary>
+              <div>
+                <p>
+                  Un resultado exacto vale 4 puntos, una diferencia correcta
+                  3, una tendencia correcta 2 y un pronóstico incorrecto 0.
+                  Solo cuenta la categoría de mayor valor.
+                </p>
+                <a href="{% url 'rules' %}">Ver reglas y ejemplos completos</a>
+              </div>
+            </details>
+            <details class="card help-question">
+              <summary>¿Qué ocurre cuando dos personas tienen los mismos puntos?</summary>
+              <div>
+                <p>
+                  En una fecha comparten el mismo rango. En la tabla general,
+                  las victorias de fecha sirven como criterio adicional. Si
+                  también coinciden, mantienen el mismo rango.
+                </p>
+              </div>
+            </details>
+            <details class="card help-question">
+              <summary>¿Qué es una victoria de fecha?</summary>
+              <div>
+                <p>
+                  Se concede a quien logra la mayor puntuación de una fecha.
+                  Si varias personas empatan en el máximo, cuenta como victoria
+                  para todas ellas.
+                </p>
+              </div>
+            </details>
+            <details class="card help-question">
+              <summary>¿Cuándo aparecen los pronósticos especiales?</summary>
+              <div>
+                <p>
+                  Se pueden modificar hasta el comienzo del primer partido del
+                  torneo. Después quedan bloqueados y se hacen visibles para
+                  el grupo. Cada respuesta correcta suma 5 puntos.
+                </p>
+              </div>
+            </details>
+          </div>
+        </section>
+
+        <section class="help-topic" id="cuenta">
+          <div class="help-topic-heading">
+            <span aria-hidden="true">04</span>
+            <div>
+              <div class="public-eyebrow">Perfil</div>
+              <h2>Correo, recordatorios y cuenta</h2>
+            </div>
+          </div>
+
+          <div class="help-questions">
+            <details class="card help-question">
+              <summary>No recibí el correo de confirmación. ¿Qué hago?</summary>
+              <div>
+                <p>
+                  Revisa spam, confirma que la dirección esté bien escrita y
+                  solicita un nuevo envío desde la pantalla de verificación.
+                  Los enlaces anteriores pueden dejar de ser válidos.
+                </p>
+              </div>
+            </details>
+            <details class="card help-question">
+              <summary>¿Cómo recupero mi contraseña?</summary>
+              <div>
+                <p>
+                  Usa “Restablecer contraseña” en la pantalla de inicio de
+                  sesión. Recibirás un enlace temporal si existe una cuenta
+                  asociada al correo indicado.
+                </p>
+              </div>
+            </details>
+            <details class="card help-question">
+              <summary>¿Cómo funcionan los recordatorios?</summary>
+              <div>
+                <p>
+                  Están desactivados al crear la cuenta. Puedes activarlos o
+                  volver a desactivarlos desde Perfil → Recordatorios. Solo se
+                  envían a una dirección verificada.
+                </p>
+              </div>
+            </details>
+            <details class="card help-question">
+              <summary>¿Cómo elimino mi cuenta?</summary>
+              <div>
+                <p>
+                  Abre Perfil → Eliminar cuenta. Si administras grupos, primero
+                  debes transferirlos o eliminarlos. La confirmación requiere
+                  la contraseña actual y la palabra “ELIMINAR”.
+                </p>
+              </div>
+            </details>
+          </div>
+        </section>
+      </main>
+
+      <aside class="card help-sidebar">
+        <div class="public-eyebrow">Accesos directos</div>
+        <h2>¿Quieres jugar?</h2>
+        <p>
+          Consulta primero las reglas o entra directamente a tu cuenta.
+        </p>
+        <a class="btn primary" href="{% url 'account_signup' %}">
+          Crear una cuenta
+        </a>
+        <a class="btn" href="{% url 'account_login' %}">
+          Iniciar sesión
+        </a>
+        <a class="help-sidebar-link" href="{% url 'rules' %}">
+          Reglas del juego →
+        </a>
+        {% if legal_pages_enabled %}
+          <a class="help-sidebar-link" href="{% url 'legal_contact' %}">
+            Contactar a Puntero →
+          </a>
+        {% endif %}
+      </aside>
+    </div>
+  </div>
+{% endblock %}

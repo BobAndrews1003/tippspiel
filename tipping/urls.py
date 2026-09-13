@@ -5,6 +5,11 @@ from . import views
 
 urlpatterns = [
     path(
+        "ayuda/",
+        views.help_page,
+        name="help_page",
+    ),
+    path(
         "privacidad/",
         views.privacy_policy,
         name="privacy_policy",

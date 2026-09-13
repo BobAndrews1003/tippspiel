@@ -2,10 +2,10 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from allauth.account.decorators import secure_admin_login
-from django.shortcuts import redirect
 from django.urls import include, path
 
 from tipping.health import health_check
+from tipping.views import public_home
 
 
 # Der Django-Admin verwendet standardmäßig nicht den
@@ -15,13 +15,6 @@ admin.autodiscover()
 admin.site.login = secure_admin_login(
     admin.site.login
 )
-
-
-def root_redirect(request):
-    if request.user.is_authenticated:
-        return redirect("dashboard")
-
-    return redirect("account_login")
 
 
 urlpatterns = [
@@ -37,7 +30,7 @@ urlpatterns = [
     path("accounts/", include("allauth.urls")),
 
     # Startseite
-    path("", root_redirect, name="root"),
+    path("", public_home, name="root"),
 
     # Tippspiel
     path("", include("tipping.urls")),
