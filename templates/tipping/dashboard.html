@@ -13,7 +13,15 @@
          BEGRÜSSUNG
          ===================================================== -->
 
-    <section class="dashboard-welcome">
+    <section class="dashboard-welcome{% if group_branding.hero_image %} dashboard-welcome--branded{% endif %}">
+
+      {% if group_branding.hero_image %}
+        <img
+          class="group-brand-dashboard-cover"
+          src="{{ group_branding.hero_image.url }}"
+          alt=""
+        >
+      {% endif %}
 
       <div
         class="dashboard-welcome-avatar"
@@ -24,6 +32,15 @@
 
       <div class="dashboard-welcome-content">
         <div class="dashboard-eyebrow">
+          {% if group_branding.logo %}
+            <img
+              class="group-brand-inline-logo"
+              src="{{ group_branding.logo.url }}"
+              alt=""
+              width="24"
+              height="24"
+            >
+          {% endif %}
           {{ group.name }}
         </div>
 
@@ -33,8 +50,12 @@
         </h1>
 
         <p>
-          Aquí encuentras lo más importante de tu grupo,
-          tus pronósticos y tu rendimiento.
+          {% if group_branding.welcome_text %}
+            {{ group_branding.welcome_text }}
+          {% else %}
+            Aquí encuentras lo más importante de tu grupo,
+            tus pronósticos y tu rendimiento.
+          {% endif %}
         </p>
       </div>
 

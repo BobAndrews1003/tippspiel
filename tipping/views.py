@@ -21,21 +21,29 @@ from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
 from django.db.models import Count
 from django.db.models.functions import Cast, Coalesce, Concat, Lower, NullIf, Rank
-from django.http import Http404, HttpRequest
+from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
+from django.views.decorators.cache import never_cache
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 
 from .forms import (
     BonusPredictionForm,
     DeleteAccountForm,
+    GroupBrandingForm,
     GroupCreateForm,
     GroupSettingsForm,
     TipReminderSettingsForm,
 )
 from .advanced_stats import build_advanced_group_stats
+from .group_branding import (
+    branding_style_from_object,
+    branding_style_from_query,
+    get_visible_group_branding,
+    render_group_branding_css,
+)
 from .group_plans import (
     get_group_plan_catalog,
     group_has_entitlement,
@@ -51,6 +59,7 @@ from .signal_control import (
 from .models import (
     BonusPrediction,
     Group,
+    GroupBranding,
     GroupMembership,
     GroupStanding,
     Match,
@@ -122,11 +131,13 @@ def advanced_group_stats(
         GroupMembership.objects
         .select_related(
             "group__tournament",
+            "group__branding",
         ),
         group_id=group_id,
         user=request.user,
     )
     group = membership.group
+    group_branding = get_visible_group_branding(group)
 
     if not group_has_entitlement(
         group,
@@ -166,6 +177,7 @@ def advanced_group_stats(
         "tipping/advanced_group_stats.html",
         {
             "group": group,
+            "group_branding": group_branding,
             "advanced_group_stats_available": True,
             "active_section": active_section,
             **stats_context,
@@ -3153,6 +3165,7 @@ def group_detail(
         .select_related(
             "group__tournament",
             "group__owner",
+            "group__branding",
         ),
         group_id=group_id,
         user=request.user,
@@ -3177,10 +3190,46 @@ def group_detail(
         "advanced_stats",
     )
 
+    branding_feature_available = group_has_entitlement(
+        group,
+        "branding",
+    )
+    group_branding = get_visible_group_branding(group)
+    branding_action = (
+        request.POST.get("form_action", "")
+        if request.method == "POST"
+        else ""
+    )
+    branding_submission = branding_action == "branding"
+    branding_reset_submission = (
+        branding_action == "branding_reset"
+    )
+    branding_form_action = (
+        branding_submission
+        or branding_reset_submission
+    )
+
     settings_form = GroupSettingsForm(
-        request.POST or None,
+        (
+            request.POST
+            if request.method == "POST"
+            and not branding_form_action
+            else None
+        ),
         instance=group,
     )
+
+    branding_form = None
+
+    if branding_feature_available and can_manage_group:
+        branding_form = GroupBrandingForm(
+            request.POST if branding_submission else None,
+            request.FILES if branding_submission else None,
+            instance=(
+                group_branding
+                or GroupBranding(group=group)
+            ),
+        )
 
     if request.method == "POST":
         if not can_manage_group:
@@ -3196,7 +3245,54 @@ def group_detail(
                 group_id=group.id,
             )
 
-        if settings_form.is_valid():
+        if branding_form_action:
+            if not branding_feature_available:
+                messages.error(
+                    request,
+                    (
+                        "La personalización requiere un "
+                        "plan Club activo."
+                    ),
+                )
+                return redirect(
+                    "group_detail",
+                    group_id=group.id,
+                )
+
+            if branding_reset_submission:
+                if group_branding is not None:
+                    group_branding.delete()
+
+                messages.success(
+                    request,
+                    "Se restauró el diseño estándar de Puntero.",
+                )
+                return redirect(
+                    "group_detail",
+                    group_id=group.id,
+                )
+
+            if branding_form.is_valid():
+                branding = branding_form.save(
+                    commit=False
+                )
+                branding.group = group
+                branding.save()
+
+                messages.success(
+                    request,
+                    "La imagen de marca fue guardada.",
+                )
+                return redirect(
+                    "group_detail",
+                    group_id=group.id,
+                )
+
+            messages.error(
+                request,
+                "Revisa la imagen de marca del grupo.",
+            )
+        elif settings_form.is_valid():
             settings_form.save()
 
             messages.success(
@@ -3208,10 +3304,11 @@ def group_detail(
                 group_id=group.id,
             )
 
-        messages.error(
-            request,
-            "Revisa la configuración del grupo.",
-        )
+        else:
+            messages.error(
+                request,
+                "Revisa la configuración del grupo.",
+            )
 
     member_memberships = list(
         GroupMembership.objects
@@ -3219,7 +3316,6 @@ def group_detail(
         .select_related("user")
         .order_by("joined_at", "id")
     )
-
     standings_by_user_id = {
         standing.user_id: standing
         for standing in (
@@ -3333,6 +3429,7 @@ def group_detail(
         "tipping/group_detail.html",
         {
             "group": group,
+            "group_branding": group_branding,
             "membership": membership,
             "is_owner": is_owner,
             "is_co_admin": is_co_admin,
@@ -3343,11 +3440,15 @@ def group_detail(
             "advanced_stats_feature_available": (
                 advanced_stats_feature_available
             ),
+            "branding_feature_available": (
+                branding_feature_available
+            ),
             "is_active": (
                 request.session.get("active_group_id")
                 == group.id
             ),
             "settings_form": settings_form,
+            "branding_form": branding_form,
             "member_rows": member_rows,
             "member_count": len(member_rows),
             "invite_url": invite_url,
@@ -3360,6 +3461,61 @@ def group_detail(
             ],
         },
     )
+
+
+@login_required
+@require_safe
+@never_cache
+def group_branding_css(
+    request: HttpRequest,
+    group_id: int,
+):
+    """Liefert validierte Gruppenfarben ohne Inline-CSS aus."""
+
+    membership = get_object_or_404(
+        GroupMembership.objects.select_related(
+            "group__branding",
+        ),
+        group_id=group_id,
+        user=request.user,
+    )
+    group = membership.group
+    preview = request.GET.get("preview") == "1"
+
+    if not group_has_entitlement(group, "branding"):
+        raise Http404
+
+    branding = get_visible_group_branding(group)
+
+    if preview and not (
+        _is_group_owner(
+            group=group,
+            membership=membership,
+        )
+        or _is_group_co_admin(
+            group=group,
+            membership=membership,
+        )
+    ):
+        raise Http404
+
+    if not preview and branding is None:
+        raise Http404
+
+    style = (
+        branding_style_from_query(request.GET)
+        if preview
+        else branding_style_from_object(branding)
+    )
+    response = HttpResponse(
+        render_group_branding_css(
+            style,
+            preview=preview,
+        ),
+        content_type="text/css; charset=utf-8",
+    )
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 @login_required

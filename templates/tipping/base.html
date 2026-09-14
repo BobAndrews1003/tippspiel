@@ -16,11 +16,18 @@
 
   <link rel="stylesheet" href="{% static 'app.css' %}">
 
+  {% if group_branding %}
+    <link
+      rel="stylesheet"
+      href="{% url 'group_branding_css' group_branding.group_id %}?v={{ group_branding.updated_at|date:'YmdHis' }}"
+    >
+  {% endif %}
+
   {% block extra_head %}{% endblock %}
   {% block extra_css %}{% endblock %}
 </head>
 
-<body class="{% block body_class %}{% endblock %}">
+<body class="{% if group_branding %}group-branding-active{% endif %} {% block body_class %}{% endblock %}">
   <!-- DEPLOY_MARKER: messages-modal-2026-07-14 -->
 
   {% include "tipping/_nav.html" %}

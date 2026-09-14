@@ -11,9 +11,11 @@ from django.core.exceptions import ValidationError
 from django.core.validators import (
     FileExtensionValidator,
     MinLengthValidator,
+    RegexValidator,
 )
 from django.db import models
 from django.utils import timezone
+from PIL import Image, UnidentifiedImageError
 
 
 # ============================================================
@@ -28,6 +30,14 @@ JOIN_CODE_LENGTH = 16
 MAX_AVATAR_FILE_SIZE = 3 * 1024 * 1024
 MAX_AVATAR_WIDTH = 3000
 MAX_AVATAR_HEIGHT = 3000
+
+MAX_GROUP_LOGO_FILE_SIZE = 2 * 1024 * 1024
+MAX_GROUP_LOGO_WIDTH = 1600
+MAX_GROUP_LOGO_HEIGHT = 1600
+
+MAX_GROUP_HERO_FILE_SIZE = 4 * 1024 * 1024
+MAX_GROUP_HERO_WIDTH = 2400
+MAX_GROUP_HERO_HEIGHT = 1400
 
 ALLOWED_AVATAR_EXTENSIONS = (
     "jpg",
@@ -47,6 +57,19 @@ ALLOWED_AVATAR_FORMATS = {
     "WEBP": {
         ".webp",
     },
+}
+
+ALLOWED_GROUP_LOGO_EXTENSIONS = (
+    "jpg",
+    "jpeg",
+    "png",
+    "webp",
+)
+
+ALLOWED_GROUP_LOGO_FORMATS = {
+    "JPEG",
+    "PNG",
+    "WEBP",
 }
 
 
@@ -120,6 +143,127 @@ def validate_avatar_file(value) -> None:
     """
 
     return None
+
+
+# ============================================================
+# Gruppenlogo-Validierung
+# ============================================================
+
+def group_logo_upload_path(
+    instance,
+    filename: str,
+) -> str:
+    """Speichert keine vom Nutzer kontrollierten Dateinamen."""
+
+    suffix = Path(filename).suffix.lower()
+    group_id = getattr(
+        instance,
+        "group_id",
+        "unknown",
+    )
+
+    return (
+        f"group-branding/group_{group_id}/"
+        f"logo-{uuid4().hex}{suffix}"
+    )
+
+
+def group_hero_upload_path(
+    instance,
+    filename: str,
+) -> str:
+    """Speichert Titelbilder unter einem zufälligen Dateinamen."""
+
+    suffix = Path(filename).suffix.lower()
+    group_id = getattr(
+        instance,
+        "group_id",
+        "unknown",
+    )
+
+    return (
+        f"group-branding/group_{group_id}/"
+        f"hero-{uuid4().hex}{suffix}"
+    )
+
+
+def _validate_group_image(
+    value,
+    *,
+    max_file_size: int,
+    max_width: int,
+    max_height: int,
+    image_label: str,
+) -> None:
+    """Begrenzt Größe, Abmessungen und tatsächliches Bildformat."""
+
+    if value.size > max_file_size:
+        raise ValidationError(
+            f"{image_label} no puede superar "
+            f"{max_file_size // (1024 * 1024)} MB."
+        )
+
+    original_position = value.tell()
+
+    try:
+        value.seek(0)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter(
+                "error",
+                Image.DecompressionBombWarning,
+            )
+
+            with Image.open(value) as image:
+                image_format = image.format
+                width, height = image.size
+                image.verify()
+    except (
+        Image.DecompressionBombError,
+        Image.DecompressionBombWarning,
+        UnidentifiedImageError,
+        OSError,
+        SyntaxError,
+    ) as exc:
+        raise ValidationError(
+            "El archivo no es una imagen válida."
+        ) from exc
+    finally:
+        value.seek(original_position)
+
+    if image_format not in ALLOWED_GROUP_LOGO_FORMATS:
+        raise ValidationError(
+            "Usa un archivo JPG, PNG o WebP."
+        )
+
+    if (
+        width > max_width
+        or height > max_height
+    ):
+        raise ValidationError(
+            f"{image_label} no puede superar "
+            f"{max_width} × {max_height} píxeles."
+        )
+
+
+def validate_group_logo(value) -> None:
+    _validate_group_image(
+        value,
+        max_file_size=MAX_GROUP_LOGO_FILE_SIZE,
+        max_width=MAX_GROUP_LOGO_WIDTH,
+        max_height=MAX_GROUP_LOGO_HEIGHT,
+        image_label="El logotipo",
+    )
+
+
+def validate_group_hero(value) -> None:
+    _validate_group_image(
+        value,
+        max_file_size=MAX_GROUP_HERO_FILE_SIZE,
+        max_width=MAX_GROUP_HERO_WIDTH,
+        max_height=MAX_GROUP_HERO_HEIGHT,
+        image_label="La imagen de portada",
+    )
 
 # ============================================================
 # Zugangscodes
@@ -359,6 +503,130 @@ class Group(models.Model):
             f"{self.name} "
             f"({self.tournament.name})"
         )
+
+
+# ============================================================
+# GroupBranding
+# ============================================================
+
+class GroupBranding(models.Model):
+    DEFAULT_PRIMARY_COLOR = "#438CFF"
+    DEFAULT_ACCENT_COLOR = "#7257E8"
+    DEFAULT_BACKGROUND_COLOR = "#183153"
+
+    class ThemeMode(models.TextChoices):
+        DARK = "dark", "Oscuro"
+        LIGHT = "light", "Claro"
+
+    class BrandIntensity(models.TextChoices):
+        SUBTLE = "subtle", "Sutil"
+        NORMAL = "normal", "Normal"
+        STRONG = "strong", "Intensa"
+
+    group = models.OneToOneField(
+        Group,
+        on_delete=models.CASCADE,
+        related_name="branding",
+    )
+
+    logo = models.ImageField(
+        upload_to=group_logo_upload_path,
+        max_length=255,
+        blank=True,
+        validators=[
+            FileExtensionValidator(
+                allowed_extensions=(
+                    ALLOWED_GROUP_LOGO_EXTENSIONS
+                ),
+            ),
+            validate_group_logo,
+        ],
+    )
+
+    hero_image = models.ImageField(
+        upload_to=group_hero_upload_path,
+        max_length=255,
+        blank=True,
+        validators=[
+            FileExtensionValidator(
+                allowed_extensions=(
+                    ALLOWED_GROUP_LOGO_EXTENSIONS
+                ),
+            ),
+            validate_group_hero,
+        ],
+    )
+
+    primary_color = models.CharField(
+        max_length=7,
+        default=DEFAULT_PRIMARY_COLOR,
+        validators=[
+            RegexValidator(
+                regex=r"^#[0-9A-Fa-f]{6}$",
+                message="Introduce un color hexadecimal válido.",
+            ),
+        ],
+    )
+
+    accent_color = models.CharField(
+        max_length=7,
+        default=DEFAULT_ACCENT_COLOR,
+        validators=[
+            RegexValidator(
+                regex=r"^#[0-9A-Fa-f]{6}$",
+                message="Introduce un color hexadecimal válido.",
+            ),
+        ],
+    )
+
+    background_color = models.CharField(
+        max_length=7,
+        default=DEFAULT_BACKGROUND_COLOR,
+        validators=[
+            RegexValidator(
+                regex=r"^#[0-9A-Fa-f]{6}$",
+                message="Introduce un color hexadecimal válido.",
+            ),
+        ],
+    )
+
+    theme_mode = models.CharField(
+        max_length=8,
+        choices=ThemeMode.choices,
+        default=ThemeMode.LIGHT,
+    )
+
+    brand_intensity = models.CharField(
+        max_length=8,
+        choices=BrandIntensity.choices,
+        default=BrandIntensity.NORMAL,
+    )
+
+    welcome_text = models.CharField(
+        max_length=280,
+        blank=True,
+        help_text=(
+            "Kurzer Begrüßungstext auf dem Dashboard."
+        ),
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    def save(
+        self,
+        *args,
+        **kwargs,
+    ):
+        self.welcome_text = self.welcome_text.strip()
+        self.primary_color = self.primary_color.upper()
+        self.accent_color = self.accent_color.upper()
+        self.background_color = self.background_color.upper()
+        return super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return f"Imagen de marca de {self.group.name}"
 
 
 # ============================================================

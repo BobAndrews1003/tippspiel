@@ -80,6 +80,11 @@ urlpatterns = [
         name="my_groups",
     ),
     path(
+        "groups/<int:group_id>/branding.css",
+        views.group_branding_css,
+        name="group_branding_css",
+    ),
+    path(
         "groups/<int:group_id>/",
         views.group_detail,
         name="group_detail",

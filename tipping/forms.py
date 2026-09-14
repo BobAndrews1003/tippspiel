@@ -6,6 +6,7 @@ from django import forms
 
 from .models import (
     Group,
+    GroupBranding,
     Match,
     Tournament,
     UserProfile,
@@ -78,6 +79,90 @@ class GroupSettingsForm(forms.ModelForm):
             )
 
         return name
+
+
+class GroupBrandingForm(forms.ModelForm):
+    class Meta:
+        model = GroupBranding
+        fields = (
+            "logo",
+            "hero_image",
+            "primary_color",
+            "accent_color",
+            "background_color",
+            "theme_mode",
+            "brand_intensity",
+            "welcome_text",
+        )
+        widgets = {
+            "logo": forms.ClearableFileInput(
+                attrs={
+                    "accept": "image/jpeg,image/png,image/webp",
+                }
+            ),
+            "hero_image": forms.ClearableFileInput(
+                attrs={
+                    "accept": "image/jpeg,image/png,image/webp",
+                }
+            ),
+            "primary_color": forms.TextInput(
+                attrs={
+                    "class": "group-brand-color-input",
+                    "type": "color",
+                }
+            ),
+            "accent_color": forms.TextInput(
+                attrs={
+                    "class": "group-brand-color-input",
+                    "type": "color",
+                }
+            ),
+            "background_color": forms.TextInput(
+                attrs={
+                    "class": "group-brand-color-input",
+                    "type": "color",
+                }
+            ),
+            "theme_mode": forms.RadioSelect(
+                attrs={"class": "group-brand-choice-list"}
+            ),
+            "brand_intensity": forms.RadioSelect(
+                attrs={"class": "group-brand-choice-list"}
+            ),
+            "welcome_text": forms.Textarea(
+                attrs={
+                    "class": "input",
+                    "rows": 3,
+                    "maxlength": 280,
+                    "placeholder": (
+                        "p. ej. Bienvenidos al torneo interno 2026."
+                    ),
+                }
+            ),
+        }
+        labels = {
+            "logo": "Logotipo",
+            "hero_image": "Imagen de portada",
+            "primary_color": "Color principal",
+            "accent_color": "Color de acento",
+            "background_color": "Tono de fondo",
+            "theme_mode": "Modo de visualización",
+            "brand_intensity": "Intensidad de la marca",
+            "welcome_text": "Mensaje de bienvenida",
+        }
+        help_texts = {
+            "logo": (
+                "JPG, PNG o WebP; máximo 2 MB y 1600 × 1600 px."
+            ),
+            "hero_image": (
+                "Opcional. JPG, PNG o WebP; máximo 4 MB y "
+                "2400 × 1400 px."
+            ),
+            "background_color": (
+                "Se mezcla con una base segura para mantener el contraste."
+            ),
+            "welcome_text": "Máximo 280 caracteres.",
+        }
 
 
 class BonusPredictionForm(forms.Form):

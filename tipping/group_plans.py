@@ -100,9 +100,9 @@ def get_group_plan_catalog() -> tuple[GroupPlanDefinition, ...]:
             included_features=(
                 "Todo lo incluido en Plus",
                 "Participantes ilimitados",
+                "Logotipo, colores y bienvenida propios",
             ),
             planned_features=(
-                "Imagen de marca del organizador",
                 "Espacios propios para patrocinadores",
                 "Soporte prioritario",
             ),
@@ -110,6 +110,7 @@ def get_group_plan_catalog() -> tuple[GroupPlanDefinition, ...]:
                 {
                     "co_admins",
                     "advanced_stats",
+                    "branding",
                 }
             ),
         ),

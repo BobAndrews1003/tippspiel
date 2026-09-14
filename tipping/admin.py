@@ -8,6 +8,7 @@ from .models import (
     AccountRetentionNotice,
     BonusPrediction,
     Group,
+    GroupBranding,
     GroupMembership,
     Match,
     Prediction,
@@ -143,8 +144,18 @@ class TournamentAdmin(admin.ModelAdmin):
     )
 
 
+class GroupBrandingInline(admin.StackedInline):
+    model = GroupBranding
+    extra = 0
+    max_num = 1
+
+
 @admin.register(Group)
 class GroupAdmin(admin.ModelAdmin):
+    inlines = (
+        GroupBrandingInline,
+    )
+
     list_display = (
         "id",
         "name",

@@ -95,6 +95,22 @@ class GroupPlanModelTests(TestCase):
             )
         )
 
+    def test_active_club_plan_exposes_branding(self):
+        group = self.create_group(
+            plan=Group.Plan.CLUB,
+            plan_expires_at=(
+                timezone.now() + timedelta(days=30)
+            ),
+        )
+
+        self.assertEqual(group.effective_plan, "club")
+        self.assertTrue(
+            group_has_entitlement(
+                group,
+                "branding",
+            )
+        )
+
     @override_settings(
         GROUP_PLAN_LIMITS_ENABLED=False,
         GROUP_PLAN_FREE_MEMBER_LIMIT=20,

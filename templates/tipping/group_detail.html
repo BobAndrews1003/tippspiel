@@ -2,42 +2,71 @@
 
 {% block title %}{{ group.name }} · Grupo{% endblock %}
 
+{% block extra_head %}
+  {{ block.super }}
+  {% if branding_form %}
+    <link
+      id="groupBrandPreviewStylesheet"
+      rel="stylesheet"
+      href="{% url 'group_branding_css' group.id %}?preview=1"
+    >
+  {% endif %}
+{% endblock %}
+
 {% block content %}
   <div class="container group-detail-page">
     <a class="group-detail-back" href="{% url 'my_groups' %}">
       ← Volver a mis grupos
     </a>
 
-    <section class="card groups-page-header group-detail-hero">
+    <section class="card groups-page-header group-detail-hero{% if group_branding.hero_image %} group-detail-hero--branded{% endif %}">
+      {% if group_branding.hero_image %}
+        <img
+          class="group-brand-detail-cover"
+          src="{{ group_branding.hero_image.url }}"
+          alt=""
+        >
+      {% endif %}
+
       <div class="group-detail-hero-copy">
-        <div class="group-card-label">
-          {{ group.tournament.name }}
-        </div>
+        {% if group_branding.logo %}
+          <img
+            class="group-brand-hero-logo"
+            src="{{ group_branding.logo.url }}"
+            alt="Logotipo de {{ group.name }}"
+          >
+        {% endif %}
 
-        <h1>{{ group.name }}</h1>
+        <div class="group-detail-hero-text">
+          <div class="group-card-label">
+            {{ group.tournament.name }}
+          </div>
 
-        <div class="group-card-badges">
-          {% if is_active %}
-            <span class="pill">Grupo activo</span>
-          {% endif %}
+          <h1>{{ group.name }}</h1>
 
-          {% if is_owner %}
-            <span class="pill">Administrador</span>
-          {% endif %}
+          <div class="group-card-badges">
+            {% if is_active %}
+              <span class="pill">Grupo activo</span>
+            {% endif %}
 
-          {% if is_co_admin %}
-            <span class="pill">Coadministrador</span>
-          {% endif %}
+            {% if is_owner %}
+              <span class="pill">Administrador</span>
+            {% endif %}
 
-          {% if group_plans_enabled %}
-            <span class="pill group-plan-badge group-plan-badge--{{ group.effective_plan }}">
-              Plan {{ group.effective_plan_label }}
+            {% if is_co_admin %}
+              <span class="pill">Coadministrador</span>
+            {% endif %}
+
+            {% if group_plans_enabled %}
+              <span class="pill group-plan-badge group-plan-badge--{{ group.effective_plan }}">
+                Plan {{ group.effective_plan_label }}
+              </span>
+            {% endif %}
+
+            <span class="pill">
+              {{ member_count }} participante{{ member_count|pluralize:"s" }}
             </span>
-          {% endif %}
-
-          <span class="pill">
-            {{ member_count }} participante{{ member_count|pluralize:"s" }}
-          </span>
+          </div>
         </div>
       </div>
 
@@ -287,6 +316,216 @@
           </section>
         {% endif %}
 
+        {% if branding_form %}
+          <details
+            class="card group-detail-section group-branding-details"
+            id="apariencia"
+            {% if branding_form.errors %}open{% endif %}
+          >
+            <summary class="group-branding-summary">
+              <span>
+                <span class="group-card-label">Plan Club</span>
+                <strong>Apariencia</strong>
+              </span>
+              <span class="group-branding-chevron" aria-hidden="true">⌄</span>
+            </summary>
+
+            <div class="group-branding-details-body">
+              <p class="muted small">
+                Define una identidad propia manteniendo la navegación y la
+                legibilidad de Puntero.
+              </p>
+
+              <section
+                class="group-brand-preview"
+                data-brand-preview
+                aria-label="Vista previa del diseño del grupo"
+              >
+                <div class="group-brand-preview-cover">
+                  <img
+                    data-brand-preview-hero
+                    {% if group_branding.hero_image %}
+                      src="{{ group_branding.hero_image.url }}"
+                    {% else %}
+                      hidden
+                    {% endif %}
+                    alt=""
+                  >
+
+                  <div class="group-brand-preview-nav">
+                    <span class="group-brand-preview-mark">
+                      {% if group_branding.logo %}
+                        <img
+                          data-brand-preview-logo
+                          src="{{ group_branding.logo.url }}"
+                          alt=""
+                        >
+                      {% else %}
+                        <img data-brand-preview-logo hidden alt="">
+                      {% endif %}
+                      <span data-brand-preview-logo-fallback>
+                        {{ group.name|slice:":1" }}
+                      </span>
+                    </span>
+                    <strong>{{ group.name }}</strong>
+                    <span class="group-brand-preview-pill">Fecha 1</span>
+                  </div>
+
+                  <div class="group-brand-preview-content">
+                    <span class="group-brand-preview-eyebrow">
+                      Vista previa
+                    </span>
+                    <h3>Hola, participante</h3>
+                    <p data-brand-preview-welcome>
+                      {% if group_branding.welcome_text %}
+                        {{ group_branding.welcome_text }}
+                      {% else %}
+                        Aquí encuentras lo más importante de tu grupo.
+                      {% endif %}
+                    </p>
+
+                    <div class="group-brand-preview-actions">
+                      <span class="group-brand-preview-button">
+                        Pronosticar
+                      </span>
+                      <span class="group-brand-preview-secondary">
+                        Ver clasificación
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <form
+                method="post"
+                enctype="multipart/form-data"
+                class="form-grid group-branding-form"
+                data-group-branding-form
+                data-preview-stylesheet="{% url 'group_branding_css' group.id %}"
+              >
+                {% csrf_token %}
+                <input type="hidden" name="form_action" value="branding">
+
+                <div class="group-brand-upload-grid">
+                  <div class="field">
+                    <label for="{{ branding_form.logo.id_for_label }}">
+                      {{ branding_form.logo.label }}
+                    </label>
+                    {{ branding_form.logo }}
+                    {% if branding_form.logo.help_text %}
+                      <small>{{ branding_form.logo.help_text }}</small>
+                    {% endif %}
+                    {% for error in branding_form.logo.errors %}
+                      <div class="form-error">{{ error }}</div>
+                    {% endfor %}
+                  </div>
+
+                  <div class="field">
+                    <label for="{{ branding_form.hero_image.id_for_label }}">
+                      {{ branding_form.hero_image.label }}
+                    </label>
+                    {{ branding_form.hero_image }}
+                    {% if branding_form.hero_image.help_text %}
+                      <small>{{ branding_form.hero_image.help_text }}</small>
+                    {% endif %}
+                    {% for error in branding_form.hero_image.errors %}
+                      <div class="form-error">{{ error }}</div>
+                    {% endfor %}
+                  </div>
+                </div>
+
+                <div class="group-brand-color-grid">
+                  <div class="field group-brand-color-field">
+                    <label for="{{ branding_form.primary_color.id_for_label }}">
+                      {{ branding_form.primary_color.label }}
+                    </label>
+                    {{ branding_form.primary_color }}
+                    {% for error in branding_form.primary_color.errors %}
+                      <div class="form-error">{{ error }}</div>
+                    {% endfor %}
+                  </div>
+
+                  <div class="field group-brand-color-field">
+                    <label for="{{ branding_form.accent_color.id_for_label }}">
+                      {{ branding_form.accent_color.label }}
+                    </label>
+                    {{ branding_form.accent_color }}
+                    {% for error in branding_form.accent_color.errors %}
+                      <div class="form-error">{{ error }}</div>
+                    {% endfor %}
+                  </div>
+
+                  <div class="field group-brand-color-field">
+                    <label for="{{ branding_form.background_color.id_for_label }}">
+                      {{ branding_form.background_color.label }}
+                    </label>
+                    {{ branding_form.background_color }}
+                    {% if branding_form.background_color.help_text %}
+                      <small>{{ branding_form.background_color.help_text }}</small>
+                    {% endif %}
+                    {% for error in branding_form.background_color.errors %}
+                      <div class="form-error">{{ error }}</div>
+                    {% endfor %}
+                  </div>
+                </div>
+
+                <div class="group-brand-choice-grid">
+                  <fieldset class="field group-brand-fieldset">
+                    <legend>{{ branding_form.theme_mode.label }}</legend>
+                    {{ branding_form.theme_mode }}
+                    {% for error in branding_form.theme_mode.errors %}
+                      <div class="form-error">{{ error }}</div>
+                    {% endfor %}
+                  </fieldset>
+
+                  <fieldset class="field group-brand-fieldset">
+                    <legend>{{ branding_form.brand_intensity.label }}</legend>
+                    {{ branding_form.brand_intensity }}
+                    {% for error in branding_form.brand_intensity.errors %}
+                      <div class="form-error">{{ error }}</div>
+                    {% endfor %}
+                  </fieldset>
+                </div>
+
+                <div class="field">
+                  <label for="{{ branding_form.welcome_text.id_for_label }}">
+                    {{ branding_form.welcome_text.label }}
+                  </label>
+                  {{ branding_form.welcome_text }}
+                  {% if branding_form.welcome_text.help_text %}
+                    <small>{{ branding_form.welcome_text.help_text }}</small>
+                  {% endif %}
+                  {% for error in branding_form.welcome_text.errors %}
+                    <div class="form-error">{{ error }}</div>
+                  {% endfor %}
+                </div>
+
+                <div class="group-branding-actions">
+                  <button type="submit" class="btn primary">
+                    Guardar apariencia
+                  </button>
+                </div>
+              </form>
+
+              <form
+                method="post"
+                class="group-brand-reset-form"
+                data-group-brand-reset-form
+              >
+                {% csrf_token %}
+                <input
+                  type="hidden"
+                  name="form_action"
+                  value="branding_reset"
+                >
+                <button type="submit" class="btn danger-outline">
+                  Restaurar diseño estándar de Puntero
+                </button>
+              </form>
+            </div>
+          </details>
+        {% endif %}
+
         {% if is_owner and co_admin_feature_available %}
           <section class="card group-detail-section">
             <div class="group-card-label">Plan {{ group.effective_plan_label }}</div>
@@ -513,6 +752,160 @@
         form.addEventListener("submit", function (event) {
           const groupName = form.getAttribute("data-group-name");
           if (!window.confirm("¿Realmente quieres abandonar «" + groupName + "»?")) {
+            event.preventDefault();
+          }
+        });
+      });
+
+      const brandingForm = document.querySelector(
+        "[data-group-branding-form]"
+      );
+      const preview = document.querySelector("[data-brand-preview]");
+      const previewStylesheet = document.getElementById(
+        "groupBrandPreviewStylesheet"
+      );
+
+      if (brandingForm && preview && previewStylesheet) {
+        const previewWelcome = preview.querySelector(
+          "[data-brand-preview-welcome]"
+        );
+        let previewTimer = null;
+
+        function fieldValue(name, fallback) {
+          const field = brandingForm.elements[name];
+
+          if (!field) {
+            return fallback;
+          }
+
+          if (field instanceof RadioNodeList) {
+            return field.value || fallback;
+          }
+
+          return field.value || fallback;
+        }
+
+        function updatePreviewStyles() {
+          const url = new URL(
+            brandingForm.getAttribute("data-preview-stylesheet"),
+            window.location.origin
+          );
+          url.searchParams.set("preview", "1");
+          url.searchParams.set(
+            "primary",
+            fieldValue("primary_color", "#438CFF")
+          );
+          url.searchParams.set(
+            "accent",
+            fieldValue("accent_color", "#7257E8")
+          );
+          url.searchParams.set(
+            "background",
+            fieldValue("background_color", "#183153")
+          );
+          url.searchParams.set(
+            "theme",
+            fieldValue("theme_mode", "light")
+          );
+          url.searchParams.set(
+            "intensity",
+            fieldValue("brand_intensity", "normal")
+          );
+          previewStylesheet.href = url.toString();
+
+          const welcome = fieldValue("welcome_text", "").trim();
+          previewWelcome.textContent = welcome || (
+            "Aquí encuentras lo más importante de tu grupo."
+          );
+        }
+
+        function schedulePreviewUpdate() {
+          window.clearTimeout(previewTimer);
+          previewTimer = window.setTimeout(updatePreviewStyles, 70);
+        }
+
+        function bindImagePreview(
+          inputName,
+          clearName,
+          imageSelector,
+          fallbackSelector
+        ) {
+          const input = brandingForm.elements[inputName];
+          const clearInput = brandingForm.elements[clearName];
+          const image = preview.querySelector(imageSelector);
+          const fallback = fallbackSelector
+            ? preview.querySelector(fallbackSelector)
+            : null;
+
+          if (!input || !image) {
+            return;
+          }
+
+          const originalSource = image.getAttribute("src") || "";
+
+          function showSource(source) {
+            if (source) {
+              image.src = source;
+              image.hidden = false;
+              if (fallback) {
+                fallback.hidden = true;
+              }
+            } else {
+              image.removeAttribute("src");
+              image.hidden = true;
+              if (fallback) {
+                fallback.hidden = false;
+              }
+            }
+          }
+
+          input.addEventListener("change", function () {
+            const file = input.files && input.files[0];
+
+            if (!file) {
+              showSource(
+                clearInput && clearInput.checked ? "" : originalSource
+              );
+              return;
+            }
+
+            const reader = new FileReader();
+            reader.addEventListener("load", function () {
+              showSource(reader.result);
+            });
+            reader.readAsDataURL(file);
+          });
+
+          if (clearInput) {
+            clearInput.addEventListener("change", function () {
+              showSource(clearInput.checked ? "" : originalSource);
+            });
+          }
+        }
+
+        brandingForm.addEventListener("input", schedulePreviewUpdate);
+        brandingForm.addEventListener("change", schedulePreviewUpdate);
+
+        bindImagePreview(
+          "logo",
+          "logo-clear",
+          "[data-brand-preview-logo]",
+          "[data-brand-preview-logo-fallback]"
+        );
+        bindImagePreview(
+          "hero_image",
+          "hero_image-clear",
+          "[data-brand-preview-hero]",
+          null
+        );
+        updatePreviewStyles();
+      }
+
+      document.querySelectorAll("[data-group-brand-reset-form]").forEach((form) => {
+        form.addEventListener("submit", function (event) {
+          if (!window.confirm(
+            "¿Restaurar colores, imágenes y mensaje al diseño estándar de Puntero?"
+          )) {
             event.preventDefault();
           }
         });

@@ -1,5 +1,6 @@
 from django.conf import settings
 
+from .group_branding import get_visible_group_branding
 from .group_plans import group_has_entitlement
 from .models import GroupMembership
 
@@ -30,12 +31,16 @@ def active_group_context(request):
             "group": None,
             "membership": None,
             "my_groups": [],
+            "group_branding": None,
         }
 
     memberships = (
         GroupMembership.objects
         .filter(user=request.user)
-        .select_related("group__tournament")
+        .select_related(
+            "group__tournament",
+            "group__branding",
+        )
         .order_by("group__name")
     )
 
@@ -59,6 +64,9 @@ def active_group_context(request):
         "group": group,
         "membership": membership,
         "my_groups": my_groups,
+        "group_branding": get_visible_group_branding(
+            group
+        ),
         "advanced_group_stats_available": bool(
             group
             and group_has_entitlement(

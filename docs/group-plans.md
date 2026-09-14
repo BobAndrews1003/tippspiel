@@ -99,6 +99,60 @@ berücksichtigt. Weder Tippwerte noch E-Mail-Adressen werden für die
 Auswertung an die Seite übergeben. Free-Gruppen und abgelaufene
 Freigaben erhalten auf dem Endpunkt eine 404-Antwort.
 
+## Club-Personalisierung
+
+Gruppen mit einem wirksamen `Club`-Plan können unter `Apariencia` auf
+der Gruppenverwaltungsseite ein kompaktes Design-Studio öffnen und
+folgende Darstellung festlegen:
+
+- eigenes Gruppenlogo,
+- optionales Titelbild,
+- frei wählbare Haupt- und Akzentfarbe,
+- frei wählbaren Hintergrundton,
+- hellen oder dunklen Darstellungsmodus,
+- Markenintensität `dezent`, `normal` oder `kräftig`,
+- Begrüßungstext für das Dashboard.
+
+Puntero verwendet standardmäßig ein helles Design. Neue
+Club-Personalisierungen übernehmen diesen Modus zunächst; die
+Gruppenverwaltung kann weiterhin ausdrücklich auf `Oscuro` wechseln.
+
+Der Bereich ist standardmäßig eingeklappt, damit die regelmäßig
+genutzte Gruppenverwaltung übersichtlich bleibt. Bei Eingabefehlern
+öffnet er sich automatisch und zeigt die Validierung direkt am Feld.
+Eine Live-Vorschau reagiert vor dem Speichern auf Farben, Modus,
+Intensität, Text und lokal ausgewählte Bilder. Mit
+`Restaurar diseño estándar de Puntero` kann die gesamte Konfiguration
+einschließlich der hochgeladenen Bilder entfernt werden.
+
+Logo, Titelbild und Farben erscheinen in Navigation, Dashboard,
+Gruppenverwaltung und den zentralen Gruppenansichten. Die feste
+Puntero-Navigation bleibt erhalten. Farben werden als validierte
+Hex-Werte gespeichert und von einem authentifizierten Stylesheet der
+eigenen Domain in kontrollierte CSS-Variablen übersetzt. Es wird kein
+frei eingegebenes CSS akzeptiert. Hintergrundtöne werden mit einer
+sicheren hellen beziehungsweise dunklen Basis gemischt; für primäre
+Schaltflächen wird automatisch eine kontrastierende Schriftfarbe
+bestimmt.
+
+Logos dürfen höchstens 2 MB und 1600 × 1600 Pixel groß sein. Akzeptiert
+werden JPG, PNG und WebP; Dateiendung und tatsächliches Bildformat
+werden geprüft. Für Titelbilder gelten 4 MB und 2400 × 1400 Pixel.
+Ersetzte, zurückgesetzte oder zusammen mit einer Gruppe gelöschte Bilder
+werden nach einem erfolgreichen Datenbank-Commit aus dem Speicher
+entfernt.
+
+Nach dem Ablauf des Club-Plans bleibt die Konfiguration gespeichert,
+wird aber nicht mehr angezeigt oder bearbeitet. Sie wird bei einer
+erneuten Club-Freigabe automatisch wieder aktiv.
+
+Lokal liegen Logo und Titelbild im nicht versionierten
+`media/`-Verzeichnis. Vor der produktiven Nutzung von Bild-Uploads muss
+`MEDIA_ROOT` auf einen
+dauerhaften, gesicherten Speicher oder das Projekt auf einen geeigneten
+Objektspeicher zeigen. Ein flüchtiges Container-Dateisystem reicht dafür
+nicht aus.
+
 ## Was vor echten Zahlungen noch fehlt
 
 Die aktuelle Umsetzung ist absichtlich keine Abonnementverwaltung. Für

@@ -34,11 +34,23 @@
           {% endif %}
         "
       >
-        {% if group %}
-          {{ group.name }}
-        {% else %}
-          Puntero
+        {% if group_branding.logo %}
+          <img
+            class="nav-group-logo"
+            src="{{ group_branding.logo.url }}"
+            alt=""
+            width="28"
+            height="28"
+          >
         {% endif %}
+
+        <span class="nav-title-text">
+          {% if group %}
+            {{ group.name }}
+          {% else %}
+            Puntero
+          {% endif %}
+        </span>
       </a>
 
     </div>
