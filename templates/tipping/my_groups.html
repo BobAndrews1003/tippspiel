@@ -73,6 +73,18 @@
                   </span>
                 {% endif %}
 
+                {% if row.is_co_admin %}
+                  <span class="pill">
+                    Coadministrador
+                  </span>
+                {% endif %}
+
+                {% if group_plans_enabled %}
+                  <span class="pill group-plan-badge group-plan-badge--{{ row.group.effective_plan }}">
+                    {{ row.group.effective_plan_label }}
+                  </span>
+                {% endif %}
+
                 {% if not row.group.join_enabled %}
                   <span class="pill">
                     Acceso cerrado

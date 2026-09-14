@@ -269,3 +269,39 @@ class ViewQueryCountTests(TestCase):
             ),
             view_name="Tabelle",
         )
+
+    def test_advanced_stats_query_count_does_not_scale(self):
+        Group.objects.filter(
+            pk__in=[
+                self.small_group.pk,
+                self.large_group.pk,
+            ]
+        ).update(plan=Group.Plan.PLUS)
+
+        small_count = self.count_view_queries(
+            group=self.small_group,
+            user=self.small_owner,
+            url=reverse(
+                "advanced_group_stats",
+                args=[self.small_group.id],
+            ),
+        )
+        large_count = self.count_view_queries(
+            group=self.large_group,
+            user=self.large_owner,
+            url=reverse(
+                "advanced_group_stats",
+                args=[self.large_group.id],
+            ),
+        )
+
+        self.assertLessEqual(
+            large_count,
+            small_count + 2,
+            msg=(
+                "Erweiterte Statistiken: Die Abfragezahl wächst "
+                "zu stark mit der Gruppengröße. "
+                f"Kleine Gruppe: {small_count}, "
+                f"große Gruppe: {large_count}."
+            ),
+        )

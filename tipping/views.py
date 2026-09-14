@@ -35,6 +35,12 @@ from .forms import (
     GroupSettingsForm,
     TipReminderSettingsForm,
 )
+from .advanced_stats import build_advanced_group_stats
+from .group_plans import (
+    get_group_plan_catalog,
+    group_has_entitlement,
+    group_member_limit,
+)
 from .membership_processing import (
     rebuild_group_after_membership_change,
 )
@@ -84,6 +90,86 @@ def help_page(request):
     return render(
         request,
         "tipping/help.html",
+    )
+
+
+@require_safe
+def group_plans(request):
+    """Noch nicht kaufbare Tarifvorschau für die Produktvalidierung."""
+
+    if not settings.GROUP_PLANS_ENABLED:
+        raise Http404
+
+    return render(
+        request,
+        "tipping/group_plans.html",
+        {
+            "plans": get_group_plan_catalog(),
+            "plan_limits_enabled": (
+                settings.GROUP_PLAN_LIMITS_ENABLED
+            ),
+        },
+    )
+
+
+@login_required
+@require_safe
+def advanced_group_stats(
+    request: HttpRequest,
+    group_id: int,
+):
+    membership = get_object_or_404(
+        GroupMembership.objects
+        .select_related(
+            "group__tournament",
+        ),
+        group_id=group_id,
+        user=request.user,
+    )
+    group = membership.group
+
+    if not group_has_entitlement(
+        group,
+        "advanced_stats",
+    ):
+        raise Http404
+
+    active_section = request.GET.get(
+        "section",
+        "overview",
+    )
+
+    if active_section not in {
+        "overview",
+        "compare",
+        "participation",
+    }:
+        active_section = "overview"
+
+    stats_context = build_advanced_group_stats(
+        group=group,
+        viewer_user_id=request.user.id,
+        requested_player_a_id=(
+            _parse_positive_database_id(
+                request.GET.get("player_a")
+            )
+        ),
+        requested_player_b_id=(
+            _parse_positive_database_id(
+                request.GET.get("player_b")
+            )
+        ),
+    )
+
+    return render(
+        request,
+        "tipping/advanced_group_stats.html",
+        {
+            "group": group,
+            "advanced_group_stats_available": True,
+            "active_section": active_section,
+            **stats_context,
+        },
     )
 
 
@@ -305,6 +391,41 @@ def _is_group_owner(
         or (
             group.owner_id is None
             and membership.is_creator
+        )
+    )
+
+
+def _is_group_co_admin(
+    *,
+    group: Group,
+    membership: GroupMembership | None,
+) -> bool:
+    """Co-Admin-Rechte gelten nur bei aktivem Plus- oder Club-Plan."""
+
+    return bool(
+        membership is not None
+        and membership.is_active
+        and membership.is_co_admin
+        and group_has_entitlement(
+            group,
+            "co_admins",
+        )
+    )
+
+
+def _can_manage_group(
+    *,
+    group: Group,
+    membership: GroupMembership | None,
+) -> bool:
+    return (
+        _is_group_owner(
+            group=group,
+            membership=membership,
+        )
+        or _is_group_co_admin(
+            group=group,
+            membership=membership,
         )
     )
 
@@ -2617,37 +2738,86 @@ def join_group(request):
             )
 
         restored = False
+        created = False
 
         if existing_membership is not None:
             membership = existing_membership
-            created = False
         else:
-            membership = (
-                GroupMembership.all_objects
-                .filter(
-                    user=request.user,
-                    group=group,
+            # Die Gruppensperre serialisiert parallele Beitritte in
+            # PostgreSQL, damit ein aktives Plan-Limit nicht durch zwei
+            # gleichzeitige Anfragen überschritten werden kann.
+            with transaction.atomic():
+                group = (
+                    Group.objects
+                    .select_for_update()
+                    .select_related("tournament")
+                    .get(pk=group.pk)
                 )
-                .first()
-            )
 
-            if membership is not None:
-                membership.is_active = True
-                membership.removed_at = None
-                membership.save(
-                    update_fields=[
-                        "is_active",
-                        "removed_at",
-                    ]
+                # Ein paralleler Request desselben Nutzers könnte die
+                # Mitgliedschaft inzwischen bereits angelegt haben.
+                membership = (
+                    GroupMembership.objects
+                    .filter(
+                        user=request.user,
+                        group=group,
+                    )
+                    .first()
                 )
-                restored = True
-                created = False
-            else:
-                membership = GroupMembership.objects.create(
-                    user=request.user,
-                    group=group,
-                )
-                created = True
+
+                if membership is None:
+                    member_limit = group_member_limit(group)
+                    active_member_count = (
+                        GroupMembership.objects
+                        .filter(group=group)
+                        .count()
+                    )
+
+                    if (
+                        member_limit is not None
+                        and active_member_count >= member_limit
+                    ):
+                        messages.error(
+                            request,
+                            (
+                                "Este grupo alcanzó el límite de "
+                                f"{member_limit} participantes de su "
+                                f"plan {group.effective_plan_label}. "
+                                "Pide al administrador que revise el plan."
+                            ),
+                        )
+                        return render(
+                            request,
+                            "tipping/join.html",
+                            {"code": code},
+                        )
+
+                    membership = (
+                        GroupMembership.all_objects
+                        .filter(
+                            user=request.user,
+                            group=group,
+                        )
+                        .first()
+                    )
+
+                if membership is not None:
+                    if not membership.is_active:
+                        membership.is_active = True
+                        membership.removed_at = None
+                        membership.save(
+                            update_fields=[
+                                "is_active",
+                                "removed_at",
+                            ]
+                        )
+                        restored = True
+                else:
+                    membership = GroupMembership.objects.create(
+                        user=request.user,
+                        group=group,
+                    )
+                    created = True
 
         request.session["active_group_id"] = group.id
 
@@ -2947,6 +3117,10 @@ def my_groups(request):
             "membership": membership,
             "group": current_group,
             "is_owner": is_owner,
+            "is_co_admin": _is_group_co_admin(
+                group=current_group,
+                membership=membership,
+            ),
             "is_active": (
                 current_group.id == active_group_id
             ),
@@ -2989,6 +3163,19 @@ def group_detail(
         group=group,
         membership=membership,
     )
+    is_co_admin = _is_group_co_admin(
+        group=group,
+        membership=membership,
+    )
+    can_manage_group = is_owner or is_co_admin
+    co_admin_feature_available = group_has_entitlement(
+        group,
+        "co_admins",
+    )
+    advanced_stats_feature_available = group_has_entitlement(
+        group,
+        "advanced_stats",
+    )
 
     settings_form = GroupSettingsForm(
         request.POST or None,
@@ -2996,7 +3183,7 @@ def group_detail(
     )
 
     if request.method == "POST":
-        if not is_owner:
+        if not can_manage_group:
             messages.error(
                 request,
                 (
@@ -3079,15 +3266,33 @@ def group_detail(
                 f"Jugador {member_membership.user_id}"
             )
 
+        member_is_owner = _is_group_owner(
+            group=group,
+            membership=member_membership,
+        )
+        member_is_co_admin = _is_group_co_admin(
+            group=group,
+            membership=member_membership,
+        )
+
         member_rows.append(
             {
                 "membership": member_membership,
                 "display_name": display_name,
                 "points": points,
                 "matchday_wins": matchday_wins,
-                "is_owner": _is_group_owner(
-                    group=group,
-                    membership=member_membership,
+                "is_owner": member_is_owner,
+                "is_co_admin": member_is_co_admin,
+                "is_co_admin_assigned": (
+                    member_membership.is_co_admin
+                ),
+                "can_remove": (
+                    can_manage_group
+                    and not member_is_owner
+                    and (
+                        is_owner
+                        or not member_membership.is_co_admin
+                    )
                 ),
             }
         )
@@ -3130,6 +3335,14 @@ def group_detail(
             "group": group,
             "membership": membership,
             "is_owner": is_owner,
+            "is_co_admin": is_co_admin,
+            "can_manage_group": can_manage_group,
+            "co_admin_feature_available": (
+                co_admin_feature_available
+            ),
+            "advanced_stats_feature_available": (
+                advanced_stats_feature_available
+            ),
             "is_active": (
                 request.session.get("active_group_id")
                 == group.id
@@ -3169,7 +3382,7 @@ def rotate_group_join_code(
             .first()
         )
 
-        if not _is_group_owner(
+        if not _can_manage_group(
             group=group,
             membership=membership,
         ):
@@ -3218,7 +3431,12 @@ def remove_group_member(
             .first()
         )
 
-        if not _is_group_owner(
+        current_is_owner = _is_group_owner(
+            group=group,
+            membership=current_membership,
+        )
+
+        if not _can_manage_group(
             group=group,
             membership=current_membership,
         ):
@@ -3268,6 +3486,22 @@ def remove_group_member(
                 group_id=group.id,
             )
 
+        if (
+            target_membership.is_co_admin
+            and not current_is_owner
+        ):
+            messages.error(
+                request,
+                (
+                    "Solo el administrador principal puede eliminar "
+                    "a otro coadministrador."
+                ),
+            )
+            return redirect(
+                "group_detail",
+                group_id=group.id,
+            )
+
         display_name = (
             target_membership.user.username.strip()
             if target_membership.user.username
@@ -3277,10 +3511,12 @@ def remove_group_member(
         # Die Mitgliedschaft wird deaktiviert. Tipp- und Bonusdaten
         # bleiben für einen späteren, bewussten Wiedereintritt erhalten.
         target_membership.is_active = False
+        target_membership.is_co_admin = False
         target_membership.removed_at = timezone.now()
         target_membership.save(
             update_fields=[
                 "is_active",
+                "is_co_admin",
                 "removed_at",
             ]
         )
@@ -3297,6 +3533,137 @@ def remove_group_member(
             "de acceso fue renovado."
         ),
     )
+    return redirect(
+        "group_detail",
+        group_id=group.id,
+    )
+
+
+@login_required
+@require_POST
+def set_group_co_admin(
+    request: HttpRequest,
+    group_id: int,
+    user_id: int,
+):
+    action = request.POST.get("action", "").strip()
+
+    if action not in {"grant", "revoke"}:
+        messages.error(
+            request,
+            "La acción de coadministrador no es válida.",
+        )
+        return redirect(
+            "group_detail",
+            group_id=group_id,
+        )
+
+    with transaction.atomic():
+        group = get_object_or_404(
+            Group.objects.select_for_update(),
+            pk=group_id,
+        )
+        current_membership = (
+            GroupMembership.objects
+            .filter(
+                group=group,
+                user=request.user,
+            )
+            .first()
+        )
+
+        if not _is_group_owner(
+            group=group,
+            membership=current_membership,
+        ):
+            messages.error(
+                request,
+                (
+                    "Solo el administrador principal puede cambiar "
+                    "los coadministradores."
+                ),
+            )
+            return redirect("my_groups")
+
+        target_membership = (
+            GroupMembership.objects
+            .select_for_update()
+            .select_related("user")
+            .filter(
+                group=group,
+                user_id=user_id,
+            )
+            .first()
+        )
+
+        if target_membership is None:
+            messages.error(
+                request,
+                "El participante ya no pertenece al grupo.",
+            )
+            return redirect(
+                "group_detail",
+                group_id=group.id,
+            )
+
+        if _is_group_owner(
+            group=group,
+            membership=target_membership,
+        ):
+            messages.error(
+                request,
+                (
+                    "El administrador principal no necesita el rol "
+                    "de coadministrador."
+                ),
+            )
+            return redirect(
+                "group_detail",
+                group_id=group.id,
+            )
+
+        if (
+            action == "grant"
+            and not group_has_entitlement(
+                group,
+                "co_admins",
+            )
+        ):
+            messages.error(
+                request,
+                (
+                    "Los coadministradores están disponibles en los "
+                    "planes Plus y Club."
+                ),
+            )
+            return redirect(
+                "group_detail",
+                group_id=group.id,
+            )
+
+        should_be_co_admin = action == "grant"
+        target_membership.is_co_admin = should_be_co_admin
+        target_membership.save(
+            update_fields=["is_co_admin"],
+        )
+
+        display_name = (
+            target_membership.user.username.strip()
+            if target_membership.user.username
+            else ""
+        ) or f"Jugador {target_membership.user_id}"
+
+    if should_be_co_admin:
+        messages.success(
+            request,
+            f"{display_name} ahora es coadministrador del grupo.",
+        )
+    else:
+        messages.success(
+            request,
+            f"{display_name} ya no es coadministrador del grupo.",
+        )
+
     return redirect(
         "group_detail",
         group_id=group.id,
@@ -3410,9 +3777,13 @@ def transfer_group_ownership(
         )
 
         new_owner_membership.is_creator = True
+        new_owner_membership.is_co_admin = False
 
         new_owner_membership.save(
-            update_fields=["is_creator"],
+            update_fields=[
+                "is_creator",
+                "is_co_admin",
+            ],
         )
 
         new_owner_name = (

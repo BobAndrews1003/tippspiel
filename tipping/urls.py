@@ -10,6 +10,11 @@ urlpatterns = [
         name="help_page",
     ),
     path(
+        "planes/",
+        views.group_plans,
+        name="group_plans",
+    ),
+    path(
         "privacidad/",
         views.privacy_policy,
         name="privacy_policy",
@@ -80,6 +85,11 @@ urlpatterns = [
         name="group_detail",
     ),
     path(
+        "groups/<int:group_id>/estadisticas/",
+        views.advanced_group_stats,
+        name="advanced_group_stats",
+    ),
+    path(
         "groups/<int:group_id>/rotate-code/",
         views.rotate_group_join_code,
         name="rotate_group_join_code",
@@ -88,6 +98,11 @@ urlpatterns = [
         "groups/<int:group_id>/members/<int:user_id>/remove/",
         views.remove_group_member,
         name="remove_group_member",
+    ),
+    path(
+        "groups/<int:group_id>/members/<int:user_id>/co-admin/",
+        views.set_group_co_admin,
+        name="set_group_co_admin",
     ),
     path(
         "groups/<int:group_id>/leave/",

@@ -44,6 +44,13 @@
       Una vez creado el grupo, recibirás un código de unión que podrás compartir con otras personas.
     </div>
 
+    {% if group_plans_enabled %}
+      <div class="muted small" style="margin-top:8px;">
+        El grupo comenzará con el plan Free.
+        <a href="{% url 'group_plans' %}">Comparar planes</a>
+      </div>
+    {% endif %}
+
   </div>
 </div>
 {% endblock %}

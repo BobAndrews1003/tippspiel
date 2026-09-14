@@ -304,6 +304,10 @@ TEMPLATES = [
                     "tipping.context_processors."
                     "legal_pages_context"
                 ),
+                (
+                    "tipping.context_processors."
+                    "group_plans_context"
+                ),
             ],
         },
     },
@@ -816,6 +820,95 @@ if (
         "Rechtliche Seiten dürfen in Produktion erst ohne "
         "Platzhalter und mit LEGAL_REVIEW_CONFIRMED=1 "
         "aktiviert werden."
+    )
+
+
+# ============================================================
+# Gruppenpläne
+# ============================================================
+
+# Die Tarifansicht und die tatsächliche Durchsetzung der Limits
+# sind absichtlich getrennt. Dadurch kann der Katalog getestet
+# werden, ohne bestehende Gruppen im privaten Testlauf zu sperren.
+GROUP_PLANS_ENABLED = env_bool(
+    "GROUP_PLANS_ENABLED",
+    default=False,
+)
+
+GROUP_PLAN_LIMITS_ENABLED = env_bool(
+    "GROUP_PLAN_LIMITS_ENABLED",
+    default=False,
+)
+
+GROUP_PLAN_FREE_MEMBER_LIMIT = env_int(
+    "GROUP_PLAN_FREE_MEMBER_LIMIT",
+    20,
+)
+
+GROUP_PLAN_PLUS_MEMBER_LIMIT = env_int(
+    "GROUP_PLAN_PLUS_MEMBER_LIMIT",
+    100,
+)
+
+GROUP_PLAN_PLUS_PRICE_USD = env_int(
+    "GROUP_PLAN_PLUS_PRICE_USD",
+    12,
+)
+
+GROUP_PLAN_CLUB_PRICE_USD = env_int(
+    "GROUP_PLAN_CLUB_PRICE_USD",
+    99,
+)
+
+
+if GROUP_PLAN_FREE_MEMBER_LIMIT < 2:
+    raise RuntimeError(
+        "GROUP_PLAN_FREE_MEMBER_LIMIT muss mindestens 2 sein."
+    )
+
+
+if (
+    GROUP_PLAN_PLUS_MEMBER_LIMIT
+    <= GROUP_PLAN_FREE_MEMBER_LIMIT
+):
+    raise RuntimeError(
+        "GROUP_PLAN_PLUS_MEMBER_LIMIT muss größer als das "
+        "Free-Limit sein."
+    )
+
+
+if (
+    GROUP_PLAN_PLUS_PRICE_USD < 1
+    or GROUP_PLAN_CLUB_PRICE_USD < 1
+):
+    raise RuntimeError(
+        "Die konfigurierten Gruppenpreise müssen positiv sein."
+    )
+
+
+if (
+    GROUP_PLAN_LIMITS_ENABLED
+    and not GROUP_PLANS_ENABLED
+):
+    raise RuntimeError(
+        "GROUP_PLAN_LIMITS_ENABLED setzt "
+        "GROUP_PLANS_ENABLED=1 voraus."
+    )
+
+
+if (
+    GROUP_PLANS_ENABLED
+    and not DEBUG
+    and (
+        not LEGAL_PAGES_ENABLED
+        or LEGAL_PAGES_HAVE_PLACEHOLDERS
+        or not LEGAL_REVIEW_CONFIRMED
+    )
+):
+    raise RuntimeError(
+        "Gruppenpläne dürfen in Produktion erst zusammen mit "
+        "vollständigen und geprüften Rechtstexten veröffentlicht "
+        "werden."
     )
 
 

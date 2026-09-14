@@ -1,0 +1,343 @@
+{% extends "tipping/base.html" %}
+
+{% block title %}Análisis de {{ group.name }}{% endblock %}
+{% block body_class %}advanced-stats-page{% endblock %}
+
+{% block content %}
+  <div class="container advanced-stats-container">
+    <a class="advanced-stats-back" href="{% url 'group_detail' group.id %}">
+      ← Volver al grupo
+    </a>
+
+    <section class="card advanced-stats-hero advanced-stats-hero--compact">
+      <div>
+        <div class="group-card-label">Plan {{ group.effective_plan_label }}</div>
+        <h1>Análisis del grupo</h1>
+        <p>Rendimiento de <strong>{{ group.name }}</strong> de un vistazo.</p>
+      </div>
+    </section>
+
+    <nav class="advanced-stats-tabs" aria-label="Secciones del análisis">
+      <a
+        href="?section=overview"
+        {% if active_section == "overview" %}class="is-active" aria-current="page"{% endif %}
+      >Resumen</a>
+      <a
+        href="?section=compare"
+        {% if active_section == "compare" %}class="is-active" aria-current="page"{% endif %}
+      >Comparar</a>
+      <a
+        href="?section=participation"
+        {% if active_section == "participation" %}class="is-active" aria-current="page"{% endif %}
+      >Participación</a>
+    </nav>
+
+    {% if active_section == "overview" %}
+      <section class="stats-kpis advanced-stats-kpis" aria-label="Resumen del grupo">
+        <article class="stats-kpi">
+          <span class="stats-kpi-label">Participantes</span>
+          <strong class="stats-kpi-value">{{ member_count }}</strong>
+        </article>
+        <article class="stats-kpi">
+          <span class="stats-kpi-label">Fechas evaluadas</span>
+          <strong class="stats-kpi-value">{{ evaluated_matchday_count }}</strong>
+        </article>
+        <article class="stats-kpi">
+          <span class="stats-kpi-label">Participación</span>
+          <strong class="stats-kpi-value">{{ participation_rate }}%</strong>
+          <span class="stats-kpi-note">solo partidos ya iniciados</span>
+        </article>
+        <article class="stats-kpi">
+          <span class="stats-kpi-label">Cambios de líder</span>
+          <strong class="stats-kpi-value">{{ leader_changes }}</strong>
+        </article>
+      </section>
+
+      <section class="stats-card">
+        <header class="stats-card-header advanced-stats-section-head">
+          <div>
+            <div class="stats-card-eyebrow">Clasificación</div>
+            <h2>Rendimiento del grupo</h2>
+          </div>
+          <span class="muted small">{{ evaluated_prediction_count }} pronósticos evaluados</span>
+        </header>
+
+        <div class="advanced-table-wrap">
+          <table class="advanced-stats-table advanced-summary-table">
+            <thead>
+              <tr>
+                <th>Participante</th>
+                <th>Pos.</th>
+                <th>Puntos</th>
+                <th>Últ. 5</th>
+                <th>Aciertos</th>
+                <th>Exactos</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for player in member_rows %}
+                <tr{% if player.is_viewer %} class="advanced-row-me"{% endif %}>
+                  <td>
+                    <strong>{{ player.display_name }}</strong>
+                    {% if player.is_viewer %}<span class="pill">Tú</span>{% endif %}
+                  </td>
+                  <td>{% if player.rank %}{{ player.rank }}.{% else %}—{% endif %}</td>
+                  <td><strong>{{ player.match_points }}</strong></td>
+                  <td>{{ player.last_five_points }}</td>
+                  <td>{{ player.hit_rate }}%</td>
+                  <td>{{ player.exact_predictions }}</td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="6">Todavía no hay participantes activos.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        {% if bonus_reveal %}
+          <p class="stats-card-note">Los puntos y la posición incluyen el bonus ya visible.</p>
+        {% endif %}
+      </section>
+    {% elif active_section == "compare" %}
+      <section class="stats-card advanced-compare-card">
+        <header class="stats-card-header advanced-stats-section-head">
+          <div>
+            <div class="stats-card-eyebrow">Cara a cara</div>
+            <h2>Comparar participantes</h2>
+          </div>
+        </header>
+
+        <form method="get" class="advanced-compare-form">
+          <input type="hidden" name="section" value="compare">
+          <div class="field">
+            <label for="advanced-player-a">Participante 1</label>
+            <select id="advanced-player-a" name="player_a">
+              {% for option in member_options %}
+                <option
+                  value="{{ option.user_id }}"
+                  {% if option.user_id == selected_player_a_id %}selected{% endif %}
+                >{{ option.display_name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="advanced-player-b">Participante 2</label>
+            <select id="advanced-player-b" name="player_b">
+              {% for option in member_options %}
+                <option
+                  value="{{ option.user_id }}"
+                  {% if option.user_id == selected_player_b_id %}selected{% endif %}
+                >{{ option.display_name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <button class="btn primary" type="submit">Comparar</button>
+        </form>
+
+        {% if comparison_rows %}
+          <div class="advanced-comparison-grid">
+            {% for player in comparison_rows %}
+              <article class="advanced-player-card">
+                <div class="advanced-player-heading">
+                  <div>
+                    <span>Participante {{ forloop.counter }}</span>
+                    <h3>{{ player.display_name }}</h3>
+                  </div>
+                  {% if player.is_viewer %}<span class="pill">Tú</span>{% endif %}
+                </div>
+
+                <dl class="advanced-player-metrics">
+                  <div><dt>Puntos</dt><dd>{{ player.match_points }}</dd></div>
+                  <div><dt>Posición</dt><dd>{% if player.rank %}{{ player.rank }}.{% else %}—{% endif %}</dd></div>
+                  <div><dt>Promedio por fecha</dt><dd>{{ player.average_points|default_if_none:"—" }}</dd></div>
+                  <div><dt>Aciertos</dt><dd>{{ player.hit_rate }}%</dd></div>
+                  <div><dt>Exactos</dt><dd>{{ player.exact_predictions }}</dd></div>
+                  <div><dt>Victorias de fecha</dt><dd>{{ player.matchday_wins }}</dd></div>
+                </dl>
+              </article>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </section>
+
+      {% if timeline_labels %}
+        {{ timeline_labels|json_script:"advancedTimelineLabels" }}
+        {{ comparison_series|json_script:"advancedComparisonSeries" }}
+
+        <section class="stats-chart-grid advanced-chart-grid">
+          <article class="stats-card">
+            <header class="stats-card-header">
+              <div>
+                <div class="stats-card-eyebrow">Temporada</div>
+                <h2>Evolución de puntos</h2>
+              </div>
+            </header>
+            <div class="stats-chart advanced-line-chart">
+              <canvas id="advancedPointsChart" aria-label="Evolución de puntos acumulados"></canvas>
+            </div>
+          </article>
+
+          <article class="stats-card">
+            <header class="stats-card-header">
+              <div>
+                <div class="stats-card-eyebrow">Clasificación</div>
+                <h2>Evolución de posición</h2>
+              </div>
+            </header>
+            <div class="stats-chart advanced-line-chart">
+              <canvas id="advancedRankChart" aria-label="Evolución de posiciones"></canvas>
+            </div>
+            <p class="stats-card-note">La posición 1 aparece en la parte superior.</p>
+          </article>
+        </section>
+      {% else %}
+        <section class="stats-empty advanced-stats-empty">
+          <div class="stats-empty-icon">📈</div>
+          <h2>La evolución aparecerá con los primeros resultados</h2>
+          <p>Por ahora todavía no existe una fecha evaluada para este grupo.</p>
+        </section>
+      {% endif %}
+    {% else %}
+      <section class="stats-card">
+        <header class="stats-card-header advanced-stats-section-head">
+          <div>
+            <div class="stats-card-eyebrow">Resumen</div>
+            <h2>Participación por persona</h2>
+          </div>
+        </header>
+
+        <div class="advanced-table-wrap">
+          <table class="advanced-stats-table advanced-participant-table">
+            <thead>
+              <tr>
+                <th>Participante</th>
+                <th>Entregados</th>
+                <th>Cuota</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for player in member_rows %}
+                <tr{% if player.is_viewer %} class="advanced-row-me"{% endif %}>
+                  <td>
+                    <strong>{{ player.display_name }}</strong>
+                    {% if player.is_viewer %}<span class="pill">Tú</span>{% endif %}
+                  </td>
+                  <td>{{ player.submitted_predictions }}/{{ player.expected_predictions }}</td>
+                  <td><strong>{{ player.participation_rate }}%</strong></td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="3">Todavía no hay participantes activos.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="stats-card">
+        <header class="stats-card-header advanced-stats-section-head">
+          <div>
+            <div class="stats-card-eyebrow">Actividad</div>
+            <h2>Participación por fecha</h2>
+          </div>
+        </header>
+
+        {% if participation_rows %}
+          <div class="advanced-participation-list">
+            {% for row in participation_rows %}
+              <div class="advanced-participation-row">
+                <strong>Fecha {{ row.matchday }}</strong>
+                <span>{{ row.matches }} partido{{ row.matches|pluralize:"s" }} iniciado{{ row.matches|pluralize:"s" }}</span>
+                <div class="advanced-progress" aria-hidden="true">
+                  <span style="--advanced-progress: {{ row.rate }}%"></span>
+                </div>
+                <span>{{ row.submitted }}/{{ row.expected }}</span>
+                <strong>{{ row.rate }}%</strong>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="stats-card-note">La participación aparecerá después del primer inicio.</p>
+        {% endif %}
+
+        <p class="stats-card-note advanced-privacy-note">
+          La cuota solo indica si se guardó un pronóstico para un partido ya iniciado.
+          Nunca muestra su contenido antes del bloqueo.
+        </p>
+      </section>
+    {% endif %}
+  </div>
+{% endblock %}
+
+{% block extra_js %}
+  {{ block.super }}
+  {% if active_section == "compare" and timeline_labels %}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+      (function () {
+        const labelsNode = document.getElementById("advancedTimelineLabels");
+        const seriesNode = document.getElementById("advancedComparisonSeries");
+
+        if (!labelsNode || !seriesNode || typeof Chart === "undefined") return;
+
+        const labels = JSON.parse(labelsNode.textContent);
+        const series = JSON.parse(seriesNode.textContent);
+        const styles = getComputedStyle(document.documentElement);
+        const text = styles.getPropertyValue("--text").trim() || "#e8eefc";
+        const muted = styles.getPropertyValue("--muted").trim() || "#a9b6d6";
+        const grid = "rgba(255,255,255,.08)";
+
+        function datasets(key) {
+          return series.map(function (item) {
+            return {
+              label: item.label,
+              data: item[key],
+              borderColor: item.color,
+              backgroundColor: item.color,
+              pointRadius: 3,
+              pointHoverRadius: 5,
+              borderWidth: 3,
+              tension: 0.25,
+              spanGaps: true
+            };
+          });
+        }
+
+        function options(rankChart) {
+          return {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: "index", intersect: false },
+            plugins: {
+              legend: { labels: { color: text, usePointStyle: true } }
+            },
+            scales: {
+              x: { ticks: { color: muted }, grid: { color: grid } },
+              y: {
+                beginAtZero: !rankChart,
+                reverse: rankChart,
+                suggestedMin: rankChart ? 1 : 0,
+                suggestedMax: rankChart ? {{ member_count }} : undefined,
+                ticks: { color: muted, precision: 0 },
+                grid: { color: grid }
+              }
+            }
+          };
+        }
+
+        new Chart(document.getElementById("advancedPointsChart"), {
+          type: "line",
+          data: { labels: labels, datasets: datasets("points") },
+          options: options(false)
+        });
+
+        new Chart(document.getElementById("advancedRankChart"), {
+          type: "line",
+          data: { labels: labels, datasets: datasets("ranks") },
+          options: options(true)
+        });
+      })();
+    </script>
+  {% endif %}
+{% endblock %}

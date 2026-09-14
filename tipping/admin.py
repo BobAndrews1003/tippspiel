@@ -149,6 +149,8 @@ class GroupAdmin(admin.ModelAdmin):
         "id",
         "name",
         "tournament",
+        "effective_plan_name",
+        "plan_expires_at",
         "join_enabled",
         "join_code",
     )
@@ -160,8 +162,44 @@ class GroupAdmin(admin.ModelAdmin):
 
     list_filter = (
         "tournament",
+        "plan",
         "join_enabled",
     )
+
+    fieldsets = (
+        (
+            "Gruppe",
+            {
+                "fields": (
+                    "name",
+                    "tournament",
+                    "owner",
+                    "join_enabled",
+                    "join_code",
+                ),
+            },
+        ),
+        (
+            "Gruppenplan (manuelle Testfreigabe)",
+            {
+                "fields": (
+                    "plan",
+                    "plan_expires_at",
+                ),
+                "description": (
+                    "Es existiert noch kein Checkout. Plus und Club "
+                    "dürfen derzeit nur für Tests vergeben werden."
+                ),
+            },
+        ),
+    )
+
+    @admin.display(
+        description="Wirksamer Plan",
+        ordering="plan",
+    )
+    def effective_plan_name(self, obj):
+        return obj.effective_plan_label
 
 
 @admin.register(Match)
@@ -192,12 +230,16 @@ class GroupMembershipAdmin(admin.ModelAdmin):
         "id",
         "user",
         "group",
+        "is_creator",
+        "is_co_admin",
         "is_active",
         "removed_at",
     )
 
     list_filter = (
         "group",
+        "is_creator",
+        "is_co_admin",
         "is_active",
     )
 

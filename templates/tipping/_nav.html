@@ -140,6 +140,15 @@
               Tabla general
             </a>
 
+            {% if advanced_group_stats_available %}
+              <a
+                href="{% url 'advanced_group_stats' group.id %}"
+                class="nav-link {% if request.resolver_match.url_name == 'advanced_group_stats' %}active{% endif %}"
+              >
+                Análisis del grupo
+              </a>
+            {% endif %}
+
             <a
               href="{% url 'bonus_tips' %}"
               class="nav-link {% if request.resolver_match.url_name == 'bonus_tips' %}active{% endif %}"
@@ -207,6 +216,15 @@
         >
           Ayuda y preguntas frecuentes
         </a>
+
+        {% if group_plans_enabled %}
+          <a
+            href="{% url 'group_plans' %}"
+            class="nav-link {% if request.resolver_match.url_name == 'group_plans' %}active{% endif %}"
+          >
+            Planes para grupos
+          </a>
+        {% endif %}
 
         {% if legal_pages_enabled %}
           <a

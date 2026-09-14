@@ -10,6 +10,12 @@
         Reglas
       </a>
 
+      {% if group_plans_enabled %}
+        <a href="{% url 'group_plans' %}">
+          Planes
+        </a>
+      {% endif %}
+
       {% if legal_pages_enabled %}
         <a href="{% url 'privacy_policy' %}">
           Privacidad

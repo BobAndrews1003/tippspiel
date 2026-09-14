@@ -1,5 +1,6 @@
 from django.conf import settings
 
+from .group_plans import group_has_entitlement
 from .models import GroupMembership
 
 
@@ -9,6 +10,16 @@ def legal_pages_context(request):
     return {
         "legal_pages_enabled": (
             settings.LEGAL_PAGES_ENABLED
+        ),
+    }
+
+
+def group_plans_context(request):
+    """Blendet die unverbindliche Tarifvorschau zentral ein oder aus."""
+
+    return {
+        "group_plans_enabled": (
+            settings.GROUP_PLANS_ENABLED
         ),
     }
 
@@ -48,4 +59,11 @@ def active_group_context(request):
         "group": group,
         "membership": membership,
         "my_groups": my_groups,
+        "advanced_group_stats_available": bool(
+            group
+            and group_has_entitlement(
+                group,
+                "advanced_stats",
+            )
+        ),
     }

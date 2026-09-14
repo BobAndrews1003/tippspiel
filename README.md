@@ -67,6 +67,10 @@ bin/check_acceptance.sh
 Die ergänzende manuelle Produktprüfung ist in
 [`docs/release-acceptance.md`](docs/release-acceptance.md) dokumentiert.
 
+Die vorbereiteten, standardmäßig deaktivierten Gruppenpläne Free, Plus
+und Club sowie der noch fehlende Weg zur Zahlungsabwicklung sind in
+[`docs/group-plans.md`](docs/group-plans.md) beschrieben.
+
 ## Produktionsarchitektur auf Railway
 
 In einem Railway-Projekt werden vier Services angelegt:

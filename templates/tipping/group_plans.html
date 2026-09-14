@@ -1,0 +1,101 @@
+{% extends "tipping/base.html" %}
+
+{% block title %}Planes para grupos{% endblock %}
+
+{% block body_class %}plans-page{% endblock %}
+
+{% block extra_head %}
+  <meta name="robots" content="noindex,nofollow">
+{% endblock %}
+
+{% block content %}
+  <div class="container plans-container">
+    <section class="card groups-page-header plans-hero">
+      <div class="plans-kicker">Planes para organizadores</div>
+      <h1>Todos juegan gratis. El organizador elige el tamaño.</h1>
+      <p>
+        Crea una competición privada y empieza con Free. Plus y Club
+        son propuestas para financiar funciones adicionales sin llenar
+        el juego de publicidad.
+      </p>
+
+      <div class="plans-preview-note" role="note">
+        <strong>Vista previa:</strong>
+        todavía no hay pagos, renovaciones ni compras disponibles.
+        Los precios y las funciones marcadas como futuras pueden cambiar.
+      </div>
+    </section>
+
+    <div class="plans-grid">
+      {% for plan in plans %}
+        <section class="card plan-card{% if plan.highlighted %} plan-card--highlighted{% endif %}">
+          {% if plan.highlighted %}
+            <span class="plan-recommendation">Recomendado</span>
+          {% endif %}
+
+          <div class="plan-card-head">
+            <div>
+              <div class="group-card-label">Plan</div>
+              <h2>{{ plan.name }}</h2>
+            </div>
+
+            <div class="plan-price">
+              <strong>{{ plan.price }}</strong>
+              <span>{{ plan.billing_note }}</span>
+            </div>
+          </div>
+
+          <p class="muted plan-description">{{ plan.description }}</p>
+
+          <div class="plan-limit">{{ plan.member_limit_label }}</div>
+
+          <h3>Incluido desde el inicio</h3>
+          <ul class="plan-features">
+            {% for feature in plan.included_features %}
+              <li>{{ feature }}</li>
+            {% endfor %}
+          </ul>
+
+          {% if plan.planned_features %}
+            <h3>Funciones previstas</h3>
+            <ul class="plan-features plan-features--planned">
+              {% for feature in plan.planned_features %}
+                <li>{{ feature }}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+
+          <div class="plan-card-action">
+            {% if plan.code == "free" %}
+              {% if request.user.is_authenticated %}
+                <a class="btn primary" href="{% url 'create_group' %}">
+                  Crear grupo gratis
+                </a>
+              {% else %}
+                <a class="btn primary" href="{% url 'account_signup' %}">
+                  Registrarse gratis
+                </a>
+              {% endif %}
+            {% else %}
+              <span class="btn plan-disabled-action" aria-disabled="true">
+                Próximamente
+              </span>
+            {% endif %}
+          </div>
+        </section>
+      {% endfor %}
+    </div>
+
+    <section class="card plans-principles">
+      <div>
+        <div class="group-card-label">Nuestro principio</div>
+        <h2>El pago nunca recae sobre los participantes</h2>
+      </div>
+      <p class="muted">
+        Entrar en un grupo, enviar pronósticos y consultar la
+        clasificación seguirá siendo gratuito. Un futuro pago solo
+        ampliaría las posibilidades del grupo para su organizador.
+      </p>
+    </section>
+  </div>
+{% endblock %}

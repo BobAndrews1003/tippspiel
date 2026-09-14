@@ -25,6 +25,16 @@
             <span class="pill">Administrador</span>
           {% endif %}
 
+          {% if is_co_admin %}
+            <span class="pill">Coadministrador</span>
+          {% endif %}
+
+          {% if group_plans_enabled %}
+            <span class="pill group-plan-badge group-plan-badge--{{ group.effective_plan }}">
+              Plan {{ group.effective_plan_label }}
+            </span>
+          {% endif %}
+
           <span class="pill">
             {{ member_count }} participante{{ member_count|pluralize:"s" }}
           </span>
@@ -32,6 +42,12 @@
       </div>
 
       <div class="group-detail-hero-actions">
+        {% if advanced_stats_feature_available %}
+          <a class="btn" href="{% url 'advanced_group_stats' group.id %}">
+            Ver análisis
+          </a>
+        {% endif %}
+
         {% if not is_active %}
           <form method="post" action="{% url 'set_active_group' %}">
             {% csrf_token %}
@@ -91,6 +107,12 @@
                     {% if row.is_owner %}
                       <span class="pill">Administrador</span>
                     {% endif %}
+
+                    {% if row.is_co_admin %}
+                      <span class="pill">Coadministrador</span>
+                    {% elif row.is_co_admin_assigned %}
+                      <span class="pill">Coadministrador pausado</span>
+                    {% endif %}
                   </div>
                 </div>
 
@@ -106,6 +128,29 @@
 
                 <div class="group-member-action">
                   {% if is_owner and not row.is_owner %}
+                    {% if co_admin_feature_available or row.is_co_admin_assigned %}
+                      <form
+                        method="post"
+                        action="{% url 'set_group_co_admin' group.id row.membership.user_id %}"
+                      >
+                        {% csrf_token %}
+
+                        {% if row.is_co_admin_assigned %}
+                          <input type="hidden" name="action" value="revoke">
+                          <button type="submit" class="btn small">
+                            Quitar rol
+                          </button>
+                        {% else %}
+                          <input type="hidden" name="action" value="grant">
+                          <button type="submit" class="btn small">
+                            Hacer coadmin
+                          </button>
+                        {% endif %}
+                      </form>
+                    {% endif %}
+                  {% endif %}
+
+                  {% if row.can_remove %}
                     <form
                       method="post"
                       action="{% url 'remove_group_member' group.id row.membership.user_id %}"
@@ -189,7 +234,7 @@
             </div>
           </div>
 
-          {% if is_owner %}
+          {% if can_manage_group %}
             <form
               method="post"
               action="{% url 'rotate_group_join_code' group.id %}"
@@ -209,7 +254,7 @@
       </main>
 
       <aside class="group-detail-sidebar">
-        {% if is_owner %}
+        {% if can_manage_group %}
           <section class="card group-detail-section" id="configuracion">
             <div class="group-card-label">Administración</div>
             <h2>Configuración</h2>
@@ -240,7 +285,41 @@
               </button>
             </form>
           </section>
+        {% endif %}
 
+        {% if is_owner and co_admin_feature_available %}
+          <section class="card group-detail-section">
+            <div class="group-card-label">Plan {{ group.effective_plan_label }}</div>
+            <h2>Coadministradores</h2>
+
+            <p class="muted small">
+              Puedes asignar o retirar el rol junto a cada participante.
+              Los coadministradores pueden editar la configuración,
+              renovar el código y eliminar participantes normales.
+            </p>
+
+            <p class="muted small group-section-note">
+              Solo tú puedes cambiar roles, transferir la administración
+              o eliminar el grupo.
+            </p>
+          </section>
+        {% elif is_owner and group_plans_enabled %}
+          <section class="card group-detail-section">
+            <div class="group-card-label">Función de Plus y Club</div>
+            <h2>Coadministradores</h2>
+
+            <p class="muted small">
+              Comparte la gestión diaria de la competición con otros
+              participantes.
+            </p>
+
+            <a class="btn" href="{% url 'group_plans' %}">
+              Comparar planes
+            </a>
+          </section>
+        {% endif %}
+
+        {% if is_owner %}
           <section class="card group-detail-section">
             <div class="group-card-label">Responsabilidad</div>
             <h2>Transferir administración</h2>

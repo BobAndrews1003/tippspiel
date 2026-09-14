@@ -242,6 +242,11 @@ class Tournament(models.Model):
 # ============================================================
 
 class Group(models.Model):
+    class Plan(models.TextChoices):
+        FREE = "free", "Free"
+        PLUS = "plus", "Plus"
+        CLUB = "club", "Club"
+
     tournament = models.ForeignKey(
         Tournament,
         on_delete=models.CASCADE,
@@ -274,6 +279,26 @@ class Group(models.Model):
         help_text=(
             "Controla si nuevos usuarios pueden "
             "unirse mediante el código de acceso."
+        ),
+    )
+
+    plan = models.CharField(
+        max_length=12,
+        choices=Plan.choices,
+        default=Plan.FREE,
+        db_index=True,
+        help_text=(
+            "Tarif der Gruppe. Bezahlte Tarife werden vorerst "
+            "ausschließlich manuell im Admin vergeben."
+        ),
+    )
+
+    plan_expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Optionales Ablaufdatum. Danach gelten automatisch "
+            "wieder die Free-Berechtigungen."
         ),
     )
 
@@ -316,6 +341,18 @@ class Group(models.Model):
             )
 
         return self.join_code
+
+    @property
+    def effective_plan(self) -> str:
+        from .group_plans import effective_plan_code
+
+        return effective_plan_code(self)
+
+    @property
+    def effective_plan_label(self) -> str:
+        from .group_plans import get_group_plan
+
+        return get_group_plan(self).name
 
     def __str__(self) -> str:
         return (
@@ -568,6 +605,14 @@ class GroupMembership(models.Model):
         default=False,
     )
 
+    is_co_admin = models.BooleanField(
+        default=False,
+        help_text=(
+            "Darf bei einem wirksamen Plus- oder Club-Plan "
+            "die laufende Gruppenverwaltung übernehmen."
+        ),
+    )
+
     is_active = models.BooleanField(
         default=True,
     )
@@ -608,6 +653,22 @@ class GroupMembership(models.Model):
                 ),
                 name="one_creator_per_group",
             ),
+
+            models.CheckConstraint(
+                condition=(
+                    models.Q(is_creator=False)
+                    | models.Q(is_co_admin=False)
+                ),
+                name="creator_is_not_group_co_admin",
+            ),
+
+            models.CheckConstraint(
+                condition=(
+                    models.Q(is_active=True)
+                    | models.Q(is_co_admin=False)
+                ),
+                name="inactive_membership_is_not_co_admin",
+            ),
         ]
 
         indexes = [
@@ -636,6 +697,26 @@ class GroupMembership(models.Model):
                         "Solo el propietario del "
                         "grupo puede estar marcado "
                         "como creador."
+                    ),
+                }
+            )
+
+        if self.is_creator and self.is_co_admin:
+            raise ValidationError(
+                {
+                    "is_co_admin": (
+                        "El propietario no necesita el rol de "
+                        "coadministrador."
+                    ),
+                }
+            )
+
+        if not self.is_active and self.is_co_admin:
+            raise ValidationError(
+                {
+                    "is_co_admin": (
+                        "Una membresía inactiva no puede conservar "
+                        "el rol de coadministrador."
                     ),
                 }
             )
