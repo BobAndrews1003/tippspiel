@@ -8,7 +8,7 @@
   {% elif matchday %}
     Fecha {{ matchday }} · {{ group.name }}
   {% else %}
-    Tabla por fecha · {{ group.name }}
+    Fecha actual · {{ group.name }}
   {% endif %}
 {% endblock %}
 
@@ -59,7 +59,7 @@
 
           {% else %}
             <h1 style="margin:0 0 6px;">
-              Tabla por fecha
+              Fecha actual
             </h1>
 
             <div class="muted small">

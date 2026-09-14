@@ -133,7 +133,7 @@
     {% if group %}
       <a
         href="{% url 'tippen' %}"
-        class="nav-link {% if request.resolver_match.url_name == 'tippen' %}active{% endif %}"
+        class="nav-link {% if request.resolver_match.url_name == 'tippen' or request.resolver_match.url_name == 'bonus_tips' %}active{% endif %}"
       >
         Pronosticar
       </a>
@@ -142,7 +142,7 @@
               href="{% url 'spieltag' %}"
               class="nav-link {% if request.resolver_match.url_name == 'spieltag' %}active{% endif %}"
             >
-              Tabla por fecha
+              Fecha actual
             </a>
 
             <a
@@ -161,12 +161,6 @@
               </a>
             {% endif %}
 
-            <a
-              href="{% url 'bonus_tips' %}"
-              class="nav-link {% if request.resolver_match.url_name == 'bonus_tips' %}active{% endif %}"
-            >
-              Pronósticos especiales
-            </a>
           {% endif %}
 
           <a

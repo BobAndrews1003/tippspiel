@@ -76,3 +76,45 @@ class TipSubmissionViewTests(TestCase):
         self.assertEqual(prediction.pred_home, 2)
         self.assertEqual(prediction.pred_away, 1)
         self.assertIsNone(prediction.points)
+
+    def test_bonus_tips_are_linked_from_tip_page_before_lock(self):
+        response = self.client.get(
+            f"{reverse('tippen')}?md=1"
+        )
+        bonus_url = reverse("bonus_tips")
+
+        self.assertContains(
+            response,
+            "Pronósticos especiales",
+        )
+        self.assertEqual(
+            response.content.decode().count(
+                f'href="{bonus_url}"'
+            ),
+            1,
+        )
+
+    def test_bonus_tips_move_to_matchday_view_after_lock(self):
+        Match.objects.filter(pk=self.match.pk).update(
+            kickoff=(
+                timezone.now()
+                - timedelta(minutes=1)
+            )
+        )
+
+        tip_response = self.client.get(
+            f"{reverse('tippen')}?md=1"
+        )
+        bonus_response = self.client.get(
+            reverse("bonus_tips")
+        )
+
+        self.assertNotContains(
+            tip_response,
+            f'href="{reverse("bonus_tips")}"',
+        )
+        self.assertRedirects(
+            bonus_response,
+            f"{reverse('spieltag')}?tab=bonus",
+            fetch_redirect_response=False,
+        )

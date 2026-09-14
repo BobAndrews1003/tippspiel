@@ -39,41 +39,52 @@
           {% endif %}
         </div>
 
-        {% if matchday %}
+        {% if matchday or bonus_tips_open %}
           <div class="toolbar-nav">
 
-            {% if prev_md %}
+            {% if bonus_tips_open %}
               <a
-                href="{% url 'tippen' %}?md={{ prev_md }}"
+                href="{% url 'bonus_tips' %}"
                 class="btn small"
-                aria-label="Fecha anterior"
               >
-                ◀
+                Pronósticos especiales
               </a>
-            {% else %}
-              <span
-                class="btn small disabled"
-                aria-hidden="true"
-              >
-                ◀
-              </span>
             {% endif %}
 
-            {% if next_md %}
-              <a
-                href="{% url 'tippen' %}?md={{ next_md }}"
-                class="btn small"
-                aria-label="Fecha siguiente"
-              >
-                ▶
-              </a>
-            {% else %}
-              <span
-                class="btn small disabled"
-                aria-hidden="true"
-              >
-                ▶
-              </span>
+            {% if matchday %}
+              {% if prev_md %}
+                <a
+                  href="{% url 'tippen' %}?md={{ prev_md }}"
+                  class="btn small"
+                  aria-label="Fecha anterior"
+                >
+                  ◀
+                </a>
+              {% else %}
+                <span
+                  class="btn small disabled"
+                  aria-hidden="true"
+                >
+                  ◀
+                </span>
+              {% endif %}
+
+              {% if next_md %}
+                <a
+                  href="{% url 'tippen' %}?md={{ next_md }}"
+                  class="btn small"
+                  aria-label="Fecha siguiente"
+                >
+                  ▶
+                </a>
+              {% else %}
+                <span
+                  class="btn small disabled"
+                  aria-hidden="true"
+                >
+                  ▶
+                </span>
+              {% endif %}
             {% endif %}
 
           </div>

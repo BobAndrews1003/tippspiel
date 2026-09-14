@@ -1218,6 +1218,13 @@ def tippen(request):
     group = membership.group
     tournament = group.tournament
     now = timezone.now()
+    bonus_lock_time = get_bonus_lock_time(
+        tournament
+    )
+    bonus_tips_open = bool(
+        bonus_lock_time is None
+        or now < bonus_lock_time
+    )
 
     # --------------------------------------------------------------
     # Verfügbare Spieltage
@@ -1263,6 +1270,7 @@ def tippen(request):
                 "prev_md": None,
                 "next_md": None,
                 "now": now,
+                "bonus_tips_open": bonus_tips_open,
             },
         )
 
@@ -1307,6 +1315,7 @@ def tippen(request):
                     "prev_md": None,
                     "next_md": None,
                     "now": now,
+                    "bonus_tips_open": bonus_tips_open,
                 },
             )
 
@@ -1566,6 +1575,7 @@ def tippen(request):
             "prev_md": prev_md,
             "next_md": next_md,
             "now": now,
+            "bonus_tips_open": bonus_tips_open,
         },
     )
 

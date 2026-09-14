@@ -306,6 +306,11 @@ class SpieltagDatabasePaginationTests(TestCase):
             rows[0]["reveal"]
         )
 
+        self.assertContains(
+            response,
+            "Pronósticos especiales",
+        )
+
     def test_revealed_bonus_is_sorted_in_database(
         self,
     ):
