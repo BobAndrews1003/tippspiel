@@ -6,7 +6,7 @@
   {% if tab == "bonus" %}
     Pronósticos especiales · {{ group.name }}
   {% elif matchday %}
-    Fecha {{ matchday }} · {{ group.name }}
+    {{ matchday_label }} · {{ group.name }}
   {% else %}
     Fecha actual · {{ group.name }}
   {% endif %}
@@ -49,7 +49,7 @@
 
           {% elif matchday %}
             <h1 style="margin:0 0 6px;">
-              Vista por fecha – Fecha {{ matchday }}
+              Vista por fecha – {{ matchday_label }}
             </h1>
 
             <div class="muted small">
@@ -83,14 +83,14 @@
               aria-label="Seleccionar fecha o pronósticos especiales"
             >
               <optgroup label="Fechas">
-                {% for md in matchdays %}
+                {% for option in matchday_options %}
                   <option
-                    value="{% url 'spieltag' %}?tab=matches&md={{ md }}"
-                    {% if tab != "bonus" and md == matchday %}
+                    value="{% url 'spieltag' %}?tab=matches&md={{ option.number }}"
+                    {% if tab != "bonus" and option.number == matchday %}
                       selected
                     {% endif %}
                   >
-                    Fecha {{ md }}
+                    {{ option.label }}
                   </option>
                 {% endfor %}
               </optgroup>
@@ -439,6 +439,12 @@
 
                   {% for header in matches %}
                     <th>
+                      {% if show_stage_labels and header.stage_label %}
+                        <div class="match-stage-label">
+                          {{ header.stage_label }}
+                        </div>
+                      {% endif %}
+
                       <div class="match-head">
                         {{ header.match.home_team|team_abbr }}
                         &nbsp;&nbsp;

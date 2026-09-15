@@ -71,6 +71,10 @@ from .models import (
 )
 
 from .scoring import points_for_prediction
+from .tournament_stages import (
+    build_matchday_metadata,
+    stage_label_for_match,
+)
 
 User = get_user_model()
 
@@ -630,7 +634,11 @@ def dashboard(request):
                 tournament=tournament,
                 matchday=current_matchday,
             )
+            .select_related(
+                "stage",
+            )
             .order_by(
+                "stage__sort_order",
                 "kickoff",
                 "home_team",
             )
@@ -749,6 +757,28 @@ def dashboard(request):
 
     standings_started = bool(
         result_matchdays
+    )
+
+    dashboard_matchdays = list(
+        dict.fromkeys(
+            [
+                *result_matchdays,
+                *(
+                    [current_matchday]
+                    if current_matchday is not None
+                    else []
+                ),
+            ]
+        )
+    )
+    matchday_metadata = build_matchday_metadata(
+        tournament,
+        dashboard_matchdays,
+    )
+    current_matchday_label = (
+        matchday_metadata[current_matchday].label
+        if current_matchday in matchday_metadata
+        else None
     )
 
     # --------------------------------------------------------------
@@ -933,6 +963,9 @@ def dashboard(request):
         performance_rows.append(
             {
                 "matchday": matchday,
+                "matchday_label": (
+                    matchday_metadata[matchday].label
+                ),
                 "points": points,
                 "bar_percent": bar_percent,
             }
@@ -1131,6 +1164,9 @@ def dashboard(request):
             "current_matchday": (
                 current_matchday
             ),
+            "current_matchday_label": (
+                current_matchday_label
+            ),
             "current_matchday_state": (
                 current_matchday_state
             ),
@@ -1176,6 +1212,14 @@ def dashboard(request):
             "last_result_matchday": (
                 last_result_matchday
             ),
+            "last_result_matchday_label": (
+                matchday_metadata[
+                    last_result_matchday
+                ].label
+                if last_result_matchday
+                in matchday_metadata
+                else None
+            ),
             "last_matchday_points": (
                 last_matchday_points
             ),
@@ -1198,6 +1242,14 @@ def dashboard(request):
             ),
             "best_matchday": (
                 best_matchday
+            ),
+            "best_matchday_label": (
+                matchday_metadata[
+                    best_matchday
+                ].label
+                if best_matchday
+                in matchday_metadata
+                else None
             ),
             "best_matchday_points": (
                 best_matchday_points
@@ -1247,6 +1299,10 @@ def tippen(request):
             "matchday",
         )
     )
+    matchday_metadata = build_matchday_metadata(
+        tournament,
+        matchdays,
+    )
 
     # --------------------------------------------------------------
     # Gewählten Spieltag bestimmen
@@ -1265,8 +1321,10 @@ def tippen(request):
             {
                 "group": group,
                 "matchday": None,
+                "matchday_label": None,
                 "matchdays": matchdays,
                 "rows": [],
+                "show_stage_labels": False,
                 "prev_md": None,
                 "next_md": None,
                 "now": now,
@@ -1281,7 +1339,11 @@ def tippen(request):
                 tournament=tournament,
                 matchday=md,
             )
+            .select_related(
+                "stage",
+            )
             .order_by(
+                "stage__sort_order",
                 "kickoff",
                 "home_team",
             )
@@ -1310,8 +1372,10 @@ def tippen(request):
                 {
                     "group": group,
                     "matchday": None,
+                    "matchday_label": None,
                     "matchdays": matchdays,
                     "rows": [],
+                    "show_stage_labels": False,
                     "prev_md": None,
                     "next_md": None,
                     "now": now,
@@ -1322,6 +1386,9 @@ def tippen(request):
     prev_md, next_md = _prev_next_md(
         tournament,
         matchday,
+    )
+    selected_matchday_metadata = (
+        matchday_metadata[matchday]
     )
 
     # --------------------------------------------------------------
@@ -1343,6 +1410,9 @@ def tippen(request):
     rows = [
         {
             "match": match,
+            "stage_label": stage_label_for_match(
+                match
+            ),
             "pred": predictions.get(
                 match.id
             ),
@@ -1570,8 +1640,14 @@ def tippen(request):
         {
             "group": group,
             "matchday": matchday,
+            "matchday_label": (
+                selected_matchday_metadata.label
+            ),
             "matchdays": matchdays,
             "rows": rows,
+            "show_stage_labels": (
+                selected_matchday_metadata.is_final
+            ),
             "prev_md": prev_md,
             "next_md": next_md,
             "now": now,
@@ -1603,6 +1679,14 @@ def spieltag(request):
         .distinct()
         .order_by("matchday")
     )
+    matchday_metadata = build_matchday_metadata(
+        tournament,
+        matchdays,
+    )
+    matchday_options = [
+        matchday_metadata[matchday]
+        for matchday in matchdays
+    ]
 
     tab = request.GET.get("tab", "matches")
 
@@ -1643,7 +1727,11 @@ def spieltag(request):
                 tournament=tournament,
                 matchday=matchday,
             )
+            .select_related(
+                "stage",
+            )
             .order_by(
+                "stage__sort_order",
                 "kickoff",
                 "home_team",
             )
@@ -2096,6 +2184,9 @@ def spieltag(request):
     match_headers = [
         {
             "match": match,
+            "stage_label": stage_label_for_match(
+                match
+            ),
             "result": (
                 match.home_score,
                 match.away_score,
@@ -2194,7 +2285,18 @@ def spieltag(request):
             "group": group,
             "tab": tab,
             "matchday": matchday,
+            "matchday_label": (
+                matchday_metadata[matchday].label
+                if matchday in matchday_metadata
+                else None
+            ),
             "matchdays": matchdays,
+            "matchday_options": matchday_options,
+            "show_stage_labels": (
+                matchday_metadata[matchday].is_final
+                if matchday in matchday_metadata
+                else False
+            ),
             "matches": match_headers,
             "table_rows": table_rows,
             "prev_md": prev_md,
@@ -2300,6 +2402,10 @@ def tabelle(request):
             "matchday",
         )
     )
+    matchday_metadata = build_matchday_metadata(
+        tournament,
+        matchdays,
+    )
 
     # --------------------------------------------------------------
     # Leerer Zustand ohne Spieltage
@@ -2314,6 +2420,9 @@ def tabelle(request):
                 "view": view,
                 "matchdays": [],
                 "shown_matchdays": [],
+                "shown_matchday_options": [],
+                "shown_first_label": None,
+                "shown_last_label": None,
                 "table_rows": [],
                 "prev_from": None,
                 "next_from": None,
@@ -2426,6 +2535,10 @@ def tabelle(request):
 
     shown_matchdays = matchdays[
         from_idx:from_idx + count
+    ]
+    shown_matchday_options = [
+        matchday_metadata[matchday]
+        for matchday in shown_matchdays
     ]
 
     shown_matchday_set = set(
@@ -2703,6 +2816,15 @@ def tabelle(request):
             "view": view,
             "matchdays": matchdays,
             "shown_matchdays": shown_matchdays,
+            "shown_matchday_options": (
+                shown_matchday_options
+            ),
+            "shown_first_label": (
+                shown_matchday_options[0].label
+            ),
+            "shown_last_label": (
+                shown_matchday_options[-1].label
+            ),
             "table_rows": table_rows,
             "prev_from": prev_from,
             "next_from": next_from,

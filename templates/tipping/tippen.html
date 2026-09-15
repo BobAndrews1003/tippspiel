@@ -2,7 +2,7 @@
 
 {% block title %}
   {% if matchday %}
-    Pronosticar · Fecha {{ matchday }} · {{ group.name }}
+    Pronosticar · {{ matchday_label }} · {{ group.name }}
   {% else %}
     Pronosticar · {{ group.name }}
   {% endif %}
@@ -24,7 +24,7 @@
           </div>
 
           {% if matchday %}
-            <h1>Pronosticar · Fecha {{ matchday }}</h1>
+            <h1>Pronosticar · {{ matchday_label }}</h1>
 
             <p class="muted">
               Puedes modificar cada pronóstico hasta el inicio
@@ -110,6 +110,14 @@
         <div class="tip-match-list">
 
           {% for row in rows %}
+
+            {% if show_stage_labels and row.stage_label %}
+              {% ifchanged row.stage_label %}
+                <div class="tip-stage-heading">
+                  {{ row.stage_label }}
+                </div>
+              {% endifchanged %}
+            {% endif %}
 
             <article
               class="

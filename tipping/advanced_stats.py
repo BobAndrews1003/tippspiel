@@ -14,6 +14,7 @@ from .models import (
     MatchdayScore,
     Prediction,
 )
+from .tournament_stages import build_matchday_metadata
 
 
 CHART_COLORS = ("#4ea1ff", "#f3b64c")
@@ -70,6 +71,10 @@ def build_advanced_group_stats(
         scores_by_matchday[score.matchday].append(score)
 
     evaluated_matchdays = sorted(scores_by_matchday)
+    matchday_metadata = build_matchday_metadata(
+        group.tournament,
+        evaluated_matchdays,
+    )
     bonus_lock_time = get_bonus_lock_time(group.tournament)
     bonus_reveal = bool(
         bonus_lock_time
@@ -167,6 +172,9 @@ def build_advanced_group_stats(
     participation_rows = [
         {
             "matchday": matchday,
+            "matchday_label": (
+                matchday_metadata[matchday].label
+            ),
             "matches": report["matches"],
             "submitted": report["submitted"],
             "expected": report["expected"],
@@ -262,6 +270,13 @@ def build_advanced_group_stats(
                 ),
                 "best_matchday": (
                     best_score.matchday
+                    if best_score is not None
+                    else None
+                ),
+                "best_matchday_label": (
+                    matchday_metadata[
+                        best_score.matchday
+                    ].label
                     if best_score is not None
                     else None
                 ),
@@ -415,7 +430,7 @@ def build_advanced_group_stats(
         "selected_player_a_id": player_a_id,
         "selected_player_b_id": player_b_id,
         "timeline_labels": [
-            f"Fecha {matchday}"
+            matchday_metadata[matchday].label
             for matchday in evaluated_matchdays
         ],
         "comparison_series": comparison_series,

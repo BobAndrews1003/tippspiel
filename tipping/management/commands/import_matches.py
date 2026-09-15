@@ -6,7 +6,12 @@ from pathlib import Path
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
-from tipping.models import Tournament, Match
+from tipping.models import (
+    Match,
+    Tournament,
+    TournamentStage,
+)
+from tipping.tournament_stages import ensure_default_stages
 
 
 def _pick(row: dict, candidates: list[str]) -> str | None:
@@ -55,6 +60,33 @@ def _to_int(val: str | None):
     return None
 
 
+STAGE_ALIASES = {
+    "regular": TournamentStage.Code.REGULAR,
+    "fase_regular": TournamentStage.Code.REGULAR,
+    "hexagonal_final": TournamentStage.Code.HEXAGONAL_FINAL,
+    "cuadrangular": TournamentStage.Code.CUADRANGULAR,
+    "hexagonal_de_descenso": (
+        TournamentStage.Code.HEXAGONAL_DESCENT
+    ),
+    "hexagonal_descenso": (
+        TournamentStage.Code.HEXAGONAL_DESCENT
+    ),
+}
+
+
+def _stage_code(value: str | None) -> str | None:
+    if value is None:
+        return None
+
+    normalized = re.sub(
+        r"[^a-z0-9]+",
+        "_",
+        value.strip().lower(),
+    ).strip("_")
+
+    return STAGE_ALIASES.get(normalized)
+
+
 
 class Command(BaseCommand):
     help = "Import matches from a CSV (e.g., TheSportsDB export) into the DB."
@@ -82,6 +114,11 @@ class Command(BaseCommand):
             raise CommandError(f"CSV file not found: {csv_path}")
 
         tournament, _ = Tournament.objects.get_or_create(name=tournament_name)
+        ensure_default_stages(tournament)
+        stages_by_code = {
+            stage.code: stage
+            for stage in tournament.stages.all()
+        }
 
         created = 0
         updated = 0
@@ -103,6 +140,19 @@ class Command(BaseCommand):
 
                 # Matchday (Fecha = Spieltag/Runde)
                 matchday_raw = _pick(row, ["Fecha", "fecha", "matchday", "round"])
+                stage_raw = _pick(
+                    row,
+                    ["Fase", "fase", "stage", "phase"],
+                )
+                stage_round_raw = _pick(
+                    row,
+                    [
+                        "Fecha de fase",
+                        "fecha_fase",
+                        "stage_round",
+                        "phase_round",
+                    ],
+                )
 
                 kickoff_dt = _parse_datetime(timestamp or date_event, time_event)
 
@@ -114,6 +164,43 @@ class Command(BaseCommand):
 
                 # Convert matchday to int (or None)
                 md = _to_int(matchday_raw)
+                stage_code = _stage_code(stage_raw)
+
+                if stage_raw and stage_code is None:
+                    skipped += 1
+                    continue
+
+                stage = (
+                    stages_by_code.get(stage_code)
+                    if stage_code
+                    else (
+                        stages_by_code.get(
+                            TournamentStage.Code.REGULAR
+                        )
+                        if md is not None
+                        else None
+                    )
+                )
+                stage_round = _to_int(stage_round_raw)
+
+                if (
+                    stage is not None
+                    and stage_round is None
+                ):
+                    if stage.code == TournamentStage.Code.REGULAR:
+                        stage_round = md
+                    elif md is not None and md >= 31:
+                        stage_round = md - 30
+
+                if (
+                    stage is not None
+                    and (
+                        stage_round is None
+                        or stage_round > stage.round_count
+                    )
+                ):
+                    skipped += 1
+                    continue
 
                 # Optional scores
                 hs = _pick(row, ["Home Score", "intHomeScore", "HomeScore", "home_score", "score_home"])
@@ -136,6 +223,8 @@ class Command(BaseCommand):
                         away_team=away,
                         kickoff=kickoff,
                         matchday=md,
+                        stage=stage,
+                        stage_round=stage_round,
                     )
 
                     if update_results and hs_i is not None and aws_i is not None:
@@ -151,6 +240,14 @@ class Command(BaseCommand):
                     # Always update matchday if missing/different
                     if obj.matchday != md:
                         obj.matchday = md
+                        changed = True
+
+                    if obj.stage_id != getattr(stage, "id", None):
+                        obj.stage = stage
+                        changed = True
+
+                    if obj.stage_round != stage_round:
+                        obj.stage_round = stage_round
                         changed = True
 
                     # Update results only if flag is set and values exist

@@ -10,6 +10,8 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import (
     FileExtensionValidator,
+    MaxValueValidator,
+    MinValueValidator,
     MinLengthValidator,
     RegexValidator,
 )
@@ -382,6 +384,97 @@ class Tournament(models.Model):
 
 
 # ============================================================
+# TournamentStage
+# ============================================================
+
+class TournamentStage(models.Model):
+    class Code(models.TextChoices):
+        REGULAR = "regular", "Fase regular"
+        HEXAGONAL_FINAL = (
+            "hexagonal_final",
+            "Hexagonal final",
+        )
+        CUADRANGULAR = (
+            "cuadrangular",
+            "Cuadrangular",
+        )
+        HEXAGONAL_DESCENT = (
+            "hexagonal_descenso",
+            "Hexagonal de descenso",
+        )
+
+    tournament = models.ForeignKey(
+        Tournament,
+        on_delete=models.CASCADE,
+        related_name="stages",
+    )
+
+    code = models.CharField(
+        max_length=32,
+        choices=Code.choices,
+    )
+
+    name = models.CharField(
+        max_length=80,
+    )
+
+    sort_order = models.PositiveSmallIntegerField(
+        validators=[
+            MinValueValidator(1),
+        ],
+    )
+
+    round_count = models.PositiveSmallIntegerField(
+        validators=[
+            MinValueValidator(1),
+            MaxValueValidator(MAX_MATCHDAY),
+        ],
+    )
+
+    class Meta:
+        ordering = (
+            "tournament_id",
+            "sort_order",
+            "id",
+        )
+        constraints = [
+            models.UniqueConstraint(
+                fields=(
+                    "tournament",
+                    "code",
+                ),
+                name="uniq_tournament_stage_code",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    round_count__gte=1,
+                    round_count__lte=MAX_MATCHDAY,
+                ),
+                name="stage_round_count_1_200",
+            ),
+        ]
+
+    def save(
+        self,
+        *args,
+        **kwargs,
+    ):
+        self.name = self.name.strip()
+
+        return super().save(
+            *args,
+            **kwargs,
+        )
+
+    @property
+    def is_regular(self) -> bool:
+        return self.code == self.Code.REGULAR
+
+    def __str__(self) -> str:
+        return f"{self.name} · {self.tournament.name}"
+
+
+# ============================================================
 # Group
 # ============================================================
 
@@ -656,6 +749,32 @@ class Match(models.Model):
         blank=True,
     )
 
+    stage = models.ForeignKey(
+        TournamentStage,
+        on_delete=models.RESTRICT,
+        null=True,
+        blank=True,
+        related_name="matches",
+        help_text=(
+            "Wettbewerbsphase innerhalb der Saison. "
+            "Ohne Auswahl wird das Spiel wie ein reguläres "
+            "Saisonspiel behandelt."
+        ),
+    )
+
+    stage_round = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[
+            MinValueValidator(1),
+            MaxValueValidator(MAX_MATCHDAY),
+        ],
+        help_text=(
+            "Rundennummer innerhalb der Phase. Die globale "
+            "Spieltagsnummer bleibt separat erhalten."
+        ),
+    )
+
     home_score = models.PositiveSmallIntegerField(
         null=True,
         blank=True,
@@ -680,6 +799,19 @@ class Match(models.Model):
                     )
                 ),
                 name="match_md_positive_or_null",
+            ),
+
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        stage_round__isnull=True,
+                    )
+                    | models.Q(
+                        stage_round__gte=1,
+                        stage_round__lte=MAX_MATCHDAY,
+                    )
+                ),
+                name="match_stage_round_positive_or_null",
             ),
 
             # Ergebniswerte dürfen nur zwischen
@@ -752,10 +884,53 @@ class Match(models.Model):
                 ],
                 name="match_tournament_ko_idx",
             ),
+
+            models.Index(
+                fields=[
+                    "tournament",
+                    "stage",
+                    "stage_round",
+                ],
+                name="match_tourn_stage_round_idx",
+            ),
         ]
 
     def clean(self) -> None:
         super().clean()
+
+        stage_errors = {}
+
+        if self.stage_id is not None:
+            if (
+                self.tournament_id is not None
+                and self.stage.tournament_id
+                != self.tournament_id
+            ):
+                stage_errors["stage"] = (
+                    "Die Phase muss zum selben Turnier "
+                    "wie das Spiel gehören."
+                )
+
+            if self.stage_round is None:
+                stage_errors["stage_round"] = (
+                    "Für Spiele mit einer Phase muss eine "
+                    "Phasenrunde angegeben werden."
+                )
+
+            elif self.stage_round > self.stage.round_count:
+                stage_errors["stage_round"] = (
+                    "Die Phasenrunde darf die konfigurierte "
+                    "Rundenzahl der Phase nicht überschreiten."
+                )
+
+        elif self.stage_round is not None:
+            stage_errors["stage"] = (
+                "Für eine Phasenrunde muss eine Phase "
+                "ausgewählt werden."
+            )
+
+        if stage_errors:
+            raise ValidationError(stage_errors)
 
         if (
             not self.pk

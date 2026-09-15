@@ -19,6 +19,7 @@ from .models import (
     TipReminderDelivery,
     UserProfile,
 )
+from .tournament_stages import matchday_label_for_match
 
 
 logger = logging.getLogger(__name__)
@@ -124,6 +125,11 @@ def _build_sections(
             {
                 "group": membership.group,
                 "matchday": matchday,
+                "matchday_label": (
+                    matchday_label_for_match(
+                        matches[0]
+                    )
+                ),
                 "matches": matches,
                 "tip_url": _absolute_url(path),
             }
@@ -244,7 +250,10 @@ def send_due_tip_reminders(
             home_score__isnull=True,
             away_score__isnull=True,
         )
-        .select_related("tournament")
+        .select_related(
+            "tournament",
+            "stage",
+        )
         .order_by("kickoff", "id")
     )
 

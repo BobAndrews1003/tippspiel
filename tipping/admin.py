@@ -15,6 +15,7 @@ from .models import (
     StandingRebuildJob,
     TipReminderDelivery,
     Tournament,
+    TournamentStage,
 )
 
 
@@ -136,11 +137,57 @@ class TipReminderDeliveryAdmin(
         return False
 
 
+class TournamentStageInline(admin.TabularInline):
+    model = TournamentStage
+    extra = 0
+    fields = (
+        "code",
+        "name",
+        "sort_order",
+        "round_count",
+    )
+
+
 @admin.register(Tournament)
 class TournamentAdmin(admin.ModelAdmin):
+    inlines = (
+        TournamentStageInline,
+    )
+
     list_display = (
         "id",
         "name",
+    )
+
+
+@admin.register(TournamentStage)
+class TournamentStageAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "tournament",
+        "name",
+        "code",
+        "sort_order",
+        "round_count",
+    )
+
+    list_filter = (
+        "tournament",
+        "code",
+    )
+
+    search_fields = (
+        "name",
+        "tournament__name",
+    )
+
+    list_select_related = (
+        "tournament",
+    )
+
+    ordering = (
+        "tournament",
+        "sort_order",
     )
 
 
@@ -218,6 +265,9 @@ class MatchAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "tournament",
+        "matchday",
+        "stage",
+        "stage_round",
         "home_team",
         "away_team",
         "kickoff",
@@ -227,11 +277,24 @@ class MatchAdmin(admin.ModelAdmin):
 
     list_filter = (
         "tournament",
+        "stage",
     )
 
     search_fields = (
         "home_team",
         "away_team",
+    )
+
+    list_select_related = (
+        "tournament",
+        "stage",
+    )
+
+    ordering = (
+        "tournament",
+        "matchday",
+        "stage__sort_order",
+        "kickoff",
     )
 
 

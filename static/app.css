@@ -5211,6 +5211,23 @@ body.app-message-is-open{
   min-width:0;
 }
 
+.tip-stage-heading{
+  margin:8px 3px -2px;
+  padding-top:10px;
+  border-top:1px solid var(--border);
+  color:var(--brand-text);
+  font-size:12px;
+  font-weight:900;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+
+.tip-stage-heading:first-child{
+  margin-top:0;
+  padding-top:0;
+  border-top:0;
+}
+
 
 /* Einzelnes Spiel */
 
@@ -6566,6 +6583,19 @@ thead th{
 .puntero-table-page
 .match-head{
   color:#f3f7ff;
+}
+
+.puntero-table-page
+.match-stage-label{
+  max-width:118px;
+  margin:0 auto 5px;
+  color:var(--brand-text);
+  font-size:9px;
+  font-weight:900;
+  letter-spacing:.055em;
+  line-height:1.25;
+  text-transform:uppercase;
+  white-space:normal;
 }
 
 

@@ -23,7 +23,7 @@
           {% if shown_matchdays %}
             <div class="muted small">
               Vista actual:
-              Fecha {{ shown_matchdays|first }}–{{ shown_matchdays|last }}
+              {{ shown_first_label }} – {{ shown_last_label }}
               ({{ shown_matchdays|length }})
               de {{ matchdays|length }}
             </div>
@@ -198,11 +198,11 @@
                 Nombre
               </th>
 
-              {% for md in shown_matchdays %}
+              {% for option in shown_matchday_options %}
                 <th
                   class="
                     table-matchday-heading
-                    {% if md == current_matchday %}
+                    {% if option.number == current_matchday %}
                       table-matchday-heading--current
                     {% endif %}
                   "
@@ -221,7 +221,7 @@
                   </span>
 
                   <span class="table-matchday-heading-date">
-                    Fecha {{ md }}
+                    {{ option.label }}
                   </span>
 
                 </th>

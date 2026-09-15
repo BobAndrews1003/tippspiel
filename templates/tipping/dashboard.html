@@ -90,7 +90,7 @@
               </div>
 
               <h2>
-                Fecha {{ current_matchday }}
+                {{ current_matchday_label }}
               </h2>
             </div>
 
@@ -259,7 +259,7 @@
 
           <span class="dashboard-kpi-note">
             {% if last_result_matchday %}
-              Puntos en la fecha {{ last_result_matchday }}
+              Puntos en {{ last_result_matchday_label }}
             {% else %}
               Todavía sin resultados
             {% endif %}
@@ -308,7 +308,7 @@
               <div class="dashboard-performance-row">
 
                 <span class="dashboard-performance-label">
-                  Fecha {{ item.matchday }}
+                  {{ item.matchday_label }}
                 </span>
 
                 <div
@@ -384,7 +384,7 @@
 
               <small>
                 {% if best_matchday %}
-                  Fecha {{ best_matchday }}
+                  {{ best_matchday_label }}
                 {% else %}
                   todavía sin resultados
                 {% endif %}

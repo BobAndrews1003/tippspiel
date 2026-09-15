@@ -247,7 +247,7 @@
           <div class="advanced-participation-list">
             {% for row in participation_rows %}
               <div class="advanced-participation-row">
-                <strong>Fecha {{ row.matchday }}</strong>
+                <strong>{{ row.matchday_label }}</strong>
                 <span>{{ row.matches }} partido{{ row.matches|pluralize:"s" }} iniciado{{ row.matches|pluralize:"s" }}</span>
                 <div class="advanced-progress" aria-hidden="true">
                   <span style="--advanced-progress: {{ row.rate }}%"></span>
