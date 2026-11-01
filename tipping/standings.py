@@ -1,5 +1,5 @@
 from django.db import transaction
-from django.db.models import Count, Max, Q, Sum
+from django.db.models import Count, F, Max, Q, Sum
 from django.utils import timezone
 
 from .models import (
@@ -105,7 +105,16 @@ def rebuild_matchday_scores(
             exact_predictions=Count(
                 "id",
                 filter=Q(
-                    points=4,
+                    score_category=(
+                        Prediction.ScoreCategory.EXACT
+                    ),
+                )
+                | (
+                    Q(score_category__isnull=True)
+                    & Q(
+                        pred_home=F("match__home_score"),
+                        pred_away=F("match__away_score"),
+                    )
                 ),
             ),
         )

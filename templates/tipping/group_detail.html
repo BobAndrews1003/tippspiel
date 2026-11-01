@@ -290,6 +290,7 @@
 
             <form method="post" class="form-grid group-settings-form">
               {% csrf_token %}
+              <input type="hidden" name="form_action" value="settings">
 
               <div class="field">
                 <label for="{{ settings_form.name.id_for_label }}">
@@ -315,6 +316,115 @@
             </form>
           </section>
         {% endif %}
+
+        <details
+          class="card group-detail-section group-scoring-details"
+          id="puntuacion"
+          {% if scoring_form %}open{% endif %}
+        >
+          <summary class="group-branding-summary">
+            <span>
+              <span class="group-card-label">
+                {% if scoring_feature_available %}
+                  Plan {{ group.effective_plan_label }}
+                {% else %}
+                  Reglas del grupo
+                {% endif %}
+              </span>
+              <strong>Sistema de puntuación</strong>
+            </span>
+            <span class="group-branding-chevron" aria-hidden="true">⌄</span>
+          </summary>
+
+          <div class="group-scoring-details-body">
+            <div class="group-scoring-values" aria-label="Puntos del grupo">
+              <div>
+                <strong>{{ scoring_settings.exact_points }}</strong>
+                <span>Exacto</span>
+              </div>
+              <div>
+                <strong>{{ scoring_settings.goal_difference_points }}</strong>
+                <span>Diferencia</span>
+              </div>
+              <div>
+                <strong>{{ scoring_settings.tendency_points }}</strong>
+                <span>Tendencia</span>
+              </div>
+              <div>
+                <strong>{{ scoring_settings.incorrect_points }}</strong>
+                <span>Incorrecto</span>
+              </div>
+            </div>
+
+            {% if scoring_settings.is_locked %}
+              <div class="group-scoring-lock-note">
+                <strong>Reglas bloqueadas</strong>
+                <span>
+                  Se fijaron con el primer pronóstico y permanecen iguales
+                  durante toda la competición.
+                </span>
+              </div>
+            {% elif scoring_form %}
+              <p class="muted small">
+                Elige una plantilla o introduce valores propios. Las reglas se
+                bloquearán cuando se guarde el primer pronóstico del grupo.
+              </p>
+
+              <form
+                method="post"
+                class="form-grid group-scoring-form"
+                data-group-scoring-form
+              >
+                {% csrf_token %}
+                <input type="hidden" name="form_action" value="scoring">
+
+                {% for error in scoring_form.non_field_errors %}
+                  <div class="form-error">{{ error }}</div>
+                {% endfor %}
+
+                <fieldset class="field group-scoring-fieldset">
+                  <legend>{{ scoring_form.preset.label }}</legend>
+                  {{ scoring_form.preset }}
+                  {% for error in scoring_form.preset.errors %}
+                    <div class="form-error">{{ error }}</div>
+                  {% endfor %}
+                </fieldset>
+
+                <div class="group-scoring-input-grid">
+                  {% for field in scoring_form %}
+                    {% if field.name != "preset" %}
+                      <div class="field">
+                        <label for="{{ field.id_for_label }}">
+                          {{ field.label }}
+                        </label>
+                        {{ field }}
+                        {% for error in field.errors %}
+                          <div class="form-error">{{ error }}</div>
+                        {% endfor %}
+                      </div>
+                    {% endif %}
+                  {% endfor %}
+                </div>
+
+                <button type="submit" class="btn primary">
+                  Guardar puntuación
+                </button>
+              </form>
+            {% elif is_owner and group_plans_enabled %}
+              <p class="muted small">
+                Plus y Club permiten definir un sistema propio antes del
+                primer pronóstico.
+              </p>
+              <a class="btn" href="{% url 'group_plans' %}">
+                Comparar planes
+              </a>
+            {% else %}
+              <p class="muted small">
+                Estas reglas son visibles para todos los participantes.
+              </p>
+            {% endif %}
+          </div>
+        </details>
 
         {% if branding_form %}
           <details
@@ -756,6 +866,41 @@
           }
         });
       });
+
+      const scoringForm = document.querySelector(
+        "[data-group-scoring-form]"
+      );
+
+      if (scoringForm) {
+        const scoringPresets = {
+          puntero: [4, 3, 2, 0],
+          classic: [3, 2, 1, 0],
+          exact_focus: [5, 3, 1, 0]
+        };
+        const scoringFieldNames = [
+          "exact_points",
+          "goal_difference_points",
+          "tendency_points",
+          "incorrect_points"
+        ];
+
+        scoringForm.querySelectorAll('input[name="preset"]').forEach((radio) => {
+          radio.addEventListener("change", function () {
+            const values = scoringPresets[radio.value];
+
+            if (!radio.checked || !values) {
+              return;
+            }
+
+            scoringFieldNames.forEach((fieldName, index) => {
+              const field = scoringForm.elements[fieldName];
+              if (field) {
+                field.value = values[index];
+              }
+            });
+          });
+        });
+      }
 
       const brandingForm = document.querySelector(
         "[data-group-branding-form]"

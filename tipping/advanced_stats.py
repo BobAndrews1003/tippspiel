@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, F, Q, Sum
 from django.utils import timezone
 
 from .bonus_scoring import get_bonus_lock_time
@@ -109,8 +109,39 @@ def build_advanced_group_stats(
             .values("user_id")
             .annotate(
                 evaluated=Count("id"),
-                correct=Count("id", filter=Q(points__gt=0)),
-                exact=Count("id", filter=Q(points=4)),
+                correct=Count(
+                    "id",
+                    filter=(
+                        Q(
+                            score_category__in=(
+                                Prediction.ScoreCategory.EXACT,
+                                Prediction.ScoreCategory.GOAL_DIFFERENCE,
+                                Prediction.ScoreCategory.TENDENCY,
+                            ),
+                        )
+                        | (
+                            Q(score_category__isnull=True)
+                            & Q(points__gt=0)
+                        )
+                    ),
+                ),
+                exact=Count(
+                    "id",
+                    filter=(
+                        Q(
+                            score_category=(
+                                Prediction.ScoreCategory.EXACT
+                            ),
+                        )
+                        | (
+                            Q(score_category__isnull=True)
+                            & Q(
+                                pred_home=F("match__home_score"),
+                                pred_away=F("match__away_score"),
+                            )
+                        )
+                    ),
+                ),
                 earned_points=Sum("points", default=0),
             )
         )

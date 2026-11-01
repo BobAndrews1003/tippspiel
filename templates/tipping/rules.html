@@ -45,7 +45,9 @@
           <span class="rules-summary-number">2</span>
           <div>
             <h3>Suma puntos</h3>
-            <p>Recibe entre 0 y 4 puntos por cada partido evaluado.</p>
+            <p>
+              Recibe los puntos definidos para cada categoría en tu grupo.
+            </p>
           </div>
         </article>
 
@@ -76,9 +78,16 @@
             valor que corresponda a tu pronóstico.
           </p>
 
+          {% if scoring_group %}
+            <aside class="rules-notice">
+              Estás viendo el sistema de puntuación de
+              <strong>{{ scoring_group.name }}</strong>.
+            </aside>
+          {% endif %}
+
           <div class="rules-score-grid">
             <article class="rules-score-card rules-score-card--exact">
-              <strong>4</strong>
+              <strong>{{ scoring_values.exact_points }}</strong>
               <div>
                 <h3>Resultado exacto</h3>
                 <p>Aciertas los goles de ambos equipos.</p>
@@ -86,7 +95,7 @@
             </article>
 
             <article class="rules-score-card">
-              <strong>3</strong>
+              <strong>{{ scoring_values.goal_difference_points }}</strong>
               <div>
                 <h3>Diferencia correcta</h3>
                 <p>
@@ -97,19 +106,19 @@
             </article>
 
             <article class="rules-score-card">
-              <strong>2</strong>
+              <strong>{{ scoring_values.tendency_points }}</strong>
               <div>
                 <h3>Tendencia correcta</h3>
                 <p>
                   Aciertas qué equipo gana, pero no la diferencia de goles.
-                  Los empates no exactos reciben 3 puntos por tener la misma
-                  diferencia.
+                  Los empates no exactos pertenecen a la categoría de
+                  diferencia correcta.
                 </p>
               </div>
             </article>
 
             <article class="rules-score-card">
-              <strong>0</strong>
+              <strong>{{ scoring_values.incorrect_points }}</strong>
               <div>
                 <h3>Pronóstico incorrecto</h3>
                 <p>No aciertas la tendencia del partido.</p>
@@ -119,10 +128,10 @@
 
           <div class="rules-example" aria-label="Ejemplo de puntuación">
             <strong>Ejemplo: resultado oficial 2:1</strong>
-            <span>2:1 = 4 puntos</span>
-            <span>3:2 = 3 puntos</span>
-            <span>3:1 = 2 puntos</span>
-            <span>0:1 = 0 puntos</span>
+            <span>2:1 = {{ scoring_values.exact_points }} puntos</span>
+            <span>3:2 = {{ scoring_values.goal_difference_points }} puntos</span>
+            <span>3:1 = {{ scoring_values.tendency_points }} puntos</span>
+            <span>0:1 = {{ scoring_values.incorrect_points }} puntos</span>
           </div>
         </section>
 
@@ -150,7 +159,8 @@
             </li>
             <li>
               Si no existe un pronóstico completo para un partido, se
-              obtienen 0 puntos en ese encuentro.
+              aplica la puntuación prevista por el grupo para un
+              pronóstico incorrecto.
             </li>
           </ul>
 

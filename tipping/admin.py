@@ -10,6 +10,7 @@ from .models import (
     Group,
     GroupBranding,
     GroupMembership,
+    GroupScoringSettings,
     Match,
     Prediction,
     StandingRebuildJob,
@@ -197,9 +198,57 @@ class GroupBrandingInline(admin.StackedInline):
     max_num = 1
 
 
+class GroupScoringSettingsInline(admin.StackedInline):
+    model = GroupScoringSettings
+    extra = 0
+    max_num = 1
+    can_delete = False
+    fields = (
+        "exact_points",
+        "goal_difference_points",
+        "tendency_points",
+        "incorrect_points",
+        "locked_at",
+        "updated_at",
+    )
+    readonly_fields = (
+        "locked_at",
+        "updated_at",
+    )
+
+    def get_readonly_fields(
+        self,
+        request,
+        obj=None,
+    ):
+        readonly = list(
+            super().get_readonly_fields(
+                request,
+                obj,
+            )
+        )
+
+        if (
+            obj is not None
+            and hasattr(obj, "scoring_settings")
+            and obj.scoring_settings.is_locked
+        ):
+            readonly.extend(
+                [
+                    "exact_points",
+                    "goal_difference_points",
+                    "tendency_points",
+                    "incorrect_points",
+                ]
+            )
+
+        return tuple(readonly)
+
+
 @admin.register(Group)
 class GroupAdmin(admin.ModelAdmin):
     inlines = (
+        GroupScoringSettingsInline,
         GroupBrandingInline,
     )
 
@@ -336,11 +385,14 @@ class PredictionAdmin(admin.ModelAdmin):
         "match",
         "pred_home",
         "pred_away",
+        "score_category",
+        "points",
         "updated_at",
     )
 
     list_filter = (
         "group",
+        "score_category",
     )
 
 

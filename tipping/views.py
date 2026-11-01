@@ -34,6 +34,7 @@ from .forms import (
     DeleteAccountForm,
     GroupBrandingForm,
     GroupCreateForm,
+    GroupScoringSettingsForm,
     GroupSettingsForm,
     TipReminderSettingsForm,
 )
@@ -49,6 +50,10 @@ from .group_plans import (
     group_has_entitlement,
     group_member_limit,
 )
+from .group_scoring import (
+    ensure_group_scoring_settings,
+    scoring_values_for_group,
+)
 from .membership_processing import (
     rebuild_group_after_membership_change,
 )
@@ -61,6 +66,7 @@ from .models import (
     Group,
     GroupBranding,
     GroupMembership,
+    GroupScoringSettings,
     GroupStanding,
     Match,
     MatchdayScore,
@@ -70,7 +76,7 @@ from .models import (
     UserProfile,
 )
 
-from .scoring import points_for_prediction
+from .scoring import prediction_score_category
 from .tournament_stages import (
     build_matchday_metadata,
     stage_label_for_match,
@@ -268,9 +274,27 @@ def rules(request):
     Interessierte die Regeln vor der Registrierung lesen können.
     """
 
+    scoring_group = None
+
+    if request.user.is_authenticated:
+        membership = _require_active_membership(
+            request
+        )
+
+        if membership is not None:
+            scoring_group = membership.group
+
     return render(
         request,
         "tipping/rules.html",
+        {
+            "scoring_group": scoring_group,
+            "scoring_values": (
+                scoring_values_for_group(
+                    scoring_group
+                )
+            ),
+        },
     )
 
 
@@ -1575,6 +1599,7 @@ def tippen(request):
                         "pred_home": pred_home,
                         "pred_away": pred_away,
                         "points": None,
+                        "score_category": None,
                         "scored_at": None,
                     },
                 )
@@ -3080,14 +3105,24 @@ def user_stats(request, user_id: int):
 
         # B) Trefferkategorie
         pts = _prediction_points(m, p)
+        score_category = (
+            p.score_category
+            or prediction_score_category(
+                m,
+                p,
+            )
+        )
 
-        if pts is None:
+        if pts is None or score_category is None:
             continue
-        if pts == 4:
+        if score_category == Prediction.ScoreCategory.EXACT:
             hit_counts["Ergebnis"] += 1
-        elif pts == 3:
+        elif (
+            score_category
+            == Prediction.ScoreCategory.GOAL_DIFFERENCE
+        ):
             hit_counts["Tordifferenz"] += 1
-        elif pts == 2:
+        elif score_category == Prediction.ScoreCategory.TENDENCY:
             hit_counts["Tendenz"] += 1
         else:
             hit_counts["Kein Treffer"] += 1
@@ -3298,6 +3333,7 @@ def group_detail(
             "group__tournament",
             "group__owner",
             "group__branding",
+            "group__scoring_settings",
         ),
         group_id=group_id,
         user=request.user,
@@ -3321,37 +3357,47 @@ def group_detail(
         group,
         "advanced_stats",
     )
+    scoring_feature_available = group_has_entitlement(
+        group,
+        "custom_scoring",
+    )
 
     branding_feature_available = group_has_entitlement(
         group,
         "branding",
     )
+    scoring_settings = ensure_group_scoring_settings(
+        group
+    )
     group_branding = get_visible_group_branding(group)
-    branding_action = (
+    form_action = (
         request.POST.get("form_action", "")
         if request.method == "POST"
         else ""
     )
-    branding_submission = branding_action == "branding"
+    branding_submission = form_action == "branding"
     branding_reset_submission = (
-        branding_action == "branding_reset"
+        form_action == "branding_reset"
     )
     branding_form_action = (
         branding_submission
         or branding_reset_submission
     )
+    scoring_submission = form_action == "scoring"
 
     settings_form = GroupSettingsForm(
         (
             request.POST
             if request.method == "POST"
             and not branding_form_action
+            and not scoring_submission
             else None
         ),
         instance=group,
     )
 
     branding_form = None
+    scoring_form = None
 
     if branding_feature_available and can_manage_group:
         branding_form = GroupBrandingForm(
@@ -3361,6 +3407,16 @@ def group_detail(
                 group_branding
                 or GroupBranding(group=group)
             ),
+        )
+
+    if (
+        is_owner
+        and scoring_feature_available
+        and not scoring_settings.is_locked
+        and not scoring_submission
+    ):
+        scoring_form = GroupScoringSettingsForm(
+            instance=scoring_settings,
         )
 
     if request.method == "POST":
@@ -3423,6 +3479,96 @@ def group_detail(
             messages.error(
                 request,
                 "Revisa la imagen de marca del grupo.",
+            )
+        elif scoring_submission:
+            if not is_owner:
+                messages.error(
+                    request,
+                    (
+                        "Solo el administrador del grupo puede "
+                        "cambiar el sistema de puntuación."
+                    ),
+                )
+                return redirect(
+                    "group_detail",
+                    group_id=group.id,
+                )
+
+            if not scoring_feature_available:
+                messages.error(
+                    request,
+                    (
+                        "La puntuación configurable requiere un "
+                        "plan Plus o Club activo."
+                    ),
+                )
+                return redirect(
+                    "group_detail",
+                    group_id=group.id,
+                )
+
+            with transaction.atomic():
+                locked_settings = (
+                    GroupScoringSettings.objects
+                    .select_for_update()
+                    .get(group=group)
+                )
+
+                has_predictions = (
+                    Prediction.objects
+                    .filter(
+                        group=group,
+                        pred_home__isnull=False,
+                        pred_away__isnull=False,
+                    )
+                    .exists()
+                )
+
+                if (
+                    has_predictions
+                    and locked_settings.locked_at is None
+                ):
+                    locked_settings.locked_at = timezone.now()
+                    GroupScoringSettings.objects.filter(
+                        pk=locked_settings.pk,
+                    ).update(
+                        locked_at=locked_settings.locked_at,
+                        updated_at=timezone.now(),
+                    )
+
+                if locked_settings.is_locked:
+                    messages.error(
+                        request,
+                        (
+                            "El sistema de puntuación quedó bloqueado "
+                            "con el primer pronóstico del grupo."
+                        ),
+                    )
+                    return redirect(
+                        "group_detail",
+                        group_id=group.id,
+                    )
+
+                scoring_form = GroupScoringSettingsForm(
+                    request.POST,
+                    instance=locked_settings,
+                )
+
+                if scoring_form.is_valid():
+                    scoring_form.save()
+
+                    messages.success(
+                        request,
+                        "El sistema de puntuación fue guardado.",
+                    )
+                    return redirect(
+                        "group_detail",
+                        group_id=group.id,
+                    )
+
+            messages.error(
+                request,
+                "Revisa el sistema de puntuación.",
             )
         elif settings_form.is_valid():
             settings_form.save()
@@ -3575,12 +3721,17 @@ def group_detail(
             "branding_feature_available": (
                 branding_feature_available
             ),
+            "scoring_feature_available": (
+                scoring_feature_available
+            ),
             "is_active": (
                 request.session.get("active_group_id")
                 == group.id
             ),
             "settings_form": settings_form,
             "branding_form": branding_form,
+            "scoring_settings": scoring_settings,
+            "scoring_form": scoring_form,
             "member_rows": member_rows,
             "member_count": len(member_rows),
             "invite_url": invite_url,

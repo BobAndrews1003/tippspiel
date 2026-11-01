@@ -295,11 +295,15 @@ class RebuildMatchdayScoresTests(TestCase):
             1,
         )
 
-        # Zweiter Tipp wird nachträglich von
-        # 2 auf 4 Punkte korrigiert.
+        # Zweiter Tipp wird nachträglich zu einem
+        # exakten Ergebnis korrigiert.
+        self.creator_prediction_2.pred_home = 1
+        self.creator_prediction_2.pred_away = 1
         self.creator_prediction_2.points = 4
         self.creator_prediction_2.save(
             update_fields=[
+                "pred_home",
+                "pred_away",
                 "points",
             ],
         )

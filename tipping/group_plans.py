@@ -72,15 +72,16 @@ def get_group_plan_catalog() -> tuple[GroupPlanDefinition, ...]:
                 f"Hasta {plus_limit} participantes",
                 "Coadministradores para la gestión diaria",
                 "Evolución, comparaciones e informe del grupo",
+                "Reglas de puntuación configurables",
             ),
             planned_features=(
                 "Exportación CSV de resultados y clasificaciones",
-                "Reglas de puntuación configurables",
             ),
             entitlement_keys=frozenset(
                 {
                     "co_admins",
                     "advanced_stats",
+                    "custom_scoring",
                 }
             ),
             highlighted=True,
@@ -111,6 +112,7 @@ def get_group_plan_catalog() -> tuple[GroupPlanDefinition, ...]:
                     "co_admins",
                     "advanced_stats",
                     "branding",
+                    "custom_scoring",
                 }
             ),
         ),

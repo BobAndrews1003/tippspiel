@@ -8,7 +8,7 @@ from .models import (
     MatchdayScore,
     Prediction,
 )
-from .scoring import points_for_prediction
+from .scoring import score_prediction
 from .standing_refresh import (
     rebuild_group_standing_with_bonus_fallback,
 )
@@ -167,7 +167,10 @@ def process_prediction_change(
     prediction = (
         Prediction.objects
         .select_for_update()
-        .select_related("match")
+        .select_related(
+            "match",
+            "group__scoring_settings",
+        )
         .filter(
             pk=prediction_id,
         )
@@ -179,21 +182,31 @@ def process_prediction_change(
 
     current_match = prediction.match
 
-    calculated_points = points_for_prediction(
+    scoring_result = score_prediction(
         current_match,
         prediction,
     )
 
-    if prediction.points != calculated_points:
+    if (
+        prediction.points != scoring_result.points
+        or prediction.score_category
+        != scoring_result.category
+    ):
         # QuerySet.update() wird absichtlich verwendet,
         # damit kein weiteres Prediction-Signal ausgelöst wird.
         Prediction.objects.filter(
             pk=prediction.id,
         ).update(
-            points=calculated_points,
+            points=scoring_result.points,
+            score_category=(
+                scoring_result.category
+            ),
         )
 
-        prediction.points = calculated_points
+        prediction.points = scoring_result.points
+        prediction.score_category = (
+            scoring_result.category
+        )
 
     affected_by_group: dict[
         int,

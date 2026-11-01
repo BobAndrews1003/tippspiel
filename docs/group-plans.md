@@ -99,6 +99,31 @@ berücksichtigt. Weder Tippwerte noch E-Mail-Adressen werden für die
 Auswertung an die Seite übergeben. Free-Gruppen und abgelaufene
 Freigaben erhalten auf dem Endpunkt eine 404-Antwort.
 
+## Konfigurierbare Punkte
+
+Gruppen mit einem wirksamen `Plus`- oder `Club`-Plan können vor dem
+ersten vollständigen Tipp die Punkte für vier Trefferkategorien festlegen:
+
+- exaktes Ergebnis,
+- richtige Tordifferenz,
+- richtige Tendenz,
+- falscher Tipp.
+
+Zur Auswahl stehen das Puntero-System `4/3/2/0`, die klassische Variante
+`3/2/1/0`, eine exakt gewichtete Variante `5/3/1/0` und freie Werte von
+0 bis 20. Die Werte müssen vom exakten zum falschen Tipp absteigend oder
+gleich bleiben. Free-Gruppen verwenden immer `4/3/2/0`.
+
+Mit dem ersten vollständigen Tipp wird die Konfiguration dauerhaft gesperrt.
+Ein späterer Tarifablauf ändert das bereits gewählte System nicht; er entzieht
+nur die Berechtigung, ein noch ungesperrtes System weiter zu bearbeiten.
+Trefferkategorie und vergebene Punktzahl werden getrennt behandelt, damit
+Statistiken zu exakten Tipps auch bei eigenen Punktwerten korrekt bleiben.
+
+Für den derzeitigen manuellen Tarifpilot muss ein Bezahlplan deshalb vor dem
+Teilen der Gruppe freigeschaltet und das Punktesystem vor dem ersten Tipp
+gewählt werden.
+
 ## Club-Personalisierung
 
 Gruppen mit einem wirksamen `Club`-Plan können unter `Apariencia` auf

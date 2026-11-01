@@ -65,6 +65,12 @@ class GroupPlanModelTests(TestCase):
                 "advanced_stats",
             )
         )
+        self.assertTrue(
+            group_has_entitlement(
+                group,
+                "custom_scoring",
+            )
+        )
         self.assertFalse(
             group_has_entitlement(
                 group,
@@ -108,6 +114,12 @@ class GroupPlanModelTests(TestCase):
             group_has_entitlement(
                 group,
                 "branding",
+            )
+        )
+        self.assertTrue(
+            group_has_entitlement(
+                group,
+                "custom_scoring",
             )
         )
 

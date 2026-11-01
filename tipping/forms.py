@@ -7,9 +7,16 @@ from django import forms
 from .models import (
     Group,
     GroupBranding,
+    GroupScoringSettings,
     Match,
     Tournament,
     UserProfile,
+)
+from .scoring_config import (
+    MAX_SCORING_POINTS,
+    SCORING_PRESETS,
+    ScoringValues,
+    identify_scoring_preset,
 )
 
 
@@ -79,6 +86,102 @@ class GroupSettingsForm(forms.ModelForm):
             )
 
         return name
+
+
+class GroupScoringSettingsForm(forms.ModelForm):
+    preset = forms.ChoiceField(
+        choices=(
+            *(
+                (code, label)
+                for code, (label, _values)
+                in SCORING_PRESETS.items()
+            ),
+            ("custom", "Personalizado"),
+        ),
+        widget=forms.RadioSelect(
+            attrs={"class": "group-scoring-preset-list"}
+        ),
+        label="Modelo de puntuación",
+    )
+
+    class Meta:
+        model = GroupScoringSettings
+        fields = (
+            "exact_points",
+            "goal_difference_points",
+            "tendency_points",
+            "incorrect_points",
+        )
+        widgets = {
+            field_name: forms.NumberInput(
+                attrs={
+                    "class": "input group-scoring-number",
+                    "min": 0,
+                    "max": MAX_SCORING_POINTS,
+                    "inputmode": "numeric",
+                }
+            )
+            for field_name in (
+                "exact_points",
+                "goal_difference_points",
+                "tendency_points",
+                "incorrect_points",
+            )
+        }
+        labels = {
+            "exact_points": "Resultado exacto",
+            "goal_difference_points": "Diferencia correcta",
+            "tendency_points": "Tendencia correcta",
+            "incorrect_points": "Pronóstico incorrecto",
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if not self.is_bound and self.instance.pk:
+            values = ScoringValues(
+                exact_points=self.instance.exact_points,
+                goal_difference_points=(
+                    self.instance.goal_difference_points
+                ),
+                tendency_points=self.instance.tendency_points,
+                incorrect_points=self.instance.incorrect_points,
+            )
+            self.initial["preset"] = identify_scoring_preset(
+                values
+            )
+
+    def clean(self):
+        cleaned = super().clean()
+
+        if self.instance.is_locked:
+            raise forms.ValidationError(
+                "El sistema de puntuación ya está bloqueado."
+            )
+
+        preset = cleaned.get("preset")
+
+        if preset in SCORING_PRESETS:
+            _label, values = SCORING_PRESETS[preset]
+            cleaned.update(
+                {
+                    "exact_points": values.exact_points,
+                    "goal_difference_points": (
+                        values.goal_difference_points
+                    ),
+                    "tendency_points": values.tendency_points,
+                    "incorrect_points": values.incorrect_points,
+                }
+            )
+
+            for field_name in self.Meta.fields:
+                setattr(
+                    self.instance,
+                    field_name,
+                    cleaned[field_name],
+                )
+
+        return cleaned
 
 
 class GroupBrandingForm(forms.ModelForm):

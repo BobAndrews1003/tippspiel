@@ -14,5 +14,6 @@ class TippingConfig(AppConfig):
         from . import branding_signals  # noqa: F401
         from . import membership_signals  # noqa: F401
         from . import prediction_signals  # noqa: F401
+        from . import scoring_signals  # noqa: F401
         from . import signals  # noqa: F401
         from . import stage_signals  # noqa: F401

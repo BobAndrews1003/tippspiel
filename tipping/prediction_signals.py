@@ -6,6 +6,7 @@ from django.db.models.signals import (
 )
 from django.dispatch import receiver
 
+from .group_scoring import lock_group_scoring_settings
 from .models import Prediction
 from .prediction_processing import (
     process_prediction_change,
@@ -36,6 +37,7 @@ def remember_previous_prediction_location(
     if not instance.pk:
         instance._previous_group_id = None
         instance._previous_match_id = None
+        instance._previous_prediction_complete = False
         return
 
     previous_state = (
@@ -46,6 +48,8 @@ def remember_previous_prediction_location(
         .values(
             "group_id",
             "match_id",
+            "pred_home",
+            "pred_away",
         )
         .first()
     )
@@ -53,6 +57,7 @@ def remember_previous_prediction_location(
     if previous_state is None:
         instance._previous_group_id = None
         instance._previous_match_id = None
+        instance._previous_prediction_complete = False
         return
 
     instance._previous_group_id = (
@@ -61,6 +66,10 @@ def remember_previous_prediction_location(
 
     instance._previous_match_id = (
         previous_state["match_id"]
+    )
+    instance._previous_prediction_complete = (
+        previous_state["pred_home"] is not None
+        and previous_state["pred_away"] is not None
     )
 
 
@@ -74,6 +83,7 @@ def remember_previous_prediction_location(
 def process_after_prediction_save(
     sender,
     instance,
+    created,
     **kwargs,
 ):
     """
@@ -95,6 +105,27 @@ def process_after_prediction_save(
         "_previous_match_id",
         None,
     )
+
+    prediction_complete = (
+        instance.pred_home is not None
+        and instance.pred_away is not None
+    )
+    previously_complete = getattr(
+        instance,
+        "_previous_prediction_complete",
+        False,
+    )
+
+    if (
+        prediction_complete
+        and (
+            created
+            or not previously_complete
+        )
+    ):
+        lock_group_scoring_settings(
+            instance.group_id,
+        )
 
     def run_processing():
         process_prediction_change(

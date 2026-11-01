@@ -31,11 +31,13 @@ class Command(BaseCommand):
                     match__away_score__isnull=True,
                 )
             )
-            .exclude(
-                points__isnull=True,
+            .filter(
+                Q(points__isnull=False)
+                | Q(score_category__isnull=False)
             )
             .update(
                 points=None,
+                score_category=None,
             )
         )
 

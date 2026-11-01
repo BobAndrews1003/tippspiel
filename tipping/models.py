@@ -19,6 +19,11 @@ from django.db import models
 from django.utils import timezone
 from PIL import Image, UnidentifiedImageError
 
+from .scoring_config import (
+    MAX_SCORING_POINTS,
+    STANDARD_SCORING_VALUES,
+)
+
 
 # ============================================================
 # Zentrale Grenzwerte
@@ -595,6 +600,189 @@ class Group(models.Model):
         return (
             f"{self.name} "
             f"({self.tournament.name})"
+        )
+
+
+# ============================================================
+# GroupScoringSettings
+# ============================================================
+
+class GroupScoringSettings(models.Model):
+    group = models.OneToOneField(
+        Group,
+        on_delete=models.CASCADE,
+        related_name="scoring_settings",
+    )
+
+    exact_points = models.PositiveSmallIntegerField(
+        default=STANDARD_SCORING_VALUES.exact_points,
+        validators=[
+            MaxValueValidator(MAX_SCORING_POINTS),
+        ],
+    )
+
+    goal_difference_points = models.PositiveSmallIntegerField(
+        default=(
+            STANDARD_SCORING_VALUES.goal_difference_points
+        ),
+        validators=[
+            MaxValueValidator(MAX_SCORING_POINTS),
+        ],
+    )
+
+    tendency_points = models.PositiveSmallIntegerField(
+        default=STANDARD_SCORING_VALUES.tendency_points,
+        validators=[
+            MaxValueValidator(MAX_SCORING_POINTS),
+        ],
+    )
+
+    incorrect_points = models.PositiveSmallIntegerField(
+        default=STANDARD_SCORING_VALUES.incorrect_points,
+        validators=[
+            MaxValueValidator(MAX_SCORING_POINTS),
+        ],
+    )
+
+    locked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Wird beim ersten vollständigen Tipp gesetzt. "
+            "Danach darf das Punktesystem nicht mehr geändert werden."
+        ),
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        exact_points__gte=0,
+                        exact_points__lte=MAX_SCORING_POINTS,
+                        goal_difference_points__gte=0,
+                        goal_difference_points__lte=(
+                            MAX_SCORING_POINTS
+                        ),
+                        tendency_points__gte=0,
+                        tendency_points__lte=MAX_SCORING_POINTS,
+                        incorrect_points__gte=0,
+                        incorrect_points__lte=MAX_SCORING_POINTS,
+                    )
+                ),
+                name="group_scoring_points_0_20",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        exact_points__gte=models.F(
+                            "goal_difference_points"
+                        ),
+                    )
+                    & models.Q(
+                        goal_difference_points__gte=models.F(
+                            "tendency_points"
+                        ),
+                    )
+                    & models.Q(
+                        tendency_points__gte=models.F(
+                            "incorrect_points"
+                        ),
+                    )
+                ),
+                name="group_scoring_points_ordered",
+            ),
+        ]
+
+    def clean(self) -> None:
+        super().clean()
+
+        values = (
+            self.exact_points,
+            self.goal_difference_points,
+            self.tendency_points,
+            self.incorrect_points,
+        )
+
+        if values != tuple(
+            sorted(
+                values,
+                reverse=True,
+            )
+        ):
+            raise ValidationError(
+                {
+                    "goal_difference_points": (
+                        "Los puntos deben descender desde el "
+                        "resultado exacto hasta el pronóstico "
+                        "incorrecto."
+                    ),
+                }
+            )
+
+    def save(
+        self,
+        *args,
+        **kwargs,
+    ):
+        self.clean()
+
+        if self.pk:
+            previous = (
+                GroupScoringSettings.objects
+                .filter(pk=self.pk)
+                .values(
+                    "exact_points",
+                    "goal_difference_points",
+                    "tendency_points",
+                    "incorrect_points",
+                    "locked_at",
+                )
+                .first()
+            )
+
+            if (
+                previous is not None
+                and previous["locked_at"] is not None
+                and any(
+                    previous[field_name]
+                    != getattr(self, field_name)
+                    for field_name in (
+                        "exact_points",
+                        "goal_difference_points",
+                        "tendency_points",
+                        "incorrect_points",
+                    )
+                )
+            ):
+                raise ValidationError(
+                    "El sistema de puntuación ya está bloqueado."
+                )
+
+        return super().save(
+            *args,
+            **kwargs,
+        )
+
+    @property
+    def is_locked(self) -> bool:
+        return self.locked_at is not None
+
+    def __str__(self) -> str:
+        return (
+            f"{self.group.name}: "
+            f"{self.exact_points}/"
+            f"{self.goal_difference_points}/"
+            f"{self.tendency_points}/"
+            f"{self.incorrect_points}"
         )
 
 
@@ -1189,6 +1377,15 @@ class GroupMembership(models.Model):
 # ============================================================
 
 class Prediction(models.Model):
+    class ScoreCategory(models.TextChoices):
+        EXACT = "exact", "Resultado exacto"
+        GOAL_DIFFERENCE = (
+            "goal_difference",
+            "Diferencia correcta",
+        )
+        TENDENCY = "tendency", "Tendencia correcta"
+        INCORRECT = "incorrect", "Pronóstico incorrecto"
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -1218,12 +1415,25 @@ class Prediction(models.Model):
     )
 
     # null = noch nicht ausgewertet
-    # 0–4 = bereits ausgewerteter Tipp
+    # 0–20 = bereits ausgewerteter Tipp
     points = models.PositiveSmallIntegerField(
         null=True,
         blank=True,
+        validators=[
+            MaxValueValidator(MAX_SCORING_POINTS),
+        ],
         help_text=(
             "Berechnete Punkte für diesen Tipp."
+        ),
+    )
+
+    score_category = models.CharField(
+        max_length=20,
+        choices=ScoreCategory.choices,
+        null=True,
+        blank=True,
+        help_text=(
+            "Trefferkategorie unabhängig von der konfigurierten Punktzahl."
         ),
     )
 
@@ -1305,10 +1515,10 @@ class Prediction(models.Model):
                     )
                     | models.Q(
                         points__gte=0,
-                        points__lte=4,
+                        points__lte=MAX_SCORING_POINTS,
                     )
                 ),
-                name="prediction_points_0_4",
+                name="prediction_points_0_20",
             ),
         ]
 
