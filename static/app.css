@@ -6606,6 +6606,21 @@ thead th{
   color:#91a8cf;
 }
 
+.puntero-table-page
+.live-score-badge{
+  display:block;
+  width:max-content;
+  margin:4px auto 0;
+  padding:2px 6px;
+  border-radius:999px;
+  background:rgba(25,179,107,.16);
+  color:var(--success-text);
+  font-size:8px;
+  font-weight:900;
+  letter-spacing:.07em;
+  line-height:1.35;
+}
+
 
 /* ---------------------------------------------------------
    Spieltagsüberschriften

@@ -71,6 +71,10 @@ Die vorbereiteten, standardmäßig deaktivierten Gruppenpläne Free, Plus
 und Club sowie der noch fehlende Weg zur Zahlungsabwicklung sind in
 [`docs/group-plans.md`](docs/group-plans.md) beschrieben.
 
+Der opt-in Abgleich des offiziellen LigaPro-Spielplans, Live-Scoring
+und die automatische Ergebnisauswertung sind in
+[`docs/ligapro-sync.md`](docs/ligapro-sync.md) beschrieben.
+
 ## Produktionsarchitektur auf Railway
 
 In einem Railway-Projekt werden vier Services angelegt:
@@ -168,6 +172,9 @@ Optionale Worker-Anpassungen:
 | `ACCOUNT_RETENTION_NOTICE_BATCH_SIZE` | `100` |
 | `ACCOUNT_RETENTION_NOTICE_POLL_SECONDS` | `86400` |
 | `ACCOUNT_RETENTION_NOTICE_CLAIM_STALE_MINUTES` | `60` |
+| `LIGAPRO_SYNC_ENABLED` | `0`; nach geprüftem Test auf `1` setzen |
+| `LIGAPRO_SYNC_LIVE_SECONDS` | `120` |
+| `LIGAPRO_SYNC_IDLE_SECONDS` | `21600` |
 
 Der `standing-worker` prüft zusätzlich auf fällige Tipperinnerungen.
 Deshalb darf genau ein solcher Worker laufen. Nutzer müssen die Option
@@ -235,6 +242,30 @@ Web-Deployments. Der Worker wird durch Railway automatisch neu gestartet,
 wenn sein Prozess beendet wird.
 
 ## Betrieb
+
+### LigaPro-Spielplan und Live-Scoring
+
+Vor der ersten Aktivierung wird die öffentliche LigaPro-Quelle ohne
+Schreibzugriff geprüft:
+
+```sh
+python manage.py sync_ligapro
+```
+
+Wenn alle Spiele eindeutig zugeordnet werden, übernimmt folgender
+Befehl Anstoßzeiten und Ergebnisse:
+
+```sh
+python manage.py sync_ligapro --apply
+```
+
+Im automatischen Betrieb setzt nur der `standing-worker`
+`LIGAPRO_SYNC_ENABLED=1`. Er prüft rund um laufende Spiele im
+Zwei-Minuten-Takt und sonst deutlich seltener; ein zusätzlicher Service
+ist nicht nötig. Live-Punkte erscheinen nur vorläufig in `Fecha actual`.
+Erst der Status `Played` schreibt das Endergebnis und aktualisiert die
+Gesamtwertung. Einzelheiten, Sicherheitsgrenzen und der manuelle
+Rückfallweg stehen in [`docs/ligapro-sync.md`](docs/ligapro-sync.md).
 
 ### Standing-Jobs
 
@@ -342,6 +373,8 @@ Die Produktionsüberwachung sollte mindestens alarmieren bei:
 - wiederholt neu startendem Web- oder Workerprozess,
 - fehlgeschlagenen oder lange laufenden Standing-Jobs,
 - Datenbank- oder Redis-Verbindungsfehlern,
+- wiederholt fehlgeschlagenem LigaPro-Abgleich oder ausbleibenden
+  Quellaktualisierungen,
 - ungewöhnlich vielen HTTP-500- oder Auth-Fehlern.
 
 ### Backups und Wiederherstellung

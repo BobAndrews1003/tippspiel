@@ -21,19 +21,32 @@ def prediction_score_category(
 ) -> str | None:
     """Bestimmt die Trefferkategorie unabhängig von der Punktzahl."""
 
-    if prediction is None:
-        return None
+    return prediction_score_category_for_result(
+        prediction,
+        home_score=match.home_score,
+        away_score=match.away_score,
+    )
+
+
+def prediction_score_category_for_result(
+    prediction: Prediction | None,
+    *,
+    home_score: int | None,
+    away_score: int | None,
+) -> str | None:
+    """Bestimmt die Kategorie auch für einen Live-Zwischenstand."""
 
     if (
-        match.home_score is None
-        or match.away_score is None
+        prediction is None
+        or home_score is None
+        or away_score is None
         or prediction.pred_home is None
         or prediction.pred_away is None
     ):
         return None
 
-    actual_home = match.home_score
-    actual_away = match.away_score
+    actual_home = home_score
+    actual_away = away_score
     predicted_home = prediction.pred_home
     predicted_away = prediction.pred_away
 
@@ -79,9 +92,27 @@ def score_prediction(
     *,
     scoring_values: ScoringValues | None = None,
 ) -> PredictionScore:
-    category = prediction_score_category(
-        match,
+    return score_prediction_for_result(
         prediction,
+        home_score=match.home_score,
+        away_score=match.away_score,
+        scoring_values=scoring_values,
+    )
+
+
+def score_prediction_for_result(
+    prediction: Prediction | None,
+    *,
+    home_score: int | None,
+    away_score: int | None,
+    scoring_values: ScoringValues | None = None,
+) -> PredictionScore:
+    """Berechnet Punkte für Endergebnis oder Live-Zwischenstand."""
+
+    category = prediction_score_category_for_result(
+        prediction,
+        home_score=home_score,
+        away_score=away_score,
     )
 
     if category is None:

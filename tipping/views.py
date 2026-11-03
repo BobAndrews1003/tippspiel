@@ -57,6 +57,9 @@ from .group_scoring import (
 from .membership_processing import (
     rebuild_group_after_membership_change,
 )
+from .live_scoring import (
+    build_live_matchday_snapshot,
+)
 from .signal_control import (
     suppress_read_model_delete_signals,
 )
@@ -1781,6 +1784,11 @@ def spieltag(request):
         )
     }
 
+    has_live_matches = any(
+        match.is_live
+        for match in matches
+    )
+
     # -------------------------------------------------------------
     # Mitglieder sortieren und direkt in der Datenbank paginieren
     #
@@ -1823,7 +1831,19 @@ def spieltag(request):
     )
 
     if tab == "matches":
-        if matchday is not None:
+        if has_live_matches:
+            # Nur während eines laufenden Spiels wird die komplette
+            # Gruppe kurz in Python sortiert. Dadurch kann die Live-
+            # Rangfolge korrekt sein, ohne Zwischenstände dauerhaft
+            # in die Gesamtwertung zu schreiben.
+            member_queryset = (
+                member_queryset.order_by(
+                    "page_sort_name",
+                    "user_id",
+                )
+            )
+
+        elif matchday is not None:
             selected_score_subquery = (
                 MatchdayScore.objects
                 .filter(
@@ -1958,8 +1978,51 @@ def spieltag(request):
             )
         )
 
+    live_snapshot = None
+
+    if tab == "matches" and has_live_matches:
+        live_memberships = list(
+            member_queryset
+        )
+        live_snapshot = (
+            build_live_matchday_snapshot(
+                group=group,
+                matches=matches,
+                user_ids=[
+                    live_membership.user_id
+                    for live_membership
+                    in live_memberships
+                ],
+            )
+        )
+
+        for live_membership in live_memberships:
+            live_membership.page_points = (
+                live_snapshot.totals_by_user.get(
+                    live_membership.user_id,
+                    0,
+                )
+            )
+            live_membership.page_rank = (
+                live_snapshot.ranks_by_user.get(
+                    live_membership.user_id
+                )
+            )
+
+        live_memberships.sort(
+            key=lambda live_membership: (
+                -live_membership.page_points,
+                live_membership.page_sort_name,
+                live_membership.user_id,
+            )
+        )
+        paginator_source = live_memberships
+
+    else:
+        paginator_source = member_queryset
+
     paginator = Paginator(
-        member_queryset,
+        paginator_source,
         GROUP_PAGE_SIZE,
     )
 
@@ -2217,7 +2280,15 @@ def spieltag(request):
                 match.away_score,
             )
             if match.has_result
-            else None,
+            else (
+                (
+                    match.live_home_score,
+                    match.live_away_score,
+                )
+                if match.is_live
+                else None
+            ),
+            "is_live": match.is_live,
         }
         for match in matches
     ]
@@ -2252,17 +2323,40 @@ def spieltag(request):
                     )
                 )
 
-                # Punkte werden direkt aus Prediction.points gelesen.
-                # Vor dem Ergebnis bleibt der Wert None.
-                cell_points = (
-                    prediction.points
-                    if (
-                        reveal
-                        and match.has_result
-                        and prediction is not None
-                    )
-                    else None
-                )
+                # Endpunkte kommen aus dem vorberechneten Read Model.
+                # Während einer Partie liefert der flüchtige Snapshot
+                # die Punkte zum aktuellen Zwischenstand.
+                cell_points = None
+
+                if reveal and prediction is not None:
+                    if match.has_result:
+                        cell_points = prediction.points
+
+                        if (
+                            cell_points is None
+                            and live_snapshot is not None
+                        ):
+                            cell_points = (
+                                live_snapshot.cell_points.get(
+                                    (
+                                        user.id,
+                                        match.id,
+                                    )
+                                )
+                            )
+
+                    elif (
+                        match.is_live
+                        and live_snapshot is not None
+                    ):
+                        cell_points = (
+                            live_snapshot.cell_points.get(
+                                (
+                                    user.id,
+                                    match.id,
+                                )
+                            )
+                        )
 
                 cells.append(
                     {
@@ -2332,6 +2426,7 @@ def spieltag(request):
             "bonus_rows": bonus_rows,
             "my_bonus": my_bonus,
             "page_obj": page_obj,
+            "has_live_matches": has_live_matches,
         },
     )
 

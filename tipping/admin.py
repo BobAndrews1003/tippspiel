@@ -320,18 +320,33 @@ class MatchAdmin(admin.ModelAdmin):
         "home_team",
         "away_team",
         "kickoff",
+        "source_status",
+        "live_home_score",
+        "live_away_score",
         "home_score",
         "away_score",
+        "source_synced_at",
     )
 
     list_filter = (
         "tournament",
         "stage",
+        "source_status",
     )
 
     search_fields = (
         "home_team",
         "away_team",
+        "external_id",
+    )
+
+    readonly_fields = (
+        "external_source",
+        "external_id",
+        "source_status",
+        "live_home_score",
+        "live_away_score",
+        "source_synced_at",
     )
 
     list_select_related = (

@@ -72,6 +72,17 @@ einmal auf einem Desktop geprüft werden.
 - [ ] Gleiche Punktzahl und gleiche Spieltagssiege ergeben denselben Rang.
 - [ ] Spieltagssiege entscheiden die Reihenfolge bei gleicher Punktzahl.
 - [ ] Bonuspunkte erscheinen erst zum vorgesehenen Zeitpunkt.
+- [ ] `sync_ligapro` ordnet im Prüfmodus alle erwarteten Partien
+  eindeutig zu und speichert noch nichts.
+- [ ] Eine bestätigte LigaPro-Anstoßzeit ersetzt den lokalen
+  Platzhalter; eine fehlende Quellzeit löscht ihn nicht.
+- [ ] Ein Live-Zwischenstand zeigt in `Fecha actual` vorläufige Punkte,
+  gleiche Punkte als gleichen Rang und den Hinweis `EN VIVO`.
+- [ ] Live-Punkte verändern die gespeicherte Gesamtwertung nicht.
+- [ ] Der Status `Played` übernimmt das Endergebnis und aktualisiert
+  Punkte, Spieltagstabelle und Gesamtwertung automatisch.
+- [ ] Bei deaktiviertem Abgleich funktioniert die manuelle
+  Ergebniseingabe weiterhin.
 
 ### Darstellung und Betrieb
 

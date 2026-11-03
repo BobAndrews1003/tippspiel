@@ -14,6 +14,10 @@ from django.utils import timezone
 from tipping.models import (
     StandingRebuildJob,
 )
+from tipping.ligapro_sync import (
+    next_ligapro_sync_delay,
+    sync_ligapro_matches,
+)
 from tipping.account_retention_notices import (
     send_due_account_retention_notices,
 )
@@ -229,10 +233,61 @@ class Command(BaseCommand):
 
         next_reminder_check = monotonic()
         next_account_retention_check = monotonic()
+        next_ligapro_check = monotonic()
 
         try:
             while True:
                 close_old_connections()
+
+                if (
+                    settings.LIGAPRO_SYNC_ENABLED
+                    and monotonic()
+                    >= next_ligapro_check
+                ):
+                    try:
+                        sync_result = (
+                            sync_ligapro_matches(
+                                apply=True,
+                            )
+                        )
+
+                        if (
+                            sync_result.changed
+                            or sync_result.skipped
+                        ):
+                            self.stdout.write(
+                                (
+                                    "LigaPro-Synchronisation: "
+                                    f"{sync_result.changed} geändert, "
+                                    f"{sync_result.final_updates} "
+                                    "Endergebnisse, "
+                                    f"{sync_result.skipped} übersprungen."
+                                )
+                            )
+
+                    except Exception as exc:
+                        self.stderr.write(
+                            self.style.ERROR(
+                                "LigaPro-Synchronisation "
+                                f"fehlgeschlagen: {exc}"
+                            )
+                        )
+
+                    finally:
+                        try:
+                            sync_delay = (
+                                next_ligapro_sync_delay()
+                            )
+
+                        except Exception:
+                            sync_delay = (
+                                settings.LIGAPRO_SYNC_LIVE_SECONDS
+                            )
+
+                        next_ligapro_check = (
+                            monotonic()
+                            + sync_delay
+                        )
 
                 if (
                     settings.ACCOUNT_RETENTION_NOTICES_ENABLED

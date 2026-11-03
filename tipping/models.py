@@ -915,6 +915,14 @@ class GroupBranding(models.Model):
 # ============================================================
 
 class Match(models.Model):
+    class SourceStatus(models.TextChoices):
+        UNKNOWN = "unknown", "Unbekannt"
+        SCHEDULED = "scheduled", "Programmiert"
+        LIVE = "live", "Live"
+        FINISHED = "finished", "Beendet"
+        POSTPONED = "postponed", "Verschoben"
+        CANCELLED = "cancelled", "Abgesagt"
+
     tournament = models.ForeignKey(
         Tournament,
         on_delete=models.CASCADE,
@@ -969,6 +977,43 @@ class Match(models.Model):
     )
 
     away_score = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+    )
+
+    # Live-Werte bleiben bewusst vom Endergebnis getrennt. Dadurch
+    # kann die Spieltagsansicht während einer Partie Punkte anzeigen,
+    # ohne die Gesamtwertung vor dem Schlusspfiff zu verändern.
+    live_home_score = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+    )
+
+    live_away_score = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+    )
+
+    external_source = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+    )
+
+    external_id = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+    )
+
+    source_status = models.CharField(
+        max_length=16,
+        choices=SourceStatus.choices,
+        default=SourceStatus.UNKNOWN,
+        db_index=True,
+    )
+
+    source_synced_at = models.DateTimeField(
         null=True,
         blank=True,
     )
@@ -1054,6 +1099,72 @@ class Match(models.Model):
                 ),
                 name="match_result_both_or_none",
             ),
+
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        live_home_score__isnull=True,
+                        live_away_score__isnull=True,
+                    )
+                    | models.Q(
+                        live_home_score__isnull=False,
+                        live_away_score__isnull=False,
+                    )
+                ),
+                name="match_live_result_both_or_none",
+            ),
+
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        live_home_score__isnull=True,
+                    )
+                    | models.Q(
+                        live_home_score__gte=0,
+                        live_home_score__lte=MAX_GOALS,
+                    )
+                ),
+                name="match_live_home_score_0_30",
+            ),
+
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        live_away_score__isnull=True,
+                    )
+                    | models.Q(
+                        live_away_score__gte=0,
+                        live_away_score__lte=MAX_GOALS,
+                    )
+                ),
+                name="match_live_away_score_0_30",
+            ),
+
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        external_source="",
+                        external_id="",
+                    )
+                    | (
+                        ~models.Q(external_source="")
+                        & ~models.Q(external_id="")
+                    )
+                ),
+                name="match_external_reference_complete",
+            ),
+
+            models.UniqueConstraint(
+                fields=(
+                    "external_source",
+                    "external_id",
+                ),
+                condition=(
+                    ~models.Q(external_source="")
+                    & ~models.Q(external_id="")
+                ),
+                name="uniq_match_external_reference",
+            ),
         ]
 
         indexes = [
@@ -1080,6 +1191,14 @@ class Match(models.Model):
                     "stage_round",
                 ],
                 name="match_tourn_stage_round_idx",
+            ),
+
+            models.Index(
+                fields=[
+                    "external_source",
+                    "external_id",
+                ],
+                name="match_external_ref_idx",
             ),
         ]
 
@@ -1192,6 +1311,22 @@ class Match(models.Model):
         return (
             self.home_score is not None
             and self.away_score is not None
+        )
+
+    @property
+    def has_live_score(self) -> bool:
+        return (
+            self.live_home_score is not None
+            and self.live_away_score is not None
+        )
+
+    @property
+    def is_live(self) -> bool:
+        return (
+            self.source_status
+            == self.SourceStatus.LIVE
+            and self.has_live_score
+            and not self.has_result
         )
 
     @property

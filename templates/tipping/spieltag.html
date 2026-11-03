@@ -53,8 +53,14 @@
             </h1>
 
             <div class="muted small">
-              Los pronósticos se revelan después del inicio de cada
-              partido.
+              {% if has_live_matches %}
+                Puntuación provisional en vivo. Se actualiza
+                automáticamente y pasa a la clasificación general
+                cuando termina el partido.
+              {% else %}
+                Los pronósticos se revelan después del inicio de cada
+                partido.
+              {% endif %}
             </div>
 
           {% else %}
@@ -454,6 +460,11 @@
                       <div class="match-sub">
                         {% if header.result %}
                           {{ header.result.0 }}:{{ header.result.1 }}
+                          {% if header.is_live %}
+                            <span class="live-score-badge">
+                              EN VIVO
+                            </span>
+                          {% endif %}
                         {% else %}
                           {{ header.match.kickoff|date:"d.m H:i" }}
                         {% endif %}
@@ -656,6 +667,15 @@
           }
         }
       );
+
+      {% if has_live_matches %}
+        window.setTimeout(
+          function () {
+            window.location.reload();
+          },
+          60000
+        );
+      {% endif %}
     })();
   </script>
 {% endblock %}

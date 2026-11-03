@@ -945,6 +945,126 @@ if TIP_REMINDER_POLL_SECONDS < 60:
 
 
 # ============================================================
+# LigaPro-Spielplan und Live-Ergebnisse
+# ============================================================
+
+# Die öffentliche LigaPro-Datenquelle ist absichtlich opt-in. So
+# erfolgen weder lokal noch in einer neuen Produktionsumgebung
+# unbeabsichtigte externe Abfragen.
+LIGAPRO_SYNC_ENABLED = env_bool(
+    "LIGAPRO_SYNC_ENABLED",
+    default=False,
+)
+
+LIGAPRO_SYNC_URL = os.environ.get(
+    "LIGAPRO_SYNC_URL",
+    (
+        "https://ligapro.ec/informacion/fixtures/"
+        "dataPartidos.php"
+    ),
+).strip()
+
+LIGAPRO_SYNC_TOURNAMENT = os.environ.get(
+    "LIGAPRO_SYNC_TOURNAMENT",
+    "LigaPro Ecuador",
+).strip()
+
+LIGAPRO_SYNC_TIMEOUT_SECONDS = env_int(
+    "LIGAPRO_SYNC_TIMEOUT_SECONDS",
+    15,
+)
+
+LIGAPRO_SYNC_MIN_FIXTURES = env_int(
+    "LIGAPRO_SYNC_MIN_FIXTURES",
+    200,
+)
+
+LIGAPRO_SYNC_MAX_FIXTURES = env_int(
+    "LIGAPRO_SYNC_MAX_FIXTURES",
+    500,
+)
+
+LIGAPRO_SYNC_LIVE_SECONDS = env_int(
+    "LIGAPRO_SYNC_LIVE_SECONDS",
+    120,
+)
+
+LIGAPRO_SYNC_IDLE_SECONDS = env_int(
+    "LIGAPRO_SYNC_IDLE_SECONDS",
+    21600,
+)
+
+LIGAPRO_SYNC_WINDOW_BEFORE_MINUTES = env_int(
+    "LIGAPRO_SYNC_WINDOW_BEFORE_MINUTES",
+    30,
+)
+
+LIGAPRO_SYNC_WINDOW_AFTER_MINUTES = env_int(
+    "LIGAPRO_SYNC_WINDOW_AFTER_MINUTES",
+    300,
+)
+
+LIGAPRO_SYNC_USER_AGENT = os.environ.get(
+    "LIGAPRO_SYNC_USER_AGENT",
+    "Puntero/1.0 LigaPro schedule sync",
+).strip()
+
+
+if LIGAPRO_SYNC_ENABLED:
+    parsed_ligapro_url = urlsplit(
+        LIGAPRO_SYNC_URL
+    )
+
+    if parsed_ligapro_url.scheme != "https":
+        raise RuntimeError(
+            "LIGAPRO_SYNC_URL muss HTTPS verwenden."
+        )
+
+    if not LIGAPRO_SYNC_TOURNAMENT:
+        raise RuntimeError(
+            "LIGAPRO_SYNC_TOURNAMENT darf nicht leer sein."
+        )
+
+
+if not 3 <= LIGAPRO_SYNC_TIMEOUT_SECONDS <= 60:
+    raise RuntimeError(
+        "LIGAPRO_SYNC_TIMEOUT_SECONDS muss zwischen 3 und 60 liegen."
+    )
+
+
+if not (
+    1
+    <= LIGAPRO_SYNC_MIN_FIXTURES
+    <= LIGAPRO_SYNC_MAX_FIXTURES
+    <= 2000
+):
+    raise RuntimeError(
+        "Die LigaPro-Grenzen für die Anzahl Spiele sind ungültig."
+    )
+
+
+if LIGAPRO_SYNC_LIVE_SECONDS < 60:
+    raise RuntimeError(
+        "LIGAPRO_SYNC_LIVE_SECONDS muss mindestens 60 sein."
+    )
+
+
+if LIGAPRO_SYNC_IDLE_SECONDS < 900:
+    raise RuntimeError(
+        "LIGAPRO_SYNC_IDLE_SECONDS muss mindestens 900 sein."
+    )
+
+
+if (
+    LIGAPRO_SYNC_WINDOW_BEFORE_MINUTES < 0
+    or LIGAPRO_SYNC_WINDOW_AFTER_MINUTES < 60
+):
+    raise RuntimeError(
+        "Das LigaPro-Synchronisationsfenster ist ungültig."
+    )
+
+
+# ============================================================
 # Datenaufbewahrung
 # ============================================================
 
