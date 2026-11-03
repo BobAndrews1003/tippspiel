@@ -91,16 +91,21 @@ Nur der Webservice erhält eine öffentliche Domain.
 
 Repository mit dem Service verbinden und als Config-as-Code-Pfad
 `/railway.web.json` einstellen. Diese Konfiguration führt vor jedem
-Deployment zuerst den Django-Produktionscheck und anschließend genau
-einmal
+Deployment den Django-Produktionscheck aus, wendet Migrationen an und
+prüft anschließend den LigaPro-Spielplan:
 
 ```sh
 python manage.py check --deploy --fail-level ERROR
 python manage.py migrate --noinput
+python manage.py bootstrap_ligapro
 ```
 
-aus. Danach sammelt `bin/start_web.sh` die statischen Dateien und
-startet Gunicorn auf Railways `PORT`.
+Bei einer leeren Datenbank importiert der letzte Befehl die reguläre
+Saison und alle drei Finalphasen aus den versionierten CSV-Dateien. Bei
+späteren Deployments validiert er die vorhandenen 312 Spiele, ohne sie
+erneut anzulegen. Ein unvollständiger oder widersprüchlicher Bestand
+stoppt das Deployment. Danach sammelt `bin/start_web.sh` die statischen
+Dateien und startet Gunicorn auf Railways `PORT`.
 
 Railway gibt den neuen Deployment-Traffic erst frei, wenn `/health/`
 HTTP 200 liefert. Der Healthcheck prüft Webprozess, PostgreSQL und Redis,
@@ -244,6 +249,17 @@ wenn sein Prozess beendet wird.
 ## Betrieb
 
 ### LigaPro-Spielplan und Live-Scoring
+
+Eine leere Datenbank erhält den vollständigen Ausgangsspielplan mit:
+
+```sh
+python manage.py bootstrap_ligapro
+```
+
+Der Befehl ist wiederholbar und erzeugt keine Duplikate. Er erwartet
+240 Spiele der regulären Saison und 72 Spiele der drei Finalphasen.
+Er lädt bewusst keine externen Daten; dadurch hängt ein Deployment
+nicht von der Erreichbarkeit der LigaPro-Seite ab.
 
 Vor der ersten Aktivierung wird die öffentliche LigaPro-Quelle ohne
 Schreibzugriff geprüft:

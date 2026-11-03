@@ -54,6 +54,18 @@ Zuerst die Migration anwenden:
 python manage.py migrate
 ```
 
+In einer leeren Datenbank wird danach der versionierte Ausgangsspielplan
+reproduzierbar importiert:
+
+```sh
+python manage.py bootstrap_ligapro
+```
+
+Der Befehl importiert 240 reguläre Partien und 72 Partien der drei
+Finalphasen. Bei erneutem Aufruf validiert er den vorhandenen Bestand,
+ohne Spiele doppelt anzulegen. Ein teilweise befüllter oder
+widersprüchlicher Bestand wird nicht automatisch verändert.
+
 Danach immer zuerst den Prüfmodus ausführen:
 
 ```sh

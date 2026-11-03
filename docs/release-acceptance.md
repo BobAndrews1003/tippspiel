@@ -30,6 +30,17 @@ Geprüft werden in einem zusammenhängenden Szenario:
 - Rang, Spieltagssieg, Spieltagstabelle und Gesamttabelle;
 - freiwillige Aktivierung der Tipperinnerung.
 
+Für eine leere Deployment-Datenbank wird zusätzlich geprüft:
+
+```sh
+python manage.py bootstrap_ligapro
+python manage.py bootstrap_ligapro
+```
+
+Beide Läufe müssen erfolgreich sein und der Bestand muss danach exakt
+312 Spiele enthalten. Der zweite Lauf darf keine weiteren Spiele
+anlegen.
+
 Anschließend muss zusätzlich der vollständige Release-Check laufen:
 
 ```sh
