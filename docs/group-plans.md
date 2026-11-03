@@ -172,11 +172,11 @@ wird aber nicht mehr angezeigt oder bearbeitet. Sie wird bei einer
 erneuten Club-Freigabe automatisch wieder aktiv.
 
 Lokal liegen Logo und Titelbild im nicht versionierten
-`media/`-Verzeichnis. Vor der produktiven Nutzung von Bild-Uploads muss
-`MEDIA_ROOT` auf einen
-dauerhaften, gesicherten Speicher oder das Projekt auf einen geeigneten
-Objektspeicher zeigen. Ein flüchtiges Container-Dateisystem reicht dafür
-nicht aus.
+`media/`-Verzeichnis. Für Railway ist ein privater, S3-kompatibler
+Objektspeicher vorbereitet, damit Bilder Deployments überstehen. Die
+Einrichtung, Sicherheitsmerkmale und der Speichertest stehen in
+[`media-storage.md`](media-storage.md). Ein flüchtiges
+Container-Dateisystem darf in Produktion nicht verwendet werden.
 
 ## Was vor echten Zahlungen noch fehlt
 

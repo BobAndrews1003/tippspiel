@@ -101,6 +101,12 @@ einmal auf einem Desktop geprüft werden.
 - [ ] Dashboard, Tippseite und beide Tabellen sind mobil bedienbar.
 - [ ] Navigation, Dialoge und Fehlermeldungen sind verständlich.
 - [ ] `/health/` antwortet erfolgreich.
+- [ ] `python manage.py check_media_storage` ist in der Zielumgebung
+  mit Schreiben, Lesen und Löschen erfolgreich.
+- [ ] Ein Club-Logo und ein Titelbild bleiben nach Neuladen und erneutem
+  Deployment sichtbar; ihre privaten URLs sind zeitlich signiert.
+- [ ] Ersetzen und Zurücksetzen entfernen die jeweils alte Bilddatei aus
+  dem Objektspeicher.
 - [ ] Rechtstext-URLs antworten bei `LEGAL_PAGES_ENABLED=0` mit 404.
 - [ ] Bei lokaler Vorschau sind Platzhalter und „No publicar“ sichtbar.
 - [ ] Es befinden sich keine Zugangsdaten oder Echtdaten im Git-Diff.

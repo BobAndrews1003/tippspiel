@@ -555,6 +555,162 @@ MEDIA_ROOT = Path(
 )
 
 
+MEDIA_STORAGE_BACKEND = os.environ.get(
+    "MEDIA_STORAGE_BACKEND",
+    "filesystem",
+).strip().lower()
+
+
+if MEDIA_STORAGE_BACKEND not in {
+    "filesystem",
+    "s3",
+}:
+    raise RuntimeError(
+        "MEDIA_STORAGE_BACKEND muss 'filesystem' oder 's3' sein."
+    )
+
+
+MEDIA_S3_BUCKET_NAME = os.environ.get(
+    "MEDIA_S3_BUCKET_NAME",
+    "",
+).strip()
+
+MEDIA_S3_ACCESS_KEY_ID = os.environ.get(
+    "MEDIA_S3_ACCESS_KEY_ID",
+    "",
+).strip()
+
+MEDIA_S3_SECRET_ACCESS_KEY = os.environ.get(
+    "MEDIA_S3_SECRET_ACCESS_KEY",
+    "",
+)
+
+MEDIA_S3_REGION_NAME = os.environ.get(
+    "MEDIA_S3_REGION_NAME",
+    "auto",
+).strip()
+
+MEDIA_S3_ENDPOINT_URL = os.environ.get(
+    "MEDIA_S3_ENDPOINT_URL",
+    "",
+).strip().rstrip("/")
+
+MEDIA_S3_ADDRESSING_STYLE = os.environ.get(
+    "MEDIA_S3_ADDRESSING_STYLE",
+    "virtual",
+).strip().lower()
+
+MEDIA_S3_QUERYSTRING_EXPIRE = env_int(
+    "MEDIA_S3_QUERYSTRING_EXPIRE",
+    3600,
+)
+
+
+if MEDIA_S3_ADDRESSING_STYLE not in {
+    "virtual",
+    "path",
+}:
+    raise RuntimeError(
+        "MEDIA_S3_ADDRESSING_STYLE muss 'virtual' oder 'path' sein."
+    )
+
+
+if not 300 <= MEDIA_S3_QUERYSTRING_EXPIRE <= 86400:
+    raise RuntimeError(
+        "MEDIA_S3_QUERYSTRING_EXPIRE muss zwischen 300 und 86400 liegen."
+    )
+
+
+MEDIA_STORAGE_ORIGIN = ""
+
+default_file_storage = {
+    "BACKEND": (
+        "django.core.files.storage."
+        "FileSystemStorage"
+    ),
+}
+
+
+if MEDIA_STORAGE_BACKEND == "s3":
+    required_media_settings = {
+        "MEDIA_S3_BUCKET_NAME": MEDIA_S3_BUCKET_NAME,
+        "MEDIA_S3_ACCESS_KEY_ID": MEDIA_S3_ACCESS_KEY_ID,
+        "MEDIA_S3_SECRET_ACCESS_KEY": (
+            MEDIA_S3_SECRET_ACCESS_KEY
+        ),
+        "MEDIA_S3_REGION_NAME": MEDIA_S3_REGION_NAME,
+        "MEDIA_S3_ENDPOINT_URL": MEDIA_S3_ENDPOINT_URL,
+    }
+    missing_media_settings = [
+        name
+        for name, value in required_media_settings.items()
+        if not value
+    ]
+
+    if missing_media_settings:
+        raise RuntimeError(
+            "Für MEDIA_STORAGE_BACKEND=s3 fehlen: "
+            + ", ".join(missing_media_settings)
+        )
+
+    media_endpoint_parts = urlsplit(
+        MEDIA_S3_ENDPOINT_URL
+    )
+
+    if (
+        media_endpoint_parts.scheme != "https"
+        or not media_endpoint_parts.hostname
+        or media_endpoint_parts.username
+        or media_endpoint_parts.password
+        or media_endpoint_parts.query
+        or media_endpoint_parts.fragment
+    ):
+        raise RuntimeError(
+            "MEDIA_S3_ENDPOINT_URL muss eine HTTPS-Basisadresse "
+            "ohne Zugangsdaten, Query oder Fragment sein."
+        )
+
+    endpoint_host = media_endpoint_parts.hostname
+
+    if media_endpoint_parts.port:
+        endpoint_host += f":{media_endpoint_parts.port}"
+
+    if MEDIA_S3_ADDRESSING_STYLE == "virtual":
+        storage_host = (
+            f"{MEDIA_S3_BUCKET_NAME}."
+            f"{endpoint_host}"
+        )
+    else:
+        storage_host = endpoint_host
+
+    MEDIA_STORAGE_ORIGIN = (
+        f"{media_endpoint_parts.scheme}://{storage_host}"
+    )
+
+    default_file_storage = {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "access_key": MEDIA_S3_ACCESS_KEY_ID,
+            "secret_key": MEDIA_S3_SECRET_ACCESS_KEY,
+            "bucket_name": MEDIA_S3_BUCKET_NAME,
+            "region_name": MEDIA_S3_REGION_NAME,
+            "endpoint_url": MEDIA_S3_ENDPOINT_URL,
+            "addressing_style": MEDIA_S3_ADDRESSING_STYLE,
+            "signature_version": "s3v4",
+            "querystring_auth": True,
+            "querystring_expire": (
+                MEDIA_S3_QUERYSTRING_EXPIRE
+            ),
+            "file_overwrite": False,
+            "default_acl": None,
+            "location": "media",
+            "object_parameters": {
+                "CacheControl": "private, max-age=3600",
+            },
+        },
+    }
+
+
 FILE_UPLOAD_PERMISSIONS = 0o640
 
 FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o750
@@ -580,13 +736,9 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = env_int(
 # ============================================================
 
 STORAGES = {
-    # Benutzer-Uploads wie Avatare.
-    "default": {
-        "BACKEND": (
-            "django.core.files.storage."
-            "FileSystemStorage"
-        ),
-    },
+    # Benutzer-Uploads liegen lokal im Dateisystem oder optional
+    # in einem privaten S3-kompatiblen Objektspeicher.
+    "default": default_file_storage,
 
     # Lokal einfache statische Speicherung,
     # in Produktion WhiteNoise mit Manifest.
@@ -1413,6 +1565,11 @@ SECURE_CSP_REPORT_ONLY = {
     "img-src": [
         CSP.SELF,
         "data:",
+        *(
+            [MEDIA_STORAGE_ORIGIN]
+            if MEDIA_STORAGE_ORIGIN
+            else []
+        ),
     ],
     "font-src": [
         CSP.SELF,

@@ -75,6 +75,10 @@ Der opt-in Abgleich des offiziellen LigaPro-Spielplans, Live-Scoring
 und die automatische Ergebnisauswertung sind in
 [`docs/ligapro-sync.md`](docs/ligapro-sync.md) beschrieben.
 
+Die dauerhafte Speicherung von Gruppenlogos und Titelbildern in einem
+privaten Railway-Bucket ist in
+[`docs/media-storage.md`](docs/media-storage.md) beschrieben.
+
 ## Produktionsarchitektur auf Railway
 
 In einem Railway-Projekt werden vier Services angelegt:
@@ -161,6 +165,24 @@ Nur der Webservice benötigt zusätzlich:
 | `WEB_CONCURRENCY` | `2` |
 | `GUNICORN_TIMEOUT` | `30` |
 
+Sobald Club-Gruppen Logos oder Titelbilder produktiv hochladen dürfen,
+benötigt nur der Webservice zusätzlich:
+
+| Variable | Bedeutung |
+| --- | --- |
+| `MEDIA_STORAGE_BACKEND` | `s3` |
+| `MEDIA_S3_BUCKET_NAME` | Referenz auf `${{Bucket.BUCKET}}` |
+| `MEDIA_S3_ACCESS_KEY_ID` | Referenz auf `${{Bucket.ACCESS_KEY_ID}}` |
+| `MEDIA_S3_SECRET_ACCESS_KEY` | Referenz auf `${{Bucket.SECRET_ACCESS_KEY}}` |
+| `MEDIA_S3_REGION_NAME` | Referenz auf `${{Bucket.REGION}}` |
+| `MEDIA_S3_ENDPOINT_URL` | Referenz auf `${{Bucket.ENDPOINT}}` |
+| `MEDIA_S3_ADDRESSING_STYLE` | laut Bucket-Credentials `virtual` oder `path` |
+| `MEDIA_S3_QUERYSTRING_EXPIRE` | Gültigkeit signierter Bild-URLs in Sekunden, Standard `3600` |
+
+Die vollständige Einrichtung und der Verbindungstest stehen in
+[`docs/media-storage.md`](docs/media-storage.md). Für den Bucket-Namen
+muss Railways `BUCKET` und nicht `RAILWAY_BUCKET_NAME` verwendet werden.
+
 Optionale Worker-Anpassungen:
 
 | Variable | Standard |
@@ -240,7 +262,10 @@ keine juristische Beratung.
    abgeschlossen sein.
 4. Web-Start und erfolgreichen `/health/`-Check kontrollieren.
 5. Worker-Logs kontrollieren: Schema aktuell, Worker gestartet.
-6. Einen Smoke-Test durchführen: Login, Gruppe, Tippabgabe und Tabelle.
+6. Bei aktiviertem S3-Speicher `python manage.py check_media_storage`
+   einmal in der Webservice-Shell erfolgreich ausführen.
+7. Einen Smoke-Test durchführen: Login, Gruppe, Tippabgabe, Tabelle und
+   bei Club-Gruppen Bild-Upload.
 
 Ein fehlgeschlagener Pre-Deploy-Befehl verhindert die Freigabe des neuen
 Web-Deployments. Der Worker wird durch Railway automatisch neu gestartet,
@@ -282,6 +307,18 @@ ist nicht nötig. Live-Punkte erscheinen nur vorläufig in `Fecha actual`.
 Erst der Status `Played` schreibt das Endergebnis und aktualisiert die
 Gesamtwertung. Einzelheiten, Sicherheitsgrenzen und der manuelle
 Rückfallweg stehen in [`docs/ligapro-sync.md`](docs/ligapro-sync.md).
+
+### Logos und Titelbilder
+
+Der konfigurierte Speicher kann ohne dauerhafte Testdatei geprüft werden:
+
+```sh
+python manage.py check_media_storage
+```
+
+Lokal prüft der Befehl das `media/`-Verzeichnis, in Railway den privaten
+S3-kompatiblen Bucket. Einrichtung, Variablen und manueller Uploadtest
+sind in [`docs/media-storage.md`](docs/media-storage.md) dokumentiert.
 
 ### Standing-Jobs
 
@@ -399,6 +436,10 @@ PostgreSQL-Backups werden beim Datenbankanbieter aktiviert. Vor dem
 Go-live und vor destruktiven Migrationen muss eine Wiederherstellung in
 eine getrennte Testdatenbank praktisch geprüft werden. Ein Backup gilt
 erst dann als verlässlich, wenn dieser Restore-Test erfolgreich war.
+
+Railway-Buckets bieten derzeit keine automatischen Snapshots oder
+Objektversionierung. Wichtige hochgeladene Originalbilder müssen deshalb
+zusätzlich gesichert und eine Wiederherstellung praktisch geprüft werden.
 
 Lokale SQLite-Dateien, `staticfiles/`, `media/`, `.env` und
 `__pycache__/` sind keine Release-Artefakte und werden nicht committet.
