@@ -26,9 +26,14 @@
       </div>
 
       <div class="field">
-        <label for="{{ form.tournament.id_for_label }}">{{ form.tournament.label }}</label>
-        {{ form.tournament }}
-        {% for e in form.tournament.errors %}
+        <span class="field-label">{{ form.tournaments.label }}</span>
+        <div class="competition-choice-list">
+          {{ form.tournaments }}
+        </div>
+        {% if form.tournaments.help_text %}
+          <div class="muted small">{{ form.tournaments.help_text }}</div>
+        {% endif %}
+        {% for e in form.tournaments.errors %}
           <div class="form-error">{{ e }}</div>
         {% endfor %}
       </div>

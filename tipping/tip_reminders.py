@@ -8,6 +8,7 @@ import logging
 from allauth.account.models import EmailAddress
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
+from django.db.models import Q
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
@@ -308,14 +309,27 @@ def send_due_tip_reminders(
         GroupMembership.objects
         .filter(
             user_id__in=user_ids,
-            group__tournament_id__in=(
-                matches_by_tournament.keys()
-            ),
+        )
+        .filter(
+            Q(
+                group__tournament_id__in=(
+                    matches_by_tournament.keys()
+                )
+            )
+            | Q(
+                group__tournament_selections__tournament_id__in=(
+                    matches_by_tournament.keys()
+                )
+            )
         )
         .select_related(
             "group",
             "group__tournament",
         )
+        .prefetch_related(
+            "group__tournament_selections",
+        )
+        .distinct()
         .order_by("user_id", "group_id")
     )
     group_ids = {
@@ -360,29 +374,33 @@ def send_due_tip_reminders(
     pending_by_user = defaultdict(list)
 
     for membership in memberships:
-        for match in matches_by_tournament[
-            membership.group.tournament_id
-        ]:
-            key = (
-                membership.user_id,
-                membership.group_id,
-                match.id,
-            )
-
-            if (
-                key in complete_predictions
-                or key in delivered
+        for tournament_id in (
+            membership.group.selected_tournament_ids()
+        ):
+            for match in matches_by_tournament.get(
+                tournament_id,
+                [],
             ):
-                continue
-
-            pending_by_user[
-                membership.user_id
-            ].append(
-                (
-                    membership,
-                    match,
+                key = (
+                    membership.user_id,
+                    membership.group_id,
+                    match.id,
                 )
-            )
+
+                if (
+                    key in complete_predictions
+                    or key in delivered
+                ):
+                    continue
+
+                pending_by_user[
+                    membership.user_id
+                ].append(
+                    (
+                        membership,
+                        match,
+                    )
+                )
 
     due_deliveries = sum(
         len(items)

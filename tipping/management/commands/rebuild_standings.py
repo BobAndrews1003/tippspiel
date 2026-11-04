@@ -38,6 +38,7 @@ class Command(BaseCommand):
         groups = (
             Group.objects
             .select_related("tournament")
+            .prefetch_related("tournament_selections")
             .order_by("id")
         )
 
@@ -60,59 +61,54 @@ class Command(BaseCommand):
         for group in groups.iterator(
             chunk_size=100,
         ):
-            result_matchdays = list(
+            tournament_ids = group.selected_tournament_ids()
+            result_events = list(
                 Match.objects
                 .filter(
-                    tournament_id=(
-                        group.tournament_id
-                    ),
+                    tournament_id__in=tournament_ids,
                     matchday__isnull=False,
                     home_score__isnull=False,
                     away_score__isnull=False,
                 )
                 .values_list(
+                    "tournament_id",
                     "matchday",
-                    flat=True,
                 )
                 .distinct()
-                .order_by("matchday")
+                .order_by("tournament_id", "matchday")
             )
 
             with transaction.atomic():
                 # Entfernt vorberechnete Zeilen für
                 # Spieltage, die aktuell keine Ergebnisse
                 # mehr besitzen.
-                stale_scores = (
-                    MatchdayScore.objects
-                    .filter(
-                        group_id=group.id,
+                valid_events = set(result_events)
+                stale_ids = [
+                    score.id
+                    for score in (
+                        MatchdayScore.objects
+                        .filter(group_id=group.id)
+                        .only("id", "tournament_id", "matchday")
                     )
-                )
-
-                if result_matchdays:
-                    stale_scores = (
-                        stale_scores.exclude(
-                            matchday__in=(
-                                result_matchdays
-                            ),
-                        )
-                    )
-
-                deleted_rows, _ = (
-                    stale_scores.delete()
-                )
+                    if (score.tournament_id, score.matchday)
+                    not in valid_events
+                ]
+                deleted_rows, _ = MatchdayScore.objects.filter(
+                    id__in=stale_ids,
+                ).delete()
 
                 matchday_rows = 0
 
-                for matchday in result_matchdays:
+                for tournament_id, matchday in result_events:
                     matchday_rows += (
                         rebuild_matchday_scores(
                             group_id=group.id,
                             matchday=matchday,
+                            tournament_id=tournament_id,
                         )
                     )
 
-                if result_matchdays:
+                if result_events:
                     timeline_rows = (
                         rebuild_group_timeline(
                             group_id=group.id,
@@ -137,7 +133,7 @@ class Command(BaseCommand):
                 (
                     f"Gruppe {group.id} "
                     f"«{group.name}»: "
-                    f"{len(result_matchdays)} Spieltage, "
+                    f"{len(result_events)} Spieltage, "
                     f"{matchday_rows} Spieltagssummen, "
                     f"{timeline_rows} Timeline-Zeilen, "
                     f"{standing_rows} Ranglistenzeilen, "

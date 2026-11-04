@@ -20,7 +20,7 @@
 
         <div>
           <div class="tip-entry-eyebrow">
-            {{ group.name }}
+            {{ group.name }} · {{ tournament.name }}
           </div>
 
           {% if matchday %}
@@ -54,7 +54,7 @@
             {% if matchday %}
               {% if prev_md %}
                 <a
-                  href="{% url 'tippen' %}?md={{ prev_md }}"
+                  href="{% url 'tippen' %}?competition={{ tournament.id }}&md={{ prev_md }}"
                   class="btn small"
                   aria-label="Fecha anterior"
                 >
@@ -71,7 +71,7 @@
 
               {% if next_md %}
                 <a
-                  href="{% url 'tippen' %}?md={{ next_md }}"
+                  href="{% url 'tippen' %}?competition={{ tournament.id }}&md={{ next_md }}"
                   class="btn small"
                   aria-label="Fecha siguiente"
                 >
@@ -93,6 +93,8 @@
       </div>
     </section>
 
+    {% include "tipping/_competition_switcher.html" with competition_route="tippen" %}
+
 
     <!-- =====================================================
          TIPPS
@@ -102,7 +104,7 @@
 
       <form
         method="post"
-        action="{% url 'tippen' %}?md={{ matchday }}"
+        action="{% url 'tippen' %}?competition={{ tournament.id }}&md={{ matchday }}"
         class="tip-entry-form"
       >
         {% csrf_token %}

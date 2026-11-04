@@ -22,11 +22,16 @@
 
           {% if shown_matchdays %}
             <div class="muted small">
-              Vista actual:
+              {{ tournament.name }} · Vista actual:
               {{ shown_first_label }} – {{ shown_last_label }}
               ({{ shown_matchdays|length }})
               de {{ matchdays|length }}
             </div>
+            {% if group_tournaments|length > 1 %}
+              <div class="muted small">
+                El total general combina todas las competiciones seleccionadas.
+              </div>
+            {% endif %}
           {% else %}
             <div class="muted small">
               Todavía no hay fechas disponibles.
@@ -41,7 +46,7 @@
           {% if prev_from is not None %}
             <a
               class="btn small"
-              href="{% url 'tabelle' %}?view={{ view }}&from={{ prev_from }}&count={{ count }}{% if page_obj %}&page={{ page_obj.number }}{% endif %}"
+              href="{% url 'tabelle' %}?competition={{ tournament.id }}&view={{ view }}&from={{ prev_from }}&count={{ count }}{% if page_obj %}&page={{ page_obj.number }}{% endif %}"
               aria-label="Fechas anteriores"
             >
               ◀
@@ -58,7 +63,7 @@
           {% if next_from is not None %}
             <a
               class="btn small"
-              href="{% url 'tabelle' %}?view={{ view }}&from={{ next_from }}&count={{ count }}{% if page_obj %}&page={{ page_obj.number }}{% endif %}"
+              href="{% url 'tabelle' %}?competition={{ tournament.id }}&view={{ view }}&from={{ next_from }}&count={{ count }}{% if page_obj %}&page={{ page_obj.number }}{% endif %}"
               aria-label="Siguientes fechas"
             >
               ▶
@@ -76,6 +81,8 @@
       </div>
     </section>
 
+    {% include "tipping/_competition_switcher.html" with competition_route="tabelle" %}
+
     <!-- =====================================================
          TABS
          ===================================================== -->
@@ -89,7 +96,7 @@
             active
           {% endif %}
         "
-        href="{% url 'tabelle' %}?view=mdpoints&from={{ from_idx }}&count={{ count }}{% if page_obj %}&page={{ page_obj.number }}{% endif %}"
+        href="{% url 'tabelle' %}?competition={{ tournament.id }}&view=mdpoints&from={{ from_idx }}&count={{ count }}{% if page_obj %}&page={{ page_obj.number }}{% endif %}"
       >
         Puntos por fecha
       </a>
@@ -101,7 +108,7 @@
             active
           {% endif %}
         "
-        href="{% url 'tabelle' %}?view=ranks&from={{ from_idx }}&count={{ count }}{% if page_obj %}&page={{ page_obj.number }}{% endif %}"
+        href="{% url 'tabelle' %}?competition={{ tournament.id }}&view=ranks&from={{ from_idx }}&count={{ count }}{% if page_obj %}&page={{ page_obj.number }}{% endif %}"
       >
         Posiciones
       </a>
@@ -113,7 +120,7 @@
             active
           {% endif %}
         "
-        href="{% url 'tabelle' %}?view=rankdiff&from={{ from_idx }}&count={{ count }}{% if page_obj %}&page={{ page_obj.number }}{% endif %}"
+        href="{% url 'tabelle' %}?competition={{ tournament.id }}&view=rankdiff&from={{ from_idx }}&count={{ count }}{% if page_obj %}&page={{ page_obj.number }}{% endif %}"
       >
         Diferencia
       </a>

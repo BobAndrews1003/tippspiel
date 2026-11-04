@@ -41,6 +41,9 @@ def active_group_context(request):
             "group__tournament",
             "group__branding",
         )
+        .prefetch_related(
+            "group__tournament_selections__tournament",
+        )
         .order_by("group__name")
     )
 

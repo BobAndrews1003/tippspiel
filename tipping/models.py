@@ -326,12 +326,73 @@ class UserProfile(models.Model):
 
 
 # ============================================================
-# Tournament
+# Season / Tournament
 # ============================================================
 
+class Season(models.Model):
+    name = models.CharField(
+        max_length=80,
+    )
+
+    year = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        unique=True,
+    )
+
+    is_open_for_groups = models.BooleanField(
+        default=True,
+        help_text=(
+            "Steuert, ob die Saison bei der Erstellung "
+            "einer Gruppe angeboten wird."
+        ),
+    )
+
+    class Meta:
+        ordering = (
+            "-year",
+            "name",
+        )
+
+    def save(
+        self,
+        *args,
+        **kwargs,
+    ):
+        self.name = self.name.strip()
+        return super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return self.name
+
 class Tournament(models.Model):
+    season = models.ForeignKey(
+        Season,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="tournaments",
+    )
+
     name = models.CharField(
         max_length=120,
+    )
+
+    code = models.SlugField(
+        max_length=50,
+        blank=True,
+        help_text=(
+            "Stabiler interner Schlüssel, z. B. ligapro, "
+            "copa-ecuador oder copa-de-la-liga."
+        ),
+    )
+
+    is_selectable = models.BooleanField(
+        default=True,
+        help_text=(
+            "Noch nicht bestätigte oder abgeschlossene Wettbewerbe "
+            "können für neue Gruppen ausgeblendet werden."
+        ),
     )
 
     # Ab diesem Zeitpunkt sind Bonustipps gesperrt.
@@ -378,11 +439,7 @@ class Tournament(models.Model):
         **kwargs,
     ):
         self.name = self.name.strip()
-
-        return super().save(
-            *args,
-            **kwargs,
-        )
+        return super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return self.name
@@ -416,7 +473,15 @@ class TournamentStage(models.Model):
 
     code = models.CharField(
         max_length=32,
-        choices=Code.choices,
+        validators=[
+            RegexValidator(
+                regex=r"^[a-z0-9_]+$",
+                message=(
+                    "Der Phasenschlüssel darf nur Kleinbuchstaben, "
+                    "Zahlen und Unterstriche enthalten."
+                ),
+            ),
+        ],
     )
 
     name = models.CharField(
@@ -465,11 +530,7 @@ class TournamentStage(models.Model):
         **kwargs,
     ):
         self.name = self.name.strip()
-
-        return super().save(
-            *args,
-            **kwargs,
-        )
+        return super().save(*args, **kwargs)
 
     @property
     def is_regular(self) -> bool:
@@ -493,6 +554,16 @@ class Group(models.Model):
         Tournament,
         on_delete=models.CASCADE,
         related_name="groups",
+        help_text=(
+            "Primärer Wettbewerb für Bonustipps und die "
+            "Rückwärtskompatibilität bestehender Gruppen."
+        ),
+    )
+
+    tournaments = models.ManyToManyField(
+        Tournament,
+        through="GroupTournamentSelection",
+        related_name="selected_by_groups",
     )
 
     name = models.CharField(
@@ -557,10 +628,63 @@ class Group(models.Model):
             .upper()
         )
 
-        return super().save(
+        result = super().save(
             *args,
             **kwargs,
         )
+
+        # Direkt über ORM oder Admin angelegte Gruppen erhalten
+        # automatisch mindestens ihren primären Wettbewerb. Das hält
+        # bestehende Tests, Imports und Verwaltungsabläufe kompatibel.
+        if self.tournament_id:
+            GroupTournamentSelection.objects.get_or_create(
+                group_id=self.pk,
+                tournament_id=self.tournament_id,
+                defaults={"sort_order": 1},
+            )
+
+        return result
+
+    def selected_tournament_ids(self) -> list[int]:
+        if not self.pk:
+            return (
+                [self.tournament_id]
+                if self.tournament_id
+                else []
+            )
+
+        tournament_ids = [
+            selection.tournament_id
+            for selection in self.tournament_selections.all()
+        ]
+
+        if not tournament_ids and self.tournament_id:
+            return [self.tournament_id]
+
+        return tournament_ids
+
+    def includes_tournament(self, tournament_id: int) -> bool:
+        if self.tournament_id == tournament_id:
+            return True
+
+        return bool(
+            self.pk
+            and self.tournament_selections.filter(
+                tournament_id=tournament_id,
+            ).exists()
+        )
+
+    @property
+    def competition_names(self) -> str:
+        if not self.pk:
+            return self.tournament.name
+
+        names = [
+            selection.tournament.name
+            for selection in self.tournament_selections.all()
+        ]
+
+        return ", ".join(names) if names else self.tournament.name
 
     def rotate_join_code(
         self,
@@ -599,8 +723,109 @@ class Group(models.Model):
     def __str__(self) -> str:
         return (
             f"{self.name} "
-            f"({self.tournament.name})"
+            f"({self.competition_names})"
         )
+
+
+class GroupTournamentSelection(models.Model):
+    group = models.ForeignKey(
+        Group,
+        on_delete=models.CASCADE,
+        related_name="tournament_selections",
+    )
+
+    tournament = models.ForeignKey(
+        Tournament,
+        on_delete=models.PROTECT,
+        related_name="group_selections",
+    )
+
+    sort_order = models.PositiveSmallIntegerField(
+        default=1,
+        validators=[MinValueValidator(1)],
+    )
+
+    selected_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    locked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Nach dem ersten Tipp in diesem Wettbewerb darf die "
+            "Auswahl nicht mehr entfernt werden."
+        ),
+    )
+
+    class Meta:
+        ordering = (
+            "group_id",
+            "sort_order",
+            "id",
+        )
+        constraints = [
+            models.UniqueConstraint(
+                fields=("group", "tournament"),
+                name="uniq_group_tournament_selection",
+            ),
+        ]
+
+    def clean(self) -> None:
+        super().clean()
+
+        if (
+            self.group_id
+            and self.tournament_id
+            and self.group.tournament.season_id
+            != self.tournament.season_id
+        ):
+            raise ValidationError(
+                {
+                    "tournament": (
+                        "Todos los campeonatos del grupo deben "
+                        "pertenecer a la misma temporada."
+                    )
+                }
+            )
+
+        if self.pk:
+            previous = (
+                GroupTournamentSelection.objects
+                .filter(pk=self.pk)
+                .values("tournament_id", "locked_at")
+                .first()
+            )
+
+            if (
+                previous
+                and previous["locked_at"] is not None
+                and previous["tournament_id"]
+                != self.tournament_id
+            ):
+                raise ValidationError(
+                    {
+                        "tournament": (
+                            "La competición ya tiene pronósticos "
+                            "y no puede sustituirse."
+                        )
+                    }
+                )
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.locked_at is not None:
+            raise ValidationError(
+                "La competición ya tiene pronósticos y no puede eliminarse."
+            )
+
+        return super().delete(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return f"{self.group.name} · {self.tournament.name}"
 
 
 # ============================================================
@@ -1680,17 +1905,18 @@ class Prediction(models.Model):
 
         errors = {}
 
-        # Ein Tipp darf nur ein Spiel aus dem
-        # Turnier der ausgewählten Gruppe betreffen.
+        # Ein Tipp darf nur ein Spiel aus einem der für die
+        # Gruppe ausgewählten Wettbewerbe betreffen.
         if (
             self.group_id
             and self.match_id
-            and self.group.tournament_id
-            != self.match.tournament_id
+            and not self.group.includes_tournament(
+                self.match.tournament_id
+            )
         ):
             errors["match"] = (
                 "El partido no pertenece al "
-                "torneo de este grupo."
+                "campeonato seleccionado por este grupo."
             )
 
         # Nur tatsächliche Gruppenmitglieder dürfen
@@ -1720,10 +1946,26 @@ class Prediction(models.Model):
         # Konsistenzprüfungen auch bei update_or_create().
         self.clean()
 
-        return super().save(
+        result = super().save(
             *args,
             **kwargs,
         )
+
+        if (
+            self.group_id
+            and self.match_id
+            and self.pred_home is not None
+            and self.pred_away is not None
+        ):
+            GroupTournamentSelection.objects.filter(
+                group_id=self.group_id,
+                tournament_id=self.match.tournament_id,
+                locked_at__isnull=True,
+            ).update(
+                locked_at=timezone.now(),
+            )
+
+        return result
 
     def __str__(self) -> str:
         return (
@@ -1889,7 +2131,28 @@ class MatchdayScore(models.Model):
         related_name="tip_matchday_scores",
     )
 
+    tournament = models.ForeignKey(
+        Tournament,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="matchday_scores",
+        help_text=(
+            "Wettbewerb, zu dem dieser Spieltag gehört. Null bleibt "
+            "nur für historische Kompatibilität zulässig."
+        ),
+    )
+
     matchday = models.PositiveSmallIntegerField()
+
+    round_started_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Erster Anstoß dieses Wettbewerbsspieltags; dient der "
+            "chronologischen kombinierten Rangentwicklung."
+        ),
+    )
 
     points = models.PositiveIntegerField(
         default=0,
@@ -1929,9 +2192,24 @@ class MatchdayScore(models.Model):
                 fields=[
                     "group",
                     "user",
+                    "tournament",
                     "matchday",
                 ],
-                name="uniq_group_user_matchday",
+                condition=models.Q(
+                    tournament__isnull=False,
+                ),
+                name="uniq_group_user_tournament_matchday",
+            ),
+            models.UniqueConstraint(
+                fields=[
+                    "group",
+                    "user",
+                    "matchday",
+                ],
+                condition=models.Q(
+                    tournament__isnull=True,
+                ),
+                name="uniq_legacy_group_user_matchday",
             ),
         ]
 
@@ -1939,20 +2217,28 @@ class MatchdayScore(models.Model):
             models.Index(
                 fields=[
                     "group",
+                    "tournament",
                     "matchday",
                     "rank",
                 ],
-                name="score_group_md_rank_idx",
+                name="score_group_tourn_md_rank_idx",
             ),
             models.Index(
                 fields=[
                     "group",
                     "user",
+                    "tournament",
                     "matchday",
                 ],
-                name="score_group_user_md_idx",
+                name="score_group_user_tourn_md_idx",
             ),
         ]
+
+    def save(self, *args, **kwargs):
+        if self.tournament_id is None and self.group_id:
+            self.tournament_id = self.group.tournament_id
+
+        return super().save(*args, **kwargs)
 
     def __str__(self):
         return (

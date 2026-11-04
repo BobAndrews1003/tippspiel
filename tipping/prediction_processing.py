@@ -27,7 +27,7 @@ def _match_has_result(match: Match) -> bool:
 
 
 def _add_affected_group_matchday(
-    affected_by_group: dict[int, set[int]],
+    affected_by_group: dict[int, set[tuple[int, int]]],
     *,
     group_id: int | None,
     match: Match | None,
@@ -48,12 +48,15 @@ def _add_affected_group_matchday(
     affected_by_group[
         group_id
     ].add(
-        match.matchday
+        (
+            match.tournament_id,
+            match.matchday,
+        )
     )
 
 
 def _rebuild_affected_groups(
-    affected_by_group: dict[int, set[int]],
+    affected_by_group: dict[int, set[tuple[int, int]]],
 ) -> int:
     """
     Aktualisiert betroffene Gruppen sofort oder legt bei
@@ -65,11 +68,11 @@ def _rebuild_affected_groups(
     for group_id in sorted(
         affected_by_group
     ):
-        matchdays = affected_by_group[
+        affected_events = affected_by_group[
             group_id
         ]
 
-        if not matchdays:
+        if not affected_events:
             continue
 
         group = (
@@ -94,49 +97,51 @@ def _rebuild_affected_groups(
 
             continue
 
-        start_matchday = min(matchdays)
+        by_tournament = defaultdict(set)
+        for tournament_id, matchday in affected_events:
+            by_tournament[tournament_id].add(matchday)
 
-        has_later_results = (
-            Match.objects.filter(
-                tournament_id=(
-                    group.tournament_id
-                ),
+        rebuilt_immediately = False
+
+        for tournament_id, matchdays in sorted(
+            by_tournament.items()
+        ):
+            start_matchday = min(matchdays)
+            has_later_results = Match.objects.filter(
+                tournament_id=tournament_id,
                 matchday__gt=start_matchday,
                 home_score__isnull=False,
                 away_score__isnull=False,
             ).exists()
-        )
 
-        if has_later_results:
-            enqueue_standing_rebuild(
-                tournament_id=(
-                    group.tournament_id
-                ),
-                affected_matchdays=matchdays,
-                match_ids=[],
-                group_ids=[
-                    group_id,
-                ],
-                rebuild_bonus=False,
-            )
+            if has_later_results:
+                enqueue_standing_rebuild(
+                    tournament_id=tournament_id,
+                    affected_matchdays=matchdays,
+                    match_ids=[],
+                    group_ids=[group_id],
+                    rebuild_bonus=False,
+                )
+                continue
 
-            processed_groups += 1
-            continue
+            for matchday in sorted(matchdays):
+                rebuild_matchday_scores(
+                    group_id=group_id,
+                    matchday=matchday,
+                    tournament_id=tournament_id,
+                )
 
-        for matchday in sorted(matchdays):
-            rebuild_matchday_scores(
+            rebuilt_immediately = True
+
+        if rebuilt_immediately:
+            rebuild_group_timeline(
                 group_id=group_id,
-                matchday=matchday,
+                start_matchday=1,
             )
 
-        rebuild_group_timeline(
-            group_id=group_id,
-            start_matchday=start_matchday,
-        )
-
-        rebuild_group_standing_with_bonus_fallback(
-            group_id=group_id,
-        )
+            rebuild_group_standing_with_bonus_fallback(
+                group_id=group_id,
+            )
 
         processed_groups += 1
 
@@ -210,7 +215,7 @@ def process_prediction_change(
 
     affected_by_group: dict[
         int,
-        set[int],
+        set[tuple[int, int]],
     ] = defaultdict(set)
 
     _add_affected_group_matchday(
@@ -278,7 +283,7 @@ def process_prediction_delete(
 
     affected_by_group: dict[
         int,
-        set[int],
+        set[tuple[int, int]],
     ] = defaultdict(set)
 
     _add_affected_group_matchday(

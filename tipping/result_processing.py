@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.db.models import Q
 
 from .models import (
     Group,
@@ -50,7 +51,12 @@ def _get_tournament_group_ids(
     queryset = (
         Group.objects
         .filter(
-            tournament_id=tournament_id,
+            Q(tournament_id=tournament_id)
+            | Q(
+                tournament_selections__tournament_id=(
+                    tournament_id
+                )
+            ),
             memberships__isnull=False,
             memberships__is_active=True,
         )
@@ -117,6 +123,7 @@ def _rebuild_affected_matchdays(
                 rebuild_matchday_scores(
                     group_id=group_id,
                     matchday=matchday,
+                    tournament_id=tournament_id,
                 )
 
             else:
@@ -125,6 +132,7 @@ def _rebuild_affected_matchdays(
                 # vorberechneten Read Model bleiben.
                 MatchdayScore.objects.filter(
                     group_id=group_id,
+                    tournament_id=tournament_id,
                     matchday=matchday,
                 ).delete()
 

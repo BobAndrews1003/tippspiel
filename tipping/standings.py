@@ -1,5 +1,5 @@
 from django.db import transaction
-from django.db.models import Count, F, Max, Q, Sum
+from django.db.models import Count, F, Max, Min, Q, Sum
 from django.utils import timezone
 
 from .models import (
@@ -7,6 +7,8 @@ from .models import (
     Group,
     GroupMembership,
     GroupStanding,
+    GroupTournamentSelection,
+    Match,
     MatchdayScore,
     Prediction,
 )
@@ -19,6 +21,7 @@ from .bonus_scoring import (
 def rebuild_matchday_scores(
     group_id: int,
     matchday: int,
+    tournament_id: int | None = None,
 ) -> int:
     """
     Berechnet die Spieltagssumme aller aktuellen Mitglieder
@@ -48,6 +51,25 @@ def rebuild_matchday_scores(
         )
     )
 
+    tournament_id = (
+        tournament_id
+        or group.tournament_id
+    )
+
+    if not group.includes_tournament(tournament_id):
+        raise ValueError(
+            "Der Wettbewerb ist für diese Gruppe nicht ausgewählt."
+        )
+
+    round_started_at = (
+        Match.objects
+        .filter(
+            tournament_id=tournament_id,
+            matchday=matchday,
+        )
+        .aggregate(start=Min("kickoff"))["start"]
+    )
+
     # Nur aktuelle Mitglieder dieser Gruppe.
     user_ids = list(
         GroupMembership.objects
@@ -66,6 +88,7 @@ def rebuild_matchday_scores(
     if not user_ids:
         MatchdayScore.objects.filter(
             group_id=group_id,
+            tournament_id=tournament_id,
             matchday=matchday,
         ).delete()
 
@@ -74,6 +97,7 @@ def rebuild_matchday_scores(
     # Alte Score-Zeilen ausgeschiedener Mitglieder entfernen.
     MatchdayScore.objects.filter(
         group_id=group_id,
+        tournament_id=tournament_id,
         matchday=matchday,
     ).exclude(
         user_id__in=user_ids,
@@ -86,9 +110,7 @@ def rebuild_matchday_scores(
         .filter(
             group_id=group_id,
             user_id__in=user_ids,
-            match__tournament_id=(
-                group.tournament_id
-            ),
+            match__tournament_id=tournament_id,
             match__matchday=matchday,
             match__home_score__isnull=False,
             match__away_score__isnull=False,
@@ -139,7 +161,9 @@ def rebuild_matchday_scores(
             MatchdayScore(
                 group_id=group_id,
                 user_id=user_id,
+                tournament_id=tournament_id,
                 matchday=matchday,
+                round_started_at=round_started_at,
                 points=(
                     values["total_points"]
                     if values
@@ -154,21 +178,60 @@ def rebuild_matchday_scores(
             )
         )
 
+    existing_rows = {
+        row.user_id: row
+        for row in (
+            MatchdayScore.objects
+            .filter(
+                group_id=group_id,
+                tournament_id=tournament_id,
+                matchday=matchday,
+                user_id__in=user_ids,
+            )
+        )
+    }
+    rows_to_create = []
+    rows_to_update = []
+
+    for score_row in score_rows:
+        existing = existing_rows.get(score_row.user_id)
+
+        if existing is None:
+            rows_to_create.append(score_row)
+            continue
+
+        existing.points = score_row.points
+        existing.exact_predictions = score_row.exact_predictions
+        existing.round_started_at = score_row.round_started_at
+        existing.updated_at = updated_at
+        rows_to_update.append(existing)
+
     MatchdayScore.objects.bulk_create(
-        score_rows,
-        update_conflicts=True,
-        unique_fields=[
-            "group",
-            "user",
-            "matchday",
-        ],
-        update_fields=[
+        rows_to_create,
+        batch_size=1000,
+    )
+
+    MatchdayScore.objects.bulk_update(
+        rows_to_update,
+        [
             "points",
             "exact_predictions",
+            "round_started_at",
             "updated_at",
         ],
         batch_size=1000,
     )
+
+    # Eventuell vorhandene Legacy-Zeilen ohne Wettbewerbsbezug werden
+    # nach ihrer erfolgreichen Ablösung entfernt.
+    MatchdayScore.objects.filter(
+        group_id=group_id,
+        tournament_id__isnull=True,
+        matchday=matchday,
+        user_id__in=user_ids,
+    ).exclude(
+        id__in=[row.id for row in rows_to_update]
+    ).delete()
 
     return len(score_rows)
 
@@ -517,6 +580,236 @@ def _competition_ranks(
     return ranks
 
 
+def _rebuild_combined_group_timeline(
+    group_id: int,
+) -> int:
+    """Baut die Rangentwicklung über mehrere Wettbewerbe chronologisch."""
+
+    memberships = list(
+        GroupMembership.objects
+        .filter(group_id=group_id)
+        .select_related("user")
+        .only(
+            "user_id",
+            "user__username",
+            "user__email",
+        )
+        .order_by("user_id")
+    )
+    user_ids = [membership.user_id for membership in memberships]
+
+    if not user_ids:
+        MatchdayScore.objects.filter(group_id=group_id).delete()
+        return 0
+
+    MatchdayScore.objects.filter(
+        group_id=group_id,
+    ).exclude(
+        user_id__in=user_ids,
+    ).delete()
+
+    scores = list(
+        MatchdayScore.objects
+        .filter(
+            group_id=group_id,
+            user_id__in=user_ids,
+        )
+        .only(
+            "id",
+            "group_id",
+            "user_id",
+            "tournament_id",
+            "matchday",
+            "round_started_at",
+            "points",
+            "exact_predictions",
+            "cumulative_points",
+            "cumulative_matchday_wins",
+            "rank",
+            "rank_change",
+            "updated_at",
+        )
+    )
+
+    if not scores:
+        return 0
+
+    selection_order = dict(
+        GroupTournamentSelection.objects
+        .filter(group_id=group_id)
+        .values_list("tournament_id", "sort_order")
+    )
+
+    event_started_at = {}
+    for score in scores:
+        event_key = (
+            score.tournament_id,
+            score.matchday,
+        )
+        current = event_started_at.get(event_key)
+        if (
+            score.round_started_at is not None
+            and (
+                current is None
+                or score.round_started_at < current
+            )
+        ):
+            event_started_at[event_key] = score.round_started_at
+        else:
+            event_started_at.setdefault(event_key, current)
+
+    def event_sort_key(event_key):
+        tournament_id, matchday = event_key
+        started_at = event_started_at.get(event_key)
+        return (
+            started_at is None,
+            started_at.timestamp() if started_at else 0,
+            selection_order.get(tournament_id, 9999),
+            tournament_id or 0,
+            matchday,
+        )
+
+    event_keys = sorted(event_started_at, key=event_sort_key)
+    existing_keys = {
+        (
+            score.user_id,
+            score.tournament_id,
+            score.matchday,
+        )
+        for score in scores
+    }
+    now = timezone.now()
+    missing_rows = [
+        MatchdayScore(
+            group_id=group_id,
+            user_id=user_id,
+            tournament_id=tournament_id,
+            matchday=matchday,
+            round_started_at=event_started_at.get(event_key),
+            points=0,
+            exact_predictions=0,
+            cumulative_points=0,
+            rank=None,
+            rank_change=None,
+            updated_at=now,
+        )
+        for event_key in event_keys
+        for tournament_id, matchday in [event_key]
+        for user_id in user_ids
+        if (
+            user_id,
+            tournament_id,
+            matchday,
+        ) not in existing_keys
+    ]
+
+    if missing_rows:
+        MatchdayScore.objects.bulk_create(
+            missing_rows,
+            ignore_conflicts=True,
+            batch_size=1000,
+        )
+        scores = list(
+            MatchdayScore.objects
+            .filter(
+                group_id=group_id,
+                user_id__in=user_ids,
+            )
+            .only(
+                "id",
+                "group_id",
+                "user_id",
+                "tournament_id",
+                "matchday",
+                "round_started_at",
+                "points",
+                "exact_predictions",
+                "cumulative_points",
+                "cumulative_matchday_wins",
+                "rank",
+                "rank_change",
+                "updated_at",
+            )
+        )
+
+    score_by_key = {
+        (
+            score.user_id,
+            score.tournament_id,
+            score.matchday,
+        ): score
+        for score in scores
+    }
+    username_by_id = {
+        membership.user_id: (
+            membership.user.get_username()
+            or membership.user.email
+            or f"user-{membership.user_id}"
+        ).strip().lower()
+        for membership in memberships
+    }
+    cumulative_points = {user_id: 0 for user_id in user_ids}
+    cumulative_matchday_wins = {user_id: 0 for user_id in user_ids}
+    previous_rank = {user_id: None for user_id in user_ids}
+    changed_scores = []
+
+    for tournament_id, matchday in event_keys:
+        matchday_points = {}
+
+        for user_id in user_ids:
+            score = score_by_key[
+                (user_id, tournament_id, matchday)
+            ]
+            cumulative_points[user_id] += score.points
+            matchday_points[user_id] = score.points
+
+        winning_points = max(matchday_points.values(), default=0)
+
+        for user_id in user_ids:
+            if matchday_points[user_id] == winning_points:
+                cumulative_matchday_wins[user_id] += 1
+
+        current_ranks = _competition_ranks(
+            user_ids=user_ids,
+            cumulative_points=cumulative_points,
+            cumulative_matchday_wins=cumulative_matchday_wins,
+            username_by_id=username_by_id,
+        )
+
+        for user_id in user_ids:
+            score = score_by_key[
+                (user_id, tournament_id, matchday)
+            ]
+            old_rank = previous_rank[user_id]
+            new_rank = current_ranks[user_id]
+            score.cumulative_points = cumulative_points[user_id]
+            score.cumulative_matchday_wins = (
+                cumulative_matchday_wins[user_id]
+            )
+            score.rank = new_rank
+            score.rank_change = (
+                None if old_rank is None else old_rank - new_rank
+            )
+            score.updated_at = now
+            changed_scores.append(score)
+
+        previous_rank = current_ranks
+
+    MatchdayScore.objects.bulk_update(
+        changed_scores,
+        [
+            "cumulative_points",
+            "cumulative_matchday_wins",
+            "rank",
+            "rank_change",
+            "updated_at",
+        ],
+        batch_size=1000,
+    )
+
+    return len(changed_scores)
+
+
 @transaction.atomic
 def rebuild_group_timeline(
     group_id: int,
@@ -553,6 +846,29 @@ def rebuild_group_timeline(
     ).get(
         pk=group_id,
     )
+
+    selected_tournament_count = (
+        GroupTournamentSelection.objects
+        .filter(group_id=group_id)
+        .values("tournament_id")
+        .distinct()
+        .count()
+    )
+    score_tournament_count = (
+        MatchdayScore.objects
+        .filter(group_id=group_id)
+        .values("tournament_id")
+        .distinct()
+        .count()
+    )
+
+    if (
+        selected_tournament_count > 1
+        or score_tournament_count > 1
+    ):
+        return _rebuild_combined_group_timeline(
+            group_id
+        )
 
     memberships = list(
         GroupMembership.objects

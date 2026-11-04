@@ -11,13 +11,28 @@ from .models import (
     GroupBranding,
     GroupMembership,
     GroupScoringSettings,
+    GroupTournamentSelection,
     Match,
     Prediction,
+    Season,
     StandingRebuildJob,
     TipReminderDelivery,
     Tournament,
     TournamentStage,
 )
+
+
+@admin.register(Season)
+class SeasonAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "name",
+        "year",
+        "is_open_for_groups",
+    )
+    list_filter = ("is_open_for_groups",)
+    search_fields = ("name",)
+    ordering = ("-year", "name")
 
 
 @admin.register(AccountRetentionNotice)
@@ -158,7 +173,16 @@ class TournamentAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "name",
+        "season",
+        "code",
+        "is_selectable",
     )
+    list_filter = (
+        "season",
+        "is_selectable",
+    )
+    search_fields = ("name", "code")
+    list_select_related = ("season",)
 
 
 @admin.register(TournamentStage)
@@ -245,9 +269,23 @@ class GroupScoringSettingsInline(admin.StackedInline):
         return tuple(readonly)
 
 
+class GroupTournamentSelectionInline(admin.TabularInline):
+    model = GroupTournamentSelection
+    extra = 0
+    can_delete = False
+    fields = (
+        "tournament",
+        "sort_order",
+        "selected_at",
+        "locked_at",
+    )
+    readonly_fields = ("selected_at", "locked_at")
+
+
 @admin.register(Group)
 class GroupAdmin(admin.ModelAdmin):
     inlines = (
+        GroupTournamentSelectionInline,
         GroupScoringSettingsInline,
         GroupBrandingInline,
     )
@@ -256,6 +294,7 @@ class GroupAdmin(admin.ModelAdmin):
         "id",
         "name",
         "tournament",
+        "selected_competitions",
         "effective_plan_name",
         "plan_expires_at",
         "join_enabled",
@@ -272,6 +311,10 @@ class GroupAdmin(admin.ModelAdmin):
         "plan",
         "join_enabled",
     )
+
+    @admin.display(description="Wettbewerbe")
+    def selected_competitions(self, obj):
+        return obj.competition_names
 
     fieldsets = (
         (

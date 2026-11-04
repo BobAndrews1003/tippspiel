@@ -23,6 +23,11 @@
       <div class="header-flex">
 
         <div>
+          {% if group_tournaments|length > 1 and tab != "bonus" %}
+            <div class="muted small" style="margin-bottom:4px;">
+              {{ tournament.name }}
+            </div>
+          {% endif %}
           {% if tab == "bonus" %}
             <h1 style="margin:0 0 6px;">
               Pronósticos especiales
@@ -91,7 +96,7 @@
               <optgroup label="Fechas">
                 {% for option in matchday_options %}
                   <option
-                    value="{% url 'spieltag' %}?tab=matches&md={{ option.number }}"
+                    value="{% url 'spieltag' %}?competition={{ tournament.id }}&tab=matches&md={{ option.number }}"
                     {% if tab != "bonus" and option.number == matchday %}
                       selected
                     {% endif %}
@@ -103,7 +108,7 @@
 
               <optgroup label="Especiales">
                 <option
-                  value="{% url 'spieltag' %}?tab=bonus{% if matchday %}&md={{ matchday }}{% endif %}"
+                  value="{% url 'spieltag' %}?competition={{ tournament.id }}&tab=bonus{% if matchday %}&md={{ matchday }}{% endif %}"
                   {% if tab == "bonus" %}
                     selected
                   {% endif %}
@@ -120,7 +125,7 @@
               {% if prev_md %}
                 <a
                   class="btn small"
-                  href="{% url 'spieltag' %}?tab=matches&md={{ prev_md }}"
+                  href="{% url 'spieltag' %}?competition={{ tournament.id }}&tab=matches&md={{ prev_md }}"
                   aria-label="Fecha anterior"
                 >
                   ◀
@@ -137,7 +142,7 @@
               {% if next_md %}
                 <a
                   class="btn small"
-                  href="{% url 'spieltag' %}?tab=matches&md={{ next_md }}"
+                  href="{% url 'spieltag' %}?competition={{ tournament.id }}&tab=matches&md={{ next_md }}"
                   aria-label="Siguiente fecha"
                 >
                   ▶
@@ -157,6 +162,8 @@
         </div>
       </div>
     </section>
+
+    {% include "tipping/_competition_switcher.html" with competition_route="spieltag" %}
 
     <!-- =====================================================
          BONUSTIPPS

@@ -1,0 +1,13 @@
+{% if group_tournaments|length > 1 %}
+  <nav class="competition-switcher" aria-label="Competiciones del grupo">
+    {% for competition_item in group_tournaments %}
+      <a
+        class="competition-switcher__item{% if competition_item.id == tournament.id %} active{% endif %}"
+        href="{% url competition_route %}?competition={{ competition_item.id }}"
+        {% if competition_item.id == tournament.id %}aria-current="page"{% endif %}
+      >
+        {{ competition_item.name }}
+      </a>
+    {% endfor %}
+  </nav>
+{% endif %}

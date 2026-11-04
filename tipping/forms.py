@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from django import forms
+from django.db.models import Q
 
 from .models import (
     Group,
     GroupBranding,
     GroupScoringSettings,
+    GroupTournamentSelection,
     Match,
     Tournament,
     UserProfile,
@@ -25,29 +27,138 @@ from .scoring_config import (
 # Gruppe erstellen (ModelForm -> hat save())
 # ---------------------------------------------------------------------
 class GroupCreateForm(forms.ModelForm):
+    tournaments = forms.ModelMultipleChoiceField(
+        queryset=Tournament.objects.none(),
+        widget=forms.CheckboxSelectMultiple(
+            attrs={"class": "competition-checkbox"}
+        ),
+        label="Competiciones",
+        help_text=(
+            "Selecciona una o varias competiciones de la misma temporada."
+        ),
+    )
+
     class Meta:
         model = Group
-        fields = ("name", "tournament")
+        fields = ("name",)
         widgets = {
             "name": forms.TextInput(attrs={"placeholder": "p. ej. Amigos de la U", "class": "input"}),
-            "tournament": forms.Select(attrs={"class": "input"}),
         }
         labels = {
             "name": "Nombre del grupo",
-            "tournament": "Campeonato",
         }
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        
+        # Übergangsweise akzeptieren wir weiterhin den früheren
+        # POST-Parameter ``tournament``. So bleiben ältere Clients und
+        # Tests während der Migration funktionsfähig.
+        if args and args[0] is not None:
+            data = args[0].copy()
 
-        # Turniere sortiert + nice empty label
-        self.fields["tournament"].queryset = Tournament.objects.all().order_by("name")
-        self.fields["tournament"].empty_label = "Elegir un campeonato…"
+            if (
+                not data.getlist("tournaments")
+                and data.get("tournament")
+            ):
+                data.setlist(
+                    "tournaments",
+                    [data["tournament"]],
+                )
+
+            args = (data, *args[1:])
+
+        super().__init__(*args, **kwargs)
+
+        self.fields["tournaments"].queryset = (
+            Tournament.objects
+            .filter(
+                is_selectable=True,
+            )
+            .filter(
+                Q(season__isnull=True)
+                | Q(
+                    season__is_open_for_groups=True,
+                )
+            )
+            .select_related("season")
+            .order_by(
+                "-season__year",
+                "season__name",
+                "name",
+                "id",
+            )
+        )
+
+        self.fields["tournaments"].label_from_instance = (
+            lambda tournament: (
+                f"{tournament.season.name} · {tournament.name}"
+                if tournament.season_id
+                else tournament.name
+            )
+        )
 
         # kleine UX-Extras
         self.fields["name"].required = True
-        self.fields["tournament"].required = True
+        self.fields["tournaments"].required = True
+
+    def clean_tournaments(self):
+        tournaments = self.cleaned_data["tournaments"]
+        season_ids = {
+            tournament.season_id
+            for tournament in tournaments
+        }
+
+        if len(season_ids) > 1:
+            raise forms.ValidationError(
+                "Todas las competiciones deben pertenecer a la misma temporada."
+            )
+
+        return tournaments
+
+    def save(self, commit=True):
+        group = super().save(commit=False)
+        tournaments = self._ordered_tournaments()
+        group.tournament = tournaments[0]
+
+        if commit:
+            group.save()
+            self.save_tournament_selections(group)
+
+        return group
+
+    def save_tournament_selections(self, group: Group) -> None:
+        tournaments = self._ordered_tournaments()
+
+        GroupTournamentSelection.objects.filter(
+            group=group,
+        ).exclude(
+            tournament__in=tournaments,
+        ).delete()
+
+        for sort_order, tournament in enumerate(
+            tournaments,
+            start=1,
+        ):
+            GroupTournamentSelection.objects.update_or_create(
+                group=group,
+                tournament=tournament,
+                defaults={
+                    "sort_order": sort_order,
+                },
+            )
+
+    def _ordered_tournaments(self) -> list[Tournament]:
+        tournaments = list(
+            self.cleaned_data["tournaments"]
+        )
+
+        return sorted(
+            tournaments,
+            key=lambda tournament: (
+                0 if tournament.code == "ligapro" else 1,
+                tournament.name.lower(),
+                tournament.id,
+            ),
+        )
 
 
 class GroupSettingsForm(forms.ModelForm):

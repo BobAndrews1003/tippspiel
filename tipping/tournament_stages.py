@@ -60,6 +60,28 @@ def ensure_default_stages(
 ) -> None:
     """Legt fehlende Standardphasen an, ohne Anpassungen zu überschreiben."""
 
+    definitions = DEFAULT_STAGE_DEFINITIONS
+    season_year = (
+        tournament.season.year
+        if tournament.season_id
+        else None
+    )
+
+    # Die historische Vorlage bildet ausschließlich den Modus bis
+    # 2026 ab. Neue Pokalwettbewerbe und der noch nicht vollständig
+    # bestätigte 2027-Modus werden im Admin flexibel konfiguriert.
+    if (
+        tournament.code in {
+            "copa-ecuador",
+            "copa-de-la-liga",
+        }
+        or (
+            season_year is not None
+            and season_year >= 2027
+        )
+    ):
+        definitions = DEFAULT_STAGE_DEFINITIONS[:1]
+
     existing_codes = set(
         TournamentStage.objects
         .filter(tournament=tournament)
@@ -75,7 +97,7 @@ def ensure_default_stages(
                 sort_order=definition.sort_order,
                 round_count=definition.round_count,
             )
-            for definition in DEFAULT_STAGE_DEFINITIONS
+            for definition in definitions
             if definition.code not in existing_codes
         ],
         ignore_conflicts=True,

@@ -13,6 +13,7 @@ from .models import (
     Match,
     MatchdayScore,
     Prediction,
+    Tournament,
 )
 from .tournament_stages import build_matchday_metadata
 
@@ -47,34 +48,73 @@ def build_advanced_group_stats(
         .order_by("user__username", "user_id")
     )
     member_ids = [membership.user_id for membership in memberships]
+    tournament_ids = group.selected_tournament_ids()
+    tournaments_by_id = {
+        tournament.id: tournament
+        for tournament in (
+            Tournament.objects
+            .filter(id__in=tournament_ids)
+        )
+    }
 
     score_rows = list(
         MatchdayScore.objects
         .filter(group=group, user_id__in=member_ids)
         .only(
             "user_id",
+            "tournament_id",
             "matchday",
+            "round_started_at",
             "points",
             "cumulative_points",
             "cumulative_matchday_wins",
             "rank",
         )
-        .order_by("matchday", "user_id")
+        .order_by(
+            "round_started_at",
+            "tournament_id",
+            "matchday",
+            "user_id",
+        )
     )
     scores_by_user_id = defaultdict(list)
-    scores_by_user_matchday = {}
-    scores_by_matchday = defaultdict(list)
+    scores_by_user_event = {}
+    scores_by_event = defaultdict(list)
 
     for score in score_rows:
+        event_key = (
+            score.tournament_id,
+            score.matchday,
+        )
         scores_by_user_id[score.user_id].append(score)
-        scores_by_user_matchday[(score.user_id, score.matchday)] = score
-        scores_by_matchday[score.matchday].append(score)
+        scores_by_user_event[(score.user_id, event_key)] = score
+        scores_by_event[event_key].append(score)
 
-    evaluated_matchdays = sorted(scores_by_matchday)
-    matchday_metadata = build_matchday_metadata(
-        group.tournament,
-        evaluated_matchdays,
-    )
+    evaluated_events = list(scores_by_event)
+    metadata_by_event = {}
+
+    for tournament_id in tournament_ids:
+        tournament_matchdays = [
+            matchday
+            for event_tournament_id, matchday in evaluated_events
+            if event_tournament_id == tournament_id
+        ]
+        tournament = tournaments_by_id.get(tournament_id)
+
+        if tournament is None:
+            continue
+
+        tournament_metadata = build_matchday_metadata(
+            tournament,
+            tournament_matchdays,
+        )
+
+        for matchday, metadata in tournament_metadata.items():
+            label = metadata.label
+            if len(tournament_ids) > 1:
+                label = f"{tournament.name} · {label}"
+            metadata_by_event[(tournament_id, matchday)] = label
+
     bonus_lock_time = get_bonus_lock_time(group.tournament)
     bonus_reveal = bool(
         bonus_lock_time
@@ -152,12 +192,12 @@ def build_advanced_group_stats(
     started_matches = list(
         Match.objects
         .filter(
-            tournament=group.tournament,
+            tournament_id__in=tournament_ids,
             kickoff__lte=now,
         )
         .exclude(matchday__isnull=True)
-        .values("id", "matchday", "kickoff")
-        .order_by("matchday", "kickoff", "id")
+        .values("id", "tournament_id", "matchday", "kickoff")
+        .order_by("kickoff", "tournament_id", "matchday", "id")
     )
     started_match_ids = [match["id"] for match in started_matches]
     submitted_prediction_keys = set(
@@ -176,12 +216,16 @@ def build_advanced_group_stats(
         user_id: {"submitted": 0, "expected": 0}
         for user_id in member_ids
     }
-    participation_by_matchday = defaultdict(
+    participation_by_event = defaultdict(
         lambda: {"matches": 0, "submitted": 0, "expected": 0}
     )
 
     for match in started_matches:
-        matchday_report = participation_by_matchday[match["matchday"]]
+        event_key = (
+            match["tournament_id"],
+            match["matchday"],
+        )
+        matchday_report = participation_by_event[event_key]
         matchday_report["matches"] += 1
 
         for membership in memberships:
@@ -202,9 +246,10 @@ def build_advanced_group_stats(
 
     participation_rows = [
         {
-            "matchday": matchday,
-            "matchday_label": (
-                matchday_metadata[matchday].label
+            "matchday": event_key[1],
+            "matchday_label": metadata_by_event.get(
+                event_key,
+                f"Fecha {event_key[1]}",
             ),
             "matches": report["matches"],
             "submitted": report["submitted"],
@@ -214,17 +259,17 @@ def build_advanced_group_stats(
                 report["expected"],
             ),
         }
-        for matchday, report in sorted(
-            participation_by_matchday.items()
+        for event_key, report in (
+            participation_by_event.items()
         )
     ]
     total_submitted = sum(
         report["submitted"]
-        for report in participation_by_matchday.values()
+        for report in participation_by_event.values()
     )
     total_expected = sum(
         report["expected"]
-        for report in participation_by_matchday.values()
+        for report in participation_by_event.values()
     )
 
     member_rows = []
@@ -243,6 +288,8 @@ def build_advanced_group_stats(
                 user_scores,
                 key=lambda score: (
                     score.points,
+                    score.round_started_at or now,
+                    score.tournament_id or 0,
                     score.matchday,
                 ),
             )
@@ -281,23 +328,23 @@ def build_advanced_group_stats(
                 "average_points": (
                     round(
                         sum(score.points for score in user_scores)
-                        / len(evaluated_matchdays),
+                        / len(evaluated_events),
                         1,
                     )
-                    if evaluated_matchdays
+                    if evaluated_events
                     else None
                 ),
                 "last_five_points": sum(
                     (
                         score.points
                         if (
-                            score := scores_by_user_matchday.get(
-                                (user_id, matchday)
+                            score := scores_by_user_event.get(
+                                (user_id, event_key)
                             )
                         ) is not None
                         else 0
                     )
-                    for matchday in evaluated_matchdays[-5:]
+                    for event_key in evaluated_events[-5:]
                 ),
                 "best_matchday": (
                     best_score.matchday
@@ -305,9 +352,13 @@ def build_advanced_group_stats(
                     else None
                 ),
                 "best_matchday_label": (
-                    matchday_metadata[
-                        best_score.matchday
-                    ].label
+                    metadata_by_event.get(
+                        (
+                            best_score.tournament_id,
+                            best_score.matchday,
+                        ),
+                        f"Fecha {best_score.matchday}",
+                    )
                     if best_score is not None
                     else None
                 ),
@@ -406,8 +457,8 @@ def build_advanced_group_stats(
         ranks = []
         previous_points = 0
 
-        for matchday in evaluated_matchdays:
-            score = scores_by_user_matchday.get((player_id, matchday))
+        for event_key in evaluated_events:
+            score = scores_by_user_event.get((player_id, event_key))
 
             if score is not None:
                 previous_points = score.cumulative_points
@@ -427,10 +478,10 @@ def build_advanced_group_stats(
     leader_changes = 0
     previous_leaders = None
 
-    for matchday in evaluated_matchdays:
+    for event_key in evaluated_events:
         current_leaders = frozenset(
             score.user_id
-            for score in scores_by_matchday[matchday]
+            for score in scores_by_event[event_key]
             if score.rank == 1
         )
 
@@ -461,13 +512,16 @@ def build_advanced_group_stats(
         "selected_player_a_id": player_a_id,
         "selected_player_b_id": player_b_id,
         "timeline_labels": [
-            matchday_metadata[matchday].label
-            for matchday in evaluated_matchdays
+            metadata_by_event.get(
+                event_key,
+                f"Fecha {event_key[1]}",
+            )
+            for event_key in evaluated_events
         ],
         "comparison_series": comparison_series,
         "participation_rows": participation_rows,
         "member_count": len(memberships),
-        "evaluated_matchday_count": len(evaluated_matchdays),
+        "evaluated_matchday_count": len(evaluated_events),
         "evaluated_prediction_count": sum(
             row.get("evaluated", 0)
             for row in prediction_aggregates.values()

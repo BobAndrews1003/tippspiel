@@ -61,10 +61,11 @@ def rebuild_group_after_membership_change(
 
         return 0
 
-    result_matchdays = list(
+    tournament_ids = group.selected_tournament_ids()
+    result_events = list(
         Match.objects
         .filter(
-            tournament_id=group.tournament_id,
+            tournament_id__in=tournament_ids,
             home_score__isnull=False,
             away_score__isnull=False,
         )
@@ -72,37 +73,49 @@ def rebuild_group_after_membership_change(
             matchday__isnull=True,
         )
         .values_list(
+            "tournament_id",
             "matchday",
-            flat=True,
         )
         .distinct()
-        .order_by("matchday")
+        .order_by("tournament_id", "matchday")
     )
 
     # Score-Zeilen von nicht mehr ausgewerteten oder
     # nicht mehr vorhandenen Spieltagen entfernen.
-    if result_matchdays:
-        MatchdayScore.objects.filter(
-            group_id=group_id,
-        ).exclude(
-            matchday__in=result_matchdays,
-        ).delete()
+    if result_events:
+        valid_events = set(result_events)
+        obsolete_ids = [
+            row.id
+            for row in (
+                MatchdayScore.objects
+                .filter(group_id=group_id)
+                .only("id", "tournament_id", "matchday")
+            )
+            if (row.tournament_id, row.matchday)
+            not in valid_events
+        ]
+
+        if obsolete_ids:
+            MatchdayScore.objects.filter(
+                id__in=obsolete_ids,
+            ).delete()
 
     else:
         MatchdayScore.objects.filter(
             group_id=group_id,
         ).delete()
 
-    for matchday in result_matchdays:
+    for tournament_id, matchday in result_events:
         rebuild_matchday_scores(
             group_id=group_id,
             matchday=matchday,
+            tournament_id=tournament_id,
         )
 
-    if result_matchdays:
+    if result_events:
         rebuild_group_timeline(
             group_id=group_id,
-            start_matchday=result_matchdays[0],
+            start_matchday=1,
         )
 
     return rebuild_group_bonus_points(

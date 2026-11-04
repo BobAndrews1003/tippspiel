@@ -61,6 +61,8 @@
 
     </section>
 
+    {% include "tipping/_competition_switcher.html" with competition_route="dashboard" %}
+
     <!-- =====================================================
          HAUPTBEREICH
          ===================================================== -->
@@ -161,7 +163,7 @@
             {% endif %}
 
             <a
-              href="{% url 'tippen' %}?md={{ current_matchday }}"
+              href="{% url 'tippen' %}?competition={{ tournament.id }}&md={{ current_matchday }}"
               class="btn primary dashboard-primary-button"
             >
               {% if missing_predictions > 0 %}
@@ -179,7 +181,7 @@
             </p>
 
             <a
-              href="{% url 'spieltag' %}?md={{ current_matchday }}"
+              href="{% url 'spieltag' %}?competition={{ tournament.id }}&md={{ current_matchday }}"
               class="btn primary dashboard-primary-button"
             >
               Ver la fecha
@@ -428,7 +430,7 @@
           </div>
 
           <a
-            href="{% url 'tabelle' %}"
+            href="{% url 'tabelle' %}?competition={{ tournament.id }}"
             class="btn small"
           >
             Ver tabla

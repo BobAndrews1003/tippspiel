@@ -545,6 +545,58 @@ def _require_active_membership(request) -> Optional[GroupMembership]:
     return None
 
 
+def _group_tournament_choices(group: Group) -> list[Tournament]:
+    tournaments = [
+        selection.tournament
+        for selection in (
+            group.tournament_selections
+            .select_related("tournament", "tournament__season")
+            .order_by("sort_order", "id")
+        )
+    ]
+
+    return tournaments or [group.tournament]
+
+
+def _selected_group_tournament(
+    request: HttpRequest,
+    group: Group,
+) -> tuple[Tournament, list[Tournament]]:
+    """Wählt einen gültigen Wettbewerb der aktiven Gruppe aus."""
+
+    tournaments = _group_tournament_choices(group)
+    tournaments_by_id = {
+        tournament.id: tournament
+        for tournament in tournaments
+    }
+    raw_competition_id = request.GET.get("competition")
+
+    try:
+        requested_id = int(raw_competition_id)
+    except (TypeError, ValueError):
+        requested_id = None
+
+    if requested_id in tournaments_by_id:
+        return tournaments_by_id[requested_id], tournaments
+
+    next_tournament_id = (
+        Match.objects
+        .filter(
+            tournament_id__in=tournaments_by_id,
+            kickoff__gte=timezone.now(),
+        )
+        .order_by("kickoff", "id")
+        .values_list("tournament_id", flat=True)
+        .first()
+    )
+
+    selected = tournaments_by_id.get(
+        next_tournament_id,
+        tournaments[0],
+    )
+    return selected, tournaments
+
+
 
 
 def _get_selected_matchday(request, tournament, now):
@@ -624,7 +676,9 @@ def dashboard(request):
         return redirect("join_group")
 
     group = membership.group
-    tournament = group.tournament
+    tournament, group_tournaments = (
+        _selected_group_tournament(request, group)
+    )
     now = timezone.now()
 
     # --------------------------------------------------------------
@@ -816,7 +870,7 @@ def dashboard(request):
     # --------------------------------------------------------------
 
     bonus_lock_time = get_bonus_lock_time(
-        tournament
+        group.tournament
     )
 
     bonus_reveal = bool(
@@ -878,6 +932,10 @@ def dashboard(request):
                 group=group,
                 user=request.user,
                 matchday__in=result_matchdays,
+            )
+            .filter(
+                Q(tournament=tournament)
+                | Q(tournament__isnull=True)
             )
             .values_list(
                 "matchday",
@@ -1187,6 +1245,7 @@ def dashboard(request):
         {
             "group": group,
             "tournament": tournament,
+            "group_tournaments": group_tournaments,
 
             "current_matchday": (
                 current_matchday
@@ -1295,10 +1354,12 @@ def tippen(request):
         return redirect("join_group")
 
     group = membership.group
-    tournament = group.tournament
+    tournament, group_tournaments = (
+        _selected_group_tournament(request, group)
+    )
     now = timezone.now()
     bonus_lock_time = get_bonus_lock_time(
-        tournament
+        group.tournament
     )
     bonus_tips_open = bool(
         bonus_lock_time is None
@@ -1347,6 +1408,8 @@ def tippen(request):
             "tipping/tippen.html",
             {
                 "group": group,
+                "tournament": tournament,
+                "group_tournaments": group_tournaments,
                 "matchday": None,
                 "matchday_label": None,
                 "matchdays": matchdays,
@@ -1398,6 +1461,8 @@ def tippen(request):
                 "tipping/tippen.html",
                 {
                     "group": group,
+                    "tournament": tournament,
+                    "group_tournaments": group_tournaments,
                     "matchday": None,
                     "matchday_label": None,
                     "matchdays": matchdays,
@@ -1655,7 +1720,7 @@ def tippen(request):
             )
 
         return redirect(
-            f"{request.path}?md={matchday}"
+            f"{request.path}?competition={tournament.id}&md={matchday}"
         )
 
     # --------------------------------------------------------------
@@ -1667,6 +1732,8 @@ def tippen(request):
         "tipping/tippen.html",
         {
             "group": group,
+            "tournament": tournament,
+            "group_tournaments": group_tournaments,
             "matchday": matchday,
             "matchday_label": (
                 selected_matchday_metadata.label
@@ -1692,7 +1759,9 @@ def spieltag(request):
         return redirect("join_group")
 
     group = membership.group
-    tournament = group.tournament
+    tournament, group_tournaments = (
+        _selected_group_tournament(request, group)
+    )
     now = timezone.now()
 
     # -------------------------------------------------------------
@@ -1722,7 +1791,7 @@ def spieltag(request):
         tab = "matches"
 
     bonus_lock_time = get_bonus_lock_time(
-        tournament
+        group.tournament
     )
 
     bonus_reveal = bool(
@@ -1752,7 +1821,7 @@ def spieltag(request):
         matches = list(
             Match.objects
             .filter(
-                tournament=tournament,
+                tournament=group.tournament,
                 matchday=matchday,
             )
             .select_related(
@@ -1852,6 +1921,10 @@ def spieltag(request):
                         "user_id"
                     ),
                     matchday=matchday,
+                )
+                .filter(
+                    Q(tournament=tournament)
+                    | Q(tournament__isnull=True)
                 )
                 .values(
                     "points"
@@ -2090,7 +2163,7 @@ def spieltag(request):
             BonusPrediction.objects
             .filter(
                 group=group,
-                tournament=tournament,
+                tournament=group.tournament,
             )
         )
 
@@ -2402,6 +2475,8 @@ def spieltag(request):
         "tipping/spieltag.html",
         {
             "group": group,
+            "tournament": tournament,
+            "group_tournaments": group_tournaments,
             "tab": tab,
             "matchday": matchday,
             "matchday_label": (
@@ -2441,17 +2516,19 @@ def tabelle(request):
         return redirect("join_group")
 
     group = membership.group
-    tournament = group.tournament
+    tournament, group_tournaments = (
+        _selected_group_tournament(request, group)
+    )
     now = timezone.now()
 
     # --------------------------------------------------------------
     # Bonusfreigabe
     # --------------------------------------------------------------
 
-    season_start = tournament.season_start
+    season_start = group.tournament.season_start
 
     bonus_lock_time = get_bonus_lock_time(
-        tournament
+        group.tournament
     )
 
     bonus_reveal = bool(
@@ -2537,6 +2614,8 @@ def tabelle(request):
             "tipping/tabelle.html",
             {
                 "group": group,
+                "tournament": tournament,
+                "group_tournaments": group_tournaments,
                 "view": view,
                 "matchdays": [],
                 "shown_matchdays": [],
@@ -2822,6 +2901,10 @@ def tabelle(request):
                     visible_result_matchdays
                 ),
             )
+            .filter(
+                Q(tournament=tournament)
+                | Q(tournament__isnull=True)
+            )
             .values_list(
                 "user_id",
                 "matchday",
@@ -2933,6 +3016,8 @@ def tabelle(request):
         "tipping/tabelle.html",
         {
             "group": group,
+            "tournament": tournament,
+            "group_tournaments": group_tournaments,
             "view": view,
             "matchdays": matchdays,
             "shown_matchdays": shown_matchdays,
@@ -3110,6 +3195,9 @@ def join_group(request):
         GroupMembership.objects
         .filter(user=request.user)
         .select_related("group__tournament")
+        .prefetch_related(
+            "group__tournament_selections__tournament",
+        )
         .order_by("group__name")
     )
 
@@ -3136,7 +3224,7 @@ def user_stats(request, user_id: int):
         return redirect("join_group")
 
     group = membership.group
-    tournament = group.tournament
+    tournament_ids = group.selected_tournament_ids()
 
     # Ziel-User muss Mitglied der aktiven Gruppe sein
     target_membership = get_object_or_404(
@@ -3150,7 +3238,7 @@ def user_stats(request, user_id: int):
 
     # Nur Spiele mit Ergebnis (sonst kann man keine Punkte/Tabellen berechnen)
     matches_with_result = Match.objects.filter(
-        tournament=tournament,
+        tournament_id__in=tournament_ids,
         home_score__isnull=False,
         away_score__isnull=False,
     )
@@ -3308,6 +3396,9 @@ def create_group(request: HttpRequest):
                     group = form.save(commit=False)
                     group.owner = request.user
                     group.save()
+                    form.save_tournament_selections(
+                        group
+                    )
 
                     GroupMembership.objects.create(
                     user=request.user,
@@ -3359,6 +3450,9 @@ def my_groups(request):
         .select_related(
             "group__tournament",
             "group__owner",
+        )
+        .prefetch_related(
+            "group__tournament_selections__tournament",
         )
         .annotate(
             member_count=Count(
@@ -3429,6 +3523,9 @@ def group_detail(
             "group__owner",
             "group__branding",
             "group__scoring_settings",
+        )
+        .prefetch_related(
+            "group__tournament_selections__tournament",
         ),
         group_id=group_id,
         user=request.user,
